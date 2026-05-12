@@ -1,5 +1,5 @@
-import React from 'react';
-import { currentUser, saldoVidas } from '../data/mockData';
+import React, { useState, useEffect } from 'react';
+import { fetchSaldoVidas } from '../services/api';
 import {
   Menu, Bell, Search, Lightbulb, Signal, ChevronDown,
   User, Settings, LogOut, HelpCircle
@@ -14,6 +14,13 @@ import {
 import { Badge } from './ui/badge';
 
 const TopNav = ({ onToggleSidebar, sidebarCollapsed }) => {
+  const [saldoVidas, setSaldoVidas] = useState({ percentual_total: 0 });
+  const currentUser = { name: 'Carlos Eduardo Silva', email: 'carlos.silva@corretora.com.br', role: 'Administrador', company: 'Corretora Premium Seguros' };
+
+  useEffect(() => {
+    fetchSaldoVidas().then(setSaldoVidas).catch(console.error);
+  }, []);
+
   return (
     <div className="top-nav">
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
