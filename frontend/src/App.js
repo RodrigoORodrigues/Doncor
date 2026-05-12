@@ -13,6 +13,10 @@ import Exclusao from "./pages/Exclusao";
 import Transferencia from "./pages/Transferencia";
 import Faturas from "./pages/Faturas";
 import Comissoes from "./pages/Comissoes";
+import Seguradoras from "./pages/Seguradoras";
+import Produtos from "./pages/Produtos";
+import Colaboradores from "./pages/Colaboradores";
+import Relatorios from "./pages/Relatorios";
 import { Loader2 } from "lucide-react";
 
 const LoadingScreen = ({ onFinish }) => {
@@ -84,6 +88,10 @@ const pageComponents = {
   transferencia: Transferencia,
   faturas: Faturas,
   comissoes: Comissoes,
+  seguradoras: Seguradoras,
+  produtos: Produtos,
+  colaboradores: Colaboradores,
+  relatorios: Relatorios,
 };
 
 function MainApp() {

@@ -345,6 +345,162 @@ backend:
         agent: "testing"
         comment: "DELETE /api/contratos-adesao/{id} successfully deletes contrato and returns success message"
 
+  - task: "List seguradoras endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "GET /api/seguradoras returns 6 seguradoras with all required fields (id, nome, codigo, cnpj, telefone, email, contratos, vidas, status)"
+
+  - task: "Create seguradora endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "POST /api/seguradoras successfully creates new seguradora with auto-generated UUID and returns complete object"
+
+  - task: "Update seguradora endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "PUT /api/seguradoras/{id} successfully updates seguradora and returns updated object with all changes reflected"
+
+  - task: "Delete seguradora endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "DELETE /api/seguradoras/{id} successfully deletes seguradora and returns success message"
+
+  - task: "List produtos endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "GET /api/produtos returns 16 produtos with all required fields (id, nome, seguradora, tipo, cobertura, acomodacao, reajuste, status)"
+
+  - task: "Create produto endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "POST /api/produtos successfully creates new produto with auto-generated UUID and returns complete object"
+
+  - task: "Update produto endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "PUT /api/produtos/{id} successfully updates produto and returns updated object with all changes reflected"
+
+  - task: "Delete produto endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "DELETE /api/produtos/{id} successfully deletes produto and returns success message"
+
+  - task: "List colaboradores endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "GET /api/colaboradores returns 10 colaboradores with all required fields (id, nome, cargo, email, telefone, departamento, dataAdmissao, status)"
+
+  - task: "Create colaborador endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "POST /api/colaboradores successfully creates new colaborador with auto-generated UUID and dataAdmissao, returns complete object"
+
+  - task: "Delete colaborador endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "DELETE /api/colaboradores/{id} successfully deletes colaborador and returns success message"
+
+  - task: "Relatórios resumo geral endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "GET /api/relatorios/resumo-geral returns comprehensive report with totalContratosAdesao, totalContratosEmpresarial, totalInclusoes, totalExclusoes, totalTransferencias, porSeguradora, statusAdesao, statusEmpresarial"
+
+  - task: "Inline edit contrato de adesão"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "PUT /api/contratos-adesao/adh-1 successfully updates contrato inline and GET /api/contratos-adesao/adh-1 verifies the update was persisted correctly"
+
 frontend:
   - task: "Frontend testing not performed"
     implemented: true
@@ -361,12 +517,12 @@ frontend:
 metadata:
   created_by: "testing_agent"
   version: "1.0"
-  test_sequence: 1
+  test_sequence: 2
   run_ui: false
 
 test_plan:
   current_focus:
-    - "All backend API endpoints tested and verified"
+    - "All backend API endpoints tested and verified including new endpoints"
   stuck_tasks: []
   test_all: true
   test_priority: "high_first"
@@ -374,3 +530,5 @@ test_plan:
 agent_communication:
   - agent: "testing"
     message: "Completed comprehensive backend API testing. All 20 endpoints tested successfully with 100% pass rate. Backend is fully functional and ready for production use."
+  - agent: "testing"
+    message: "Completed testing of 14 NEW endpoints (seguradoras, produtos, colaboradores, relatorios, inline edit). All tests passed with 100% success rate. New endpoints are fully functional: GET/POST/PUT/DELETE for seguradoras (6 items), GET/POST/PUT/DELETE for produtos (16 items), GET/POST/DELETE for colaboradores (10 items), GET /api/relatorios/resumo-geral, and inline edit for contratos-adesao. Total backend endpoints tested: 34 (20 original + 14 new)."

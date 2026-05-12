@@ -11,7 +11,7 @@ const api = axios.create({
 // ─── Dashboard ────────────────────────────────────
 export const fetchDashboardStats = () => api.get('/dashboard/stats').then(r => r.data);
 export const fetchChartData = () => api.get('/dashboard/chart-data').then(r => r.data);
-export const fetchSeguradoras = () => api.get('/dashboard/seguradoras').then(r => r.data);
+export const fetchDashboardSeguradoras = () => api.get('/dashboard/seguradoras').then(r => r.data);
 export const fetchSaldoVidas = () => api.get('/dashboard/saldo-vidas').then(r => r.data);
 export const fetchTarefasPendentes = () => api.get('/tarefas-pendentes').then(r => r.data);
 export const fetchMovimentacoesRecentes = () => api.get('/movimentacoes-recentes').then(r => r.data);
@@ -57,5 +57,29 @@ export const fetchFaturasResumo = () => api.get('/faturas/resumo').then(r => r.d
 export const fetchComissoes = (search = '') =>
   api.get('/comissoes', { params: { search } }).then(r => r.data);
 export const fetchComissoesEvolucao = () => api.get('/comissoes/evolucao').then(r => r.data);
+
+// ─── Seguradoras ──────────────────────────────────
+export const fetchSeguradoras = (search = '', status = 'todos') =>
+  api.get('/seguradoras', { params: { search, status } }).then(r => r.data);
+export const createSeguradora = (data) => api.post('/seguradoras', data).then(r => r.data);
+export const updateSeguradora = (id, data) => api.put(`/seguradoras/${id}`, data).then(r => r.data);
+export const deleteSeguradora = (id) => api.delete(`/seguradoras/${id}`).then(r => r.data);
+
+// ─── Produtos ─────────────────────────────────────
+export const fetchProdutos = (search = '', status = 'todos', seguradora = '') =>
+  api.get('/produtos', { params: { search, status, seguradora } }).then(r => r.data);
+export const createProduto = (data) => api.post('/produtos', data).then(r => r.data);
+export const updateProduto = (id, data) => api.put(`/produtos/${id}`, data).then(r => r.data);
+export const deleteProduto = (id) => api.delete(`/produtos/${id}`).then(r => r.data);
+
+// ─── Colaboradores ────────────────────────────────
+export const fetchColaboradores = (search = '', status = 'todos', departamento = '') =>
+  api.get('/colaboradores', { params: { search, status, departamento } }).then(r => r.data);
+export const createColaborador = (data) => api.post('/colaboradores', data).then(r => r.data);
+export const updateColaborador = (id, data) => api.put(`/colaboradores/${id}`, data).then(r => r.data);
+export const deleteColaborador = (id) => api.delete(`/colaboradores/${id}`).then(r => r.data);
+
+// ─── Relatórios ───────────────────────────────────
+export const fetchRelatorioResumo = () => api.get('/relatorios/resumo-geral').then(r => r.data);
 
 export default api;

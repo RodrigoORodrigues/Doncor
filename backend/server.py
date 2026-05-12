@@ -15,6 +15,9 @@ from models import (
     Inclusao, InclusaoCreate,
     Exclusao, ExclusaoCreate,
     Transferencia, TransferenciaCreate,
+    Seguradora, SeguradoraCreate,
+    Produto, ProdutoCreate,
+    Colaborador, ColaboradorCreate,
 )
 from seed_data import seed_database
 
@@ -425,6 +428,179 @@ async def comissoes_evolucao():
         {"mes": "Fev", "valor": 22300},
         {"mes": "Mar", "valor": 9006},
     ]
+
+
+# ═══════════════════════════════════════════════════════════════
+#  SEGURADORAS
+# ═══════════════════════════════════════════════════════════════
+@api_router.get("/seguradoras")
+async def list_seguradoras(search: str = "", status: str = "todos"):
+    query = {}
+    if status != "todos":
+        query["status"] = {"$regex": f"^{status}$", "$options": "i"}
+    if search:
+        query["$or"] = [
+            {"nome": {"$regex": search, "$options": "i"}},
+            {"codigo": {"$regex": search, "$options": "i"}},
+            {"cnpj": {"$regex": search, "$options": "i"}},
+        ]
+    items = await db.seguradoras.find(query, _proj()).to_list(1000)
+    return items
+
+
+@api_router.post("/seguradoras")
+async def create_seguradora(data: SeguradoraCreate):
+    obj = Seguradora(**data.model_dump())
+    await db.seguradoras.insert_one(obj.model_dump())
+    return obj.model_dump()
+
+
+@api_router.put("/seguradoras/{item_id}")
+async def update_seguradora(item_id: str, data: SeguradoraCreate):
+    result = await db.seguradoras.update_one({"id": item_id}, {"$set": data.model_dump()})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Seguradora não encontrada")
+    return await db.seguradoras.find_one({"id": item_id}, _proj())
+
+
+@api_router.delete("/seguradoras/{item_id}")
+async def delete_seguradora(item_id: str):
+    result = await db.seguradoras.delete_one({"id": item_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Seguradora não encontrada")
+    return {"message": "Seguradora excluída com sucesso"}
+
+
+# ═══════════════════════════════════════════════════════════════
+#  PRODUTOS
+# ═══════════════════════════════════════════════════════════════
+@api_router.get("/produtos")
+async def list_produtos(search: str = "", status: str = "todos", seguradora: str = ""):
+    query = {}
+    if status != "todos":
+        query["status"] = {"$regex": f"^{status}$", "$options": "i"}
+    if seguradora:
+        query["seguradora"] = {"$regex": seguradora, "$options": "i"}
+    if search:
+        query["$or"] = [
+            {"nome": {"$regex": search, "$options": "i"}},
+            {"seguradora": {"$regex": search, "$options": "i"}},
+            {"tipo": {"$regex": search, "$options": "i"}},
+        ]
+    items = await db.produtos.find(query, _proj()).to_list(1000)
+    return items
+
+
+@api_router.post("/produtos")
+async def create_produto(data: ProdutoCreate):
+    obj = Produto(**data.model_dump())
+    await db.produtos.insert_one(obj.model_dump())
+    return obj.model_dump()
+
+
+@api_router.put("/produtos/{item_id}")
+async def update_produto(item_id: str, data: ProdutoCreate):
+    result = await db.produtos.update_one({"id": item_id}, {"$set": data.model_dump()})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+    return await db.produtos.find_one({"id": item_id}, _proj())
+
+
+@api_router.delete("/produtos/{item_id}")
+async def delete_produto(item_id: str):
+    result = await db.produtos.delete_one({"id": item_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+    return {"message": "Produto excluído com sucesso"}
+
+
+# ═══════════════════════════════════════════════════════════════
+#  COLABORADORES
+# ═══════════════════════════════════════════════════════════════
+@api_router.get("/colaboradores")
+async def list_colaboradores(search: str = "", status: str = "todos", departamento: str = ""):
+    query = {}
+    if status != "todos":
+        query["status"] = {"$regex": f"^{status}$", "$options": "i"}
+    if departamento:
+        query["departamento"] = {"$regex": departamento, "$options": "i"}
+    if search:
+        query["$or"] = [
+            {"nome": {"$regex": search, "$options": "i"}},
+            {"cargo": {"$regex": search, "$options": "i"}},
+            {"email": {"$regex": search, "$options": "i"}},
+        ]
+    items = await db.colaboradores.find(query, _proj()).to_list(1000)
+    return items
+
+
+@api_router.post("/colaboradores")
+async def create_colaborador(data: ColaboradorCreate):
+    obj = Colaborador(**data.model_dump())
+    obj.dataAdmissao = datetime.now().strftime("%d/%m/%Y")
+    await db.colaboradores.insert_one(obj.model_dump())
+    return obj.model_dump()
+
+
+@api_router.put("/colaboradores/{item_id}")
+async def update_colaborador(item_id: str, data: ColaboradorCreate):
+    result = await db.colaboradores.update_one({"id": item_id}, {"$set": data.model_dump()})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Colaborador não encontrado")
+    return await db.colaboradores.find_one({"id": item_id}, _proj())
+
+
+@api_router.delete("/colaboradores/{item_id}")
+async def delete_colaborador(item_id: str):
+    result = await db.colaboradores.delete_one({"id": item_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Colaborador não encontrado")
+    return {"message": "Colaborador excluído com sucesso"}
+
+
+# ═══════════════════════════════════════════════════════════════
+#  RELATÓRIOS
+# ═══════════════════════════════════════════════════════════════
+@api_router.get("/relatorios/resumo-geral")
+async def relatorio_resumo_geral():
+    adh = await db.contratos_adesao.find({}, _proj()).to_list(1000)
+    emp = await db.contratos_empresarial.find({}, _proj()).to_list(1000)
+    inc = await db.inclusoes.count_documents({})
+    exc = await db.exclusoes.count_documents({})
+    trf = await db.transferencias.count_documents({})
+
+    seg_pipeline = [{"$group": {"_id": "$seguradora", "vidas": {"$sum": "$vidas"}, "contratos": {"$sum": 1}, "valor": {"$sum": 1}}}]
+    seg_adh = await db.contratos_adesao.aggregate(seg_pipeline).to_list(100)
+    seg_emp = await db.contratos_empresarial.aggregate(seg_pipeline).to_list(100)
+
+    por_seguradora = {}
+    for s in seg_adh + seg_emp:
+        name = s["_id"]
+        if name in por_seguradora:
+            por_seguradora[name]["vidas"] += s["vidas"]
+            por_seguradora[name]["contratos"] += s["contratos"]
+        else:
+            por_seguradora[name] = {"seguradora": name, "vidas": s["vidas"], "contratos": s["contratos"]}
+
+    status_adh = {}
+    for c in adh:
+        st = c.get("status", "Ativo")
+        status_adh[st] = status_adh.get(st, 0) + 1
+    status_emp = {}
+    for c in emp:
+        st = c.get("status", "Ativo")
+        status_emp[st] = status_emp.get(st, 0) + 1
+
+    return {
+        "totalContratosAdesao": len(adh),
+        "totalContratosEmpresarial": len(emp),
+        "totalInclusoes": inc,
+        "totalExclusoes": exc,
+        "totalTransferencias": trf,
+        "porSeguradora": list(por_seguradora.values()),
+        "statusAdesao": status_adh,
+        "statusEmpresarial": status_emp,
+    }
 
 
 # ─── Include router & middleware ──────────────────────────────

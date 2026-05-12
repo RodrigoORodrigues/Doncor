@@ -84,6 +84,47 @@ MOVIMENTACOES_RECENTES = [
     {"id": "mov-5", "tipo": "Inclusão", "contrato": "EMP-2024-003", "beneficiario": "Fernanda Costa", "data": "01/03/2026", "status": "Aprovado"},
 ]
 
+SEGURADORAS = [
+    {"id": "seg-1", "nome": "Amil", "codigo": "SEG-001", "cnpj": "29.309.127/0001-79", "telefone": "(11) 4004-4040", "email": "comercial@amil.com.br", "endereco": "Av. Juiz Marco Túlio Isaac, 100 - Barueri/SP", "status": "Ativo", "contratos": 3, "vidas": 313},
+    {"id": "seg-2", "nome": "Bradesco Saúde", "codigo": "SEG-002", "cnpj": "92.693.118/0001-60", "telefone": "(11) 4004-2700", "email": "saude@bradesco.com.br", "endereco": "R. Barão de Itapagipe, 225 - Rio de Janeiro/RJ", "status": "Ativo", "contratos": 3, "vidas": 287},
+    {"id": "seg-3", "nome": "SulAmérica", "codigo": "SEG-003", "cnpj": "01.685.053/0001-56", "telefone": "(11) 3003-4600", "email": "atendimento@sulamerica.com.br", "endereco": "R. Beatriz Larragoiti Lucas, 121 - Rio de Janeiro/RJ", "status": "Ativo", "contratos": 2, "vidas": 464},
+    {"id": "seg-4", "nome": "Unimed", "codigo": "SEG-004", "cnpj": "02.812.468/0001-06", "telefone": "(11) 3217-8000", "email": "faleconosco@unimed.com.br", "endereco": "Alameda Santos, 1827 - São Paulo/SP", "status": "Ativo", "contratos": 2, "vidas": 85},
+    {"id": "seg-5", "nome": "NotreDame Intermédica", "codigo": "SEG-005", "cnpj": "44.649.812/0001-38", "telefone": "(11) 3003-5433", "email": "comercial@gndi.com.br", "endereco": "Av. Paulista, 867 - São Paulo/SP", "status": "Ativo", "contratos": 2, "vidas": 130},
+    {"id": "seg-6", "nome": "Porto Seguro Saúde", "codigo": "SEG-006", "cnpj": "61.198.164/0001-60", "telefone": "(11) 3366-3636", "email": "saude@portoseguro.com.br", "endereco": "Al. Barão de Piracicaba, 740 - São Paulo/SP", "status": "Ativo", "contratos": 2, "vidas": 96},
+]
+
+PRODUTOS = [
+    {"id": "prod-1", "nome": "Amil 400 QC Nacional", "seguradora": "Amil", "tipo": "Saúde", "cobertura": "Nacional", "acomodacao": "Enfermaria", "reajuste": "VCMH + 2%", "status": "Ativo", "contratosVinculados": 1},
+    {"id": "prod-2", "nome": "Amil 500 QC", "seguradora": "Amil", "tipo": "Saúde", "cobertura": "Nacional", "acomodacao": "Apartamento", "reajuste": "VCMH + 3%", "status": "Ativo", "contratosVinculados": 1},
+    {"id": "prod-3", "nome": "Amil S450", "seguradora": "Amil", "tipo": "Saúde", "cobertura": "Nacional", "acomodacao": "Enfermaria", "reajuste": "VCMH + 1.5%", "status": "Ativo", "contratosVinculados": 1},
+    {"id": "prod-4", "nome": "Amil S750", "seguradora": "Amil", "tipo": "Saúde", "cobertura": "Nacional", "acomodacao": "Apartamento", "reajuste": "VCMH + 4%", "status": "Ativo", "contratosVinculados": 1},
+    {"id": "prod-5", "nome": "Top Nacional Plus", "seguradora": "Bradesco Saúde", "tipo": "Saúde", "cobertura": "Nacional", "acomodacao": "Apartamento", "reajuste": "ANS + 2%", "status": "Ativo", "contratosVinculados": 1},
+    {"id": "prod-6", "nome": "Flex PME", "seguradora": "Bradesco Saúde", "tipo": "Saúde", "cobertura": "Regional", "acomodacao": "Enfermaria", "reajuste": "ANS", "status": "Ativo", "contratosVinculados": 1},
+    {"id": "prod-7", "nome": "Nacional Flex", "seguradora": "Bradesco Saúde", "tipo": "Saúde", "cobertura": "Nacional", "acomodacao": "Enfermaria", "reajuste": "ANS + 1%", "status": "Ativo", "contratosVinculados": 1},
+    {"id": "prod-8", "nome": "PME Compacto", "seguradora": "Bradesco Saúde", "tipo": "Saúde", "cobertura": "Regional", "acomodacao": "Enfermaria", "reajuste": "ANS", "status": "Ativo", "contratosVinculados": 1},
+    {"id": "prod-9", "nome": "Prestige", "seguradora": "SulAmérica", "tipo": "Saúde", "cobertura": "Nacional", "acomodacao": "Apartamento", "reajuste": "VCMH + 5%", "status": "Ativo", "contratosVinculados": 1},
+    {"id": "prod-10", "nome": "Executivo Plus", "seguradora": "SulAmérica", "tipo": "Saúde", "cobertura": "Nacional", "acomodacao": "Apartamento", "reajuste": "VCMH + 3%", "status": "Ativo", "contratosVinculados": 1},
+    {"id": "prod-11", "nome": "Unimax", "seguradora": "Unimed", "tipo": "Saúde", "cobertura": "Nacional", "acomodacao": "Apartamento", "reajuste": "ANS + 1.5%", "status": "Ativo", "contratosVinculados": 1},
+    {"id": "prod-12", "nome": "Uniflex", "seguradora": "Unimed", "tipo": "Saúde", "cobertura": "Regional", "acomodacao": "Enfermaria", "reajuste": "ANS", "status": "Ativo", "contratosVinculados": 1},
+    {"id": "prod-13", "nome": "ND Sênior", "seguradora": "NotreDame Intermédica", "tipo": "Saúde", "cobertura": "Regional", "acomodacao": "Enfermaria", "reajuste": "ANS + 2%", "status": "Cancelado", "contratosVinculados": 0},
+    {"id": "prod-14", "nome": "ND Empresarial", "seguradora": "NotreDame Intermédica", "tipo": "Saúde", "cobertura": "Nacional", "acomodacao": "Enfermaria", "reajuste": "ANS + 1%", "status": "Ativo", "contratosVinculados": 1},
+    {"id": "prod-15", "nome": "Bronze Plus", "seguradora": "Porto Seguro Saúde", "tipo": "Saúde", "cobertura": "Regional", "acomodacao": "Enfermaria", "reajuste": "ANS", "status": "Suspenso", "contratosVinculados": 0},
+    {"id": "prod-16", "nome": "Bronze Empresarial", "seguradora": "Porto Seguro Saúde", "tipo": "Saúde", "cobertura": "Regional", "acomodacao": "Enfermaria", "reajuste": "ANS + 0.5%", "status": "Ativo", "contratosVinculados": 1},
+]
+
+COLABORADORES = [
+    {"id": "col-1", "nome": "Carlos Eduardo Silva", "cargo": "Diretor Geral", "email": "carlos.silva@corretora.com.br", "telefone": "(11) 99876-5432", "departamento": "Diretoria", "status": "Ativo", "dataAdmissao": "10/01/2018"},
+    {"id": "col-2", "nome": "Ana Beatriz Mendes", "cargo": "Gerente Comercial", "email": "ana.mendes@corretora.com.br", "telefone": "(11) 99765-4321", "departamento": "Comercial", "status": "Ativo", "dataAdmissao": "15/03/2019"},
+    {"id": "col-3", "nome": "Roberto Almeida", "cargo": "Analista de Contratos", "email": "roberto.almeida@corretora.com.br", "telefone": "(11) 99654-3210", "departamento": "Operações", "status": "Ativo", "dataAdmissao": "02/06/2020"},
+    {"id": "col-4", "nome": "Juliana Martins", "cargo": "Analista Financeiro", "email": "juliana.martins@corretora.com.br", "telefone": "(11) 99543-2109", "departamento": "Financeiro", "status": "Ativo", "dataAdmissao": "20/08/2020"},
+    {"id": "col-5", "nome": "Fernando Costa", "cargo": "Assistente Comercial", "email": "fernando.costa@corretora.com.br", "telefone": "(11) 99432-1098", "departamento": "Comercial", "status": "Ativo", "dataAdmissao": "05/01/2021"},
+    {"id": "col-6", "nome": "Mariana Souza", "cargo": "Assistente Operacional", "email": "mariana.souza@corretora.com.br", "telefone": "(11) 99321-0987", "departamento": "Operações", "status": "Ativo", "dataAdmissao": "12/04/2021"},
+    {"id": "col-7", "nome": "Pedro Henrique Lima", "cargo": "Corretor", "email": "pedro.lima@corretora.com.br", "telefone": "(11) 99210-9876", "departamento": "Comercial", "status": "Ativo", "dataAdmissao": "08/09/2022"},
+    {"id": "col-8", "nome": "Camila Oliveira", "cargo": "Analista de Movimentações", "email": "camila.oliveira@corretora.com.br", "telefone": "(11) 99109-8765", "departamento": "Operações", "status": "Ativo", "dataAdmissao": "15/02/2023"},
+    {"id": "col-9", "nome": "Lucas Tavares", "cargo": "Estagiário", "email": "lucas.tavares@corretora.com.br", "telefone": "(11) 98098-7654", "departamento": "Operações", "status": "Ativo", "dataAdmissao": "01/07/2025"},
+    {"id": "col-10", "nome": "Patrícia Santos", "cargo": "Gerente Operacional", "email": "patricia.santos@corretora.com.br", "telefone": "(11) 98987-6543", "departamento": "Operações", "status": "Inativo", "dataAdmissao": "03/05/2019"},
+]
+
 
 async def seed_database(db):
     """Seed the database with initial data if collections are empty."""
@@ -97,6 +138,9 @@ async def seed_database(db):
         "comissoes": COMISSOES,
         "tarefas_pendentes": TAREFAS_PENDENTES,
         "movimentacoes_recentes": MOVIMENTACOES_RECENTES,
+        "seguradoras": SEGURADORAS,
+        "produtos": PRODUTOS,
+        "colaboradores": COLABORADORES,
     }
 
     for collection_name, data in collections_data.items():

@@ -137,3 +137,61 @@ class MovimentacaoRecente(BaseModel):
     beneficiario: str
     data: str
     status: str = "Pendente"
+
+
+
+class SeguradoraBase(BaseModel):
+    nome: str
+    codigo: str = ""
+    cnpj: str = ""
+    telefone: str = ""
+    email: str = ""
+    endereco: str = ""
+    status: str = "Ativo"
+
+
+class Seguradora(SeguradoraBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    contratos: int = 0
+    vidas: int = 0
+
+
+class SeguradoraCreate(SeguradoraBase):
+    pass
+
+
+class ProdutoBase(BaseModel):
+    nome: str
+    seguradora: str
+    tipo: str = "Saúde"
+    cobertura: str = "Nacional"
+    acomodacao: str = "Enfermaria"
+    reajuste: str = ""
+    status: str = "Ativo"
+
+
+class Produto(ProdutoBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    contratosVinculados: int = 0
+
+
+class ProdutoCreate(ProdutoBase):
+    pass
+
+
+class ColaboradorBase(BaseModel):
+    nome: str
+    cargo: str = ""
+    email: str = ""
+    telefone: str = ""
+    departamento: str = ""
+    status: str = "Ativo"
+
+
+class Colaborador(ColaboradorBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    dataAdmissao: str = ""
+
+
+class ColaboradorCreate(ColaboradorBase):
+    pass

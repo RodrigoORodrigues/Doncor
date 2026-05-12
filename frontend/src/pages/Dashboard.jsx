@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchDashboardStats, fetchChartData, fetchSeguradoras, fetchSaldoVidas, fetchTarefasPendentes, fetchMovimentacoesRecentes } from '../services/api';
+import { fetchDashboardStats, fetchChartData, fetchDashboardSeguradoras, fetchSaldoVidas, fetchTarefasPendentes, fetchMovimentacoesRecentes } from '../services/api';
 import {
   FileText, Users, Heart, CheckCircle, Clock,
   Receipt, ArrowUpRight, ArrowDownRight, Loader2
@@ -22,7 +22,7 @@ const Dashboard = () => {
     const load = async () => {
       try {
         const [s, c, seg, sal, t, m] = await Promise.all([
-          fetchDashboardStats(), fetchChartData(), fetchSeguradoras(),
+          fetchDashboardStats(), fetchChartData(), fetchDashboardSeguradoras(),
           fetchSaldoVidas(), fetchTarefasPendentes(), fetchMovimentacoesRecentes()
         ]);
         setStats(s); setChartData(c); setSeguradoras(seg); setSaldo(sal); setTarefas(t); setMovimentacoes(m);
