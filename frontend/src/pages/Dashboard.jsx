@@ -35,10 +35,10 @@ const Dashboard = () => {
   if (loading) return <div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'50vh'}}><Loader2 size={32} className="animate-spin" style={{color:'#4979bb',animation:'spin 1s linear infinite'}}/></div>;
 
   const statCards = stats ? [
-    { label: 'Total Contratos', value: stats.totalContratos.toLocaleString('pt-BR'), icon: FileText, color: '#4979bb', change: '+12', up: true },
-    { label: 'Contratos Ativos', value: stats.contratosAtivos.toLocaleString('pt-BR'), icon: CheckCircle, color: '#27ae60', change: '+8', up: true },
-    { label: 'Total de Vidas', value: stats.vidasTotal.toLocaleString('pt-BR'), icon: Users, color: '#2C7BE5', change: '+156', up: true },
-    { label: 'Vidas Ativas', value: stats.vidasAtivas.toLocaleString('pt-BR'), icon: Heart, color: '#e6832a', change: '+89', up: true },
+    { label: 'Total Contratos', value: stats.totalContratos?.toLocaleString('pt-BR') || '0', icon: FileText, color: '#4979bb', change: '+12', up: true },
+    { label: 'Contratos Ativos', value: stats.contratosAtivos?.toLocaleString('pt-BR') || '0', icon: CheckCircle, color: '#27ae60', change: '+8', up: true },
+    { label: 'Total de Vidas', value: stats.vidasTotal?.toLocaleString('pt-BR') || '0', icon: Users, color: '#2C7BE5', change: '+156', up: true },
+    { label: 'Vidas Ativas', value: stats.vidasAtivas?.toLocaleString('pt-BR') || '0', icon: Heart, color: '#e6832a', change: '+89', up: true },
     { label: 'Mov. Pendentes', value: stats.movimentacoesPendentes, icon: Clock, color: '#8e44ad', change: '-5', up: false },
     { label: 'Faturas Pendentes', value: stats.faturasPendentes, icon: Receipt, color: '#e63757', change: '+2', up: true },
   ] : [];

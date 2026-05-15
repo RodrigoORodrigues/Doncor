@@ -40,7 +40,7 @@ const Comissoes = () => {
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f2f5" />
             <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#8a8d93' }} />
             <YAxis tick={{ fontSize: 11, fill: '#8a8d93' }} tickFormatter={v=>`${(v/1000).toFixed(0)}k`} />
-            <Tooltip contentStyle={{ fontSize: '0.75rem', borderRadius: '6px', border: '1px solid #e3e6f0' }} formatter={v=>[`R$ ${v.toLocaleString('pt-BR')}`, 'Comissão']} />
+            <Tooltip contentStyle={{ fontSize: '0.75rem', borderRadius: '6px', border: '1px solid #e3e6f0' }} formatter={v=>[`R$ ${v?.toLocaleString('pt-BR') || '0'}`, 'Comissão']} />
             <Bar dataKey="valor" fill="#e6832a" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
