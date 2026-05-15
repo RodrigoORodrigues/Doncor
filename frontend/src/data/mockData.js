@@ -1,4 +1,4 @@
-// Mock data for GA - Gestão de Apólices
+// Mock data for Don Cor - Gestão de Apólices
 
 export const currentUser = {
   id: 1,

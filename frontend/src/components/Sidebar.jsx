@@ -52,11 +52,11 @@ const Sidebar = ({ collapsed, onToggle, onMenuClick, activeItem }) => {
             </svg>
             <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
               <span style={{ fontWeight: 600, fontSize: '1.1rem', color: '#4979bb', fontFamily: 'Poppins, sans-serif', letterSpacing: '-0.5px' }}>
-                GA
+                Don Cor
                 <span style={{ fontSize: '0.6rem', fontWeight: 400, color: '#e6832a', marginLeft: '4px' }}>WEB</span>
               </span>
               <span style={{ fontSize: '0.55rem', color: '#8a8d93', fontWeight: 400, marginTop: '1px' }}>
-                Gestão de Apólices
+                Gestão de Apólices - Don Cor
               </span>
             </div>
           </div>

@@ -45,11 +45,11 @@ const LoadingScreen = ({ onFinish }) => {
           <path d="M35 25 Q35 75 65 75 Q45 75 45 50 Q45 25 65 25 Q35 25 35 25Z" fill="white" />
         </svg>
         <span style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 500, fontSize: '40pt', color: '#4979bb', fontFamily: 'Poppins, sans-serif', letterSpacing: '-1px' }}>
-          SiSCOR
+          Don Cor
         </span>
       </div>
       <span style={{ fontSize: '18pt', fontWeight: 600, color: '#e6832a', marginTop: '4px', zIndex: 1 }}>
-        Gestão de Apólices
+        Gestão de Apólices - Don Cor
       </span>
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', zIndex: 1, marginTop: '16px' }}>
         {validating ? (

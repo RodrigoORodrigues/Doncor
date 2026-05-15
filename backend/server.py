@@ -61,7 +61,7 @@ def _next_protocol(prefix: str, seq: int):
 # ─── Root ──────────────────────────────────────────────────────
 @api_router.get("/")
 async def root():
-    return {"message": "GA Gestão de Apólices API"}
+    return {"message": "Don Cor API - Gestão de Apólices"}
 
 
 # ═══════════════════════════════════════════════════════════════
