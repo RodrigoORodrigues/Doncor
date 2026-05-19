@@ -188,4 +188,19 @@ export const fetchRelatorioResumo = () =>
     statusEmpresarial: {},
   });
 
+// ─── Robô / Automação ───────────────────────────
+export const fetchRoboStatus = () =>
+  getObject("/robo/status", {
+    status: "offline",
+    queue: 0,
+    lastRunAt: null,
+    successRate: 0,
+  });
+
+export const fetchRoboExecucoes = () => getArray("/robo/execucoes");
+
+export const startRobo = () => api.post("/robo/iniciar").then((r) => r.data);
+
+export const pauseRobo = () => api.post("/robo/pausar").then((r) => r.data);
+
 export default api;

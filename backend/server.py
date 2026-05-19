@@ -559,6 +559,51 @@ async def delete_colaborador(item_id: str):
 
 
 # ═══════════════════════════════════════════════════════════════
+#  ROBÔ / AUTOMAÇÃO
+# ═══════════════════════════════════════════════════════════════
+@api_router.get("/robo/status")
+async def robo_status():
+    estado = await db.robo_estado.find_one({"id": "default"}, _proj())
+    return {
+        "status": (estado or {}).get("status", "ready"),
+        "queue": await db.tarefas_pendentes.count_documents({}),
+        "lastRunAt": (estado or {}).get("lastRunAt"),
+        "successRate": (estado or {}).get("successRate", 98),
+    }
+
+
+@api_router.post("/robo/iniciar")
+async def robo_iniciar():
+    now = datetime.now().strftime("%d/%m/%Y %H:%M")
+    await db.robo_estado.update_one(
+        {"id": "default"},
+        {"$set": {"id": "default", "status": "running", "lastRunAt": now, "successRate": 98}},
+        upsert=True,
+    )
+    return {"message": "Robô iniciado com sucesso", "status": "running", "lastRunAt": now}
+
+
+@api_router.post("/robo/pausar")
+async def robo_pausar():
+    now = datetime.now().strftime("%d/%m/%Y %H:%M")
+    await db.robo_estado.update_one(
+        {"id": "default"},
+        {"$set": {"id": "default", "status": "ready", "lastRunAt": now, "successRate": 98}},
+        upsert=True,
+    )
+    return {"message": "Robô pausado com sucesso", "status": "ready", "lastRunAt": now}
+
+
+@api_router.get("/robo/execucoes")
+async def robo_execucoes():
+    return [
+        {"id": "rb-001", "processo": "Importação de faturas", "inicio": "19/05/2026 08:15", "duracao": "01m42s", "status": "Concluído"},
+        {"id": "rb-002", "processo": "Validação de contratos", "inicio": "19/05/2026 09:10", "duracao": "03m05s", "status": "Concluído"},
+        {"id": "rb-003", "processo": "Conciliação de comissão", "inicio": "19/05/2026 10:00", "duracao": "--", "status": "Em execução"},
+    ]
+
+
+# ═══════════════════════════════════════════════════════════════
 #  RELATÓRIOS
 # ═══════════════════════════════════════════════════════════════
 @api_router.get("/relatorios/resumo-geral")
