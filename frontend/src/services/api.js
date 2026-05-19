@@ -1,4 +1,5 @@
 import axios from "axios";
+import { supabase } from "../lib/supabaseClient";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 const API = BACKEND_URL ? `${BACKEND_URL}/api` : "/api";
@@ -6,6 +7,22 @@ const API = BACKEND_URL ? `${BACKEND_URL}/api` : "/api";
 const api = axios.create({
   baseURL: API,
   timeout: 15000,
+});
+
+api.interceptors.request.use(async (config) => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${session.access_token}`;
+    }
+    const role = localStorage.getItem("doncor_user_role");
+    if (role) {
+      config.headers = config.headers || {};
+      config.headers["x-user-role"] = role;
+    }
+  } catch (e) {}
+  return config;
 });
 
 const asArray = (value, endpoint = "") => {
@@ -187,5 +204,20 @@ export const fetchRelatorioResumo = () =>
     statusAdesao: {},
     statusEmpresarial: {},
   });
+
+// ─── Robô / Automação ───────────────────────────
+export const fetchRoboStatus = () =>
+  getObject("/robo/status", {
+    status: "offline",
+    queue: 0,
+    lastRunAt: null,
+    successRate: 0,
+  });
+
+export const fetchRoboExecucoes = () => getArray("/robo/execucoes");
+
+export const startRobo = () => api.post("/robo/iniciar").then((r) => r.data);
+
+export const pauseRobo = () => api.post("/robo/pausar").then((r) => r.data);
 
 export default api;

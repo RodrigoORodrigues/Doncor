@@ -36,6 +36,7 @@ export const AuthProvider = ({ children }) => {
       } else {
         setUser(null);
         setProfile(null);
+        localStorage.removeItem("doncor_user_role");
       }
       setLoading(false);
     });
@@ -56,6 +57,7 @@ export const AuthProvider = ({ children }) => {
 
       if (error) throw error;
       setProfile(data);
+      if (data?.role) localStorage.setItem("doncor_user_role", data.role);
     } catch (err) {
       console.error('Erro ao buscar perfil:', err.message);
     }

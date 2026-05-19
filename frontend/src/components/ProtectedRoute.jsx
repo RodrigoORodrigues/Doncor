@@ -25,7 +25,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 
   // Se estiver logado mas o papel não for permitido
   if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
-    return <Navigate to="/acesso-negado" replace />;
+    return <Navigate to="/unauthorized" replace />;
   }
 
   return children;

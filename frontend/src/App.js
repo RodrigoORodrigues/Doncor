@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import "./App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import TopNav from "./components/TopNav";
 import TabSystem from "./components/TabSystem";
@@ -17,6 +17,11 @@ import Seguradoras from "./pages/Seguradoras";
 import Produtos from "./pages/Produtos";
 import Colaboradores from "./pages/Colaboradores";
 import Relatorios from "./pages/Relatorios";
+import Robo from "./pages/Robo";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Unauthorized from "./pages/Unauthorized";
+import ProtectedRoute from "./components/ProtectedRoute";
 import { Loader2 } from "lucide-react";
 
 const LoadingScreen = ({ onFinish }) => {
@@ -92,6 +97,7 @@ const pageComponents = {
   produtos: Produtos,
   colaboradores: Colaboradores,
   relatorios: Relatorios,
+  robo: Robo,
 };
 
 function MainApp() {
@@ -177,7 +183,18 @@ function App() {
       {loading && <LoadingScreen onFinish={handleLoadingFinish} />}
       {!loading && (
         <Routes>
-          <Route path="/*" element={<MainApp />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/unauthorized" element={<Unauthorized />} />
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
+                <MainApp />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       )}
     </BrowserRouter>

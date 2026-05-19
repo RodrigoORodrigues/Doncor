@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, Query, HTTPException
+from fastapi import FastAPI, APIRouter, Query, HTTPException, Header
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -556,6 +556,71 @@ async def delete_colaborador(item_id: str):
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Colaborador não encontrado")
     return {"message": "Colaborador excluído com sucesso"}
+
+
+# ═══════════════════════════════════════════════════════════════
+#  ROBÔ / AUTOMAÇÃO
+# ═══════════════════════════════════════════════════════════════
+def _require_robo_admin(authorization: Optional[str], x_user_role: Optional[str]):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Autenticação obrigatória")
+    if (x_user_role or "").lower() != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores podem controlar o robô")
+
+
+@api_router.get("/robo/status")
+async def robo_status():
+    estado = await db.robo_estado.find_one({"id": "default"}, _proj())
+    return {
+        "status": (estado or {}).get("status", "ready"),
+        "queue": await db.tarefas_pendentes.count_documents({}),
+        "lastRunAt": (estado or {}).get("lastRunAt"),
+        "successRate": (estado or {}).get("successRate", 98),
+    }
+
+
+@api_router.post("/robo/iniciar")
+async def robo_iniciar(authorization: Optional[str] = Header(default=None), x_user_role: Optional[str] = Header(default=None)):
+    _require_robo_admin(authorization, x_user_role)
+    now = datetime.now().strftime("%d/%m/%Y %H:%M")
+    await db.robo_estado.update_one(
+        {"id": "default"},
+        {"$set": {"id": "default", "status": "running", "lastRunAt": now, "successRate": 98}},
+        upsert=True,
+    )
+    await db.robo_execucoes.insert_one({
+        "id": str(uuid.uuid4()),
+        "processo": "Controle manual do robô",
+        "inicio": now,
+        "duracao": "--",
+        "status": "Em execução"
+    })
+    return {"message": "Robô iniciado com sucesso", "status": "running", "lastRunAt": now}
+
+
+@api_router.post("/robo/pausar")
+async def robo_pausar(authorization: Optional[str] = Header(default=None), x_user_role: Optional[str] = Header(default=None)):
+    _require_robo_admin(authorization, x_user_role)
+    now = datetime.now().strftime("%d/%m/%Y %H:%M")
+    await db.robo_estado.update_one(
+        {"id": "default"},
+        {"$set": {"id": "default", "status": "ready", "lastRunAt": now, "successRate": 98}},
+        upsert=True,
+    )
+    await db.robo_execucoes.insert_one({
+        "id": str(uuid.uuid4()),
+        "processo": "Controle manual do robô",
+        "inicio": now,
+        "duracao": "--",
+        "status": "Pausado"
+    })
+    return {"message": "Robô pausado com sucesso", "status": "ready", "lastRunAt": now}
+
+
+@api_router.get("/robo/execucoes")
+async def robo_execucoes():
+    items = await db.robo_execucoes.find({}, _proj()).sort("inicio", -1).to_list(50)
+    return items
 
 
 # ═══════════════════════════════════════════════════════════════
