@@ -17,6 +17,7 @@ import Seguradoras from "./pages/Seguradoras";
 import Produtos from "./pages/Produtos";
 import Colaboradores from "./pages/Colaboradores";
 import Relatorios from "./pages/Relatorios";
+import Robo from "./pages/Robo";
 import { Loader2 } from "lucide-react";
 
 const LoadingScreen = ({ onFinish }) => {
@@ -92,6 +93,7 @@ const pageComponents = {
   produtos: Produtos,
   colaboradores: Colaboradores,
   relatorios: Relatorios,
+  robo: Robo,
 };
 
 function MainApp() {

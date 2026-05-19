@@ -1,16 +1,16 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { menuItems } from '../data/mockData';
 import {
   Users, Handshake, UserPlus, UserMinus, ArrowLeftRight,
   Receipt, DollarSign, Building2, Package, UserCog,
-  BarChart3, Download, ChevronLeft, ChevronRight, LayoutDashboard,
-  Menu
+  BarChart3, Download, LayoutDashboard,
+  Menu, Bot
 } from 'lucide-react';
 
 const iconMap = {
   Users, Handshake, UserPlus, UserMinus, ArrowLeftRight,
   Receipt, DollarSign, Building2, Package, UserCog,
-  BarChart3, Download, LayoutDashboard, Menu
+  BarChart3, Download, LayoutDashboard, Menu, Bot
 };
 
 const Sidebar = ({ collapsed, onToggle, onMenuClick, activeItem }) => {

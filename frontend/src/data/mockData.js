@@ -42,6 +42,12 @@ export const menuItems = [
     ],
   },
   {
+    section: "Automação",
+    items: [
+      { id: "robo", label: "Robô", icon: "Bot", page: "robo" },
+    ],
+  },
+  {
     section: "Relatórios",
     items: [
       { id: "relatorios", label: "Relatórios", icon: "BarChart3", page: "relatorios" },
