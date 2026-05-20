@@ -13,7 +13,7 @@ const iconMap = {
   BarChart3, Download, LayoutDashboard, Menu, Bot
 };
 
-const Sidebar = ({ collapsed, onToggle, onMenuClick, activeItem }) => {
+const Sidebar = ({ collapsed, onToggle, onMenuClick, activeItem, allowedPages = [] }) => {
   return (
     <nav className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       {/* Logo Area */}
@@ -88,7 +88,7 @@ const Sidebar = ({ collapsed, onToggle, onMenuClick, activeItem }) => {
               </>
             )}
             {collapsed && <div style={{ borderTop: '1px solid #e3e6f0', margin: '8px 12px' }} />}
-            {section.items.map((item) => {
+            {section.items.filter((item) => allowedPages.includes(item.page)).map((item) => {
               const IconComp = iconMap[item.icon] || Users;
               return (
                 <div
