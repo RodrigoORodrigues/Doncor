@@ -20,7 +20,7 @@ import Relatorios from "./pages/Relatorios";
 import Robo from "./pages/Robo";
 import { Loader2 } from "lucide-react";
 
-const MASTER_USER = { username: 'Donfm', password: '121418', role: 'Master' };
+const MASTER_USER = { username: 'Donfim', password: '121418', role: 'Master' };
 
 const LoadingScreen = ({ onFinish }) => {
   const [validating, setValidating] = useState(true);
@@ -65,18 +65,41 @@ const LoginScreen = ({ onLogin, error }) => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow p-8">
-        <h2 style={{ fontSize: '1.8rem', textAlign: 'center', marginBottom: '8px', color: '#344050' }}>Login Doncor</h2>
-        <p style={{ textAlign: 'center', color: '#8a8d93', marginBottom: '20px' }}>Acesso inicial obrigatório</p>
+        <h2 style={{ fontSize: '1.8rem', textAlign: 'center', marginBottom: '20px', color: '#344050' }}>Doncor</h2>
         {error && <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', padding: '10px', borderRadius: '6px', marginBottom: '12px' }}>{error}</div>}
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <input placeholder="Usuário" value={username} onChange={(e) => setUsername(e.target.value)} style={{ border: '1px solid #d8e2ef', borderRadius: '6px', padding: '10px' }} required />
           <input type="password" placeholder="Senha" value={password} onChange={(e) => setPassword(e.target.value)} style={{ border: '1px solid #d8e2ef', borderRadius: '6px', padding: '10px' }} required />
           <button type="submit" style={{ background: '#2C7BE5', color: 'white', border: 'none', borderRadius: '6px', padding: '10px', fontWeight: 600 }}>Entrar</button>
         </form>
-        <p style={{ marginTop: '14px', fontSize: '0.8rem', color: '#8a8d93' }}>Usuário Master: <b>Donfm</b></p>
       </div>
     </div>
   );
+};
+
+
+const ALL_PAGES = ["dashboard","adesao","empresarial","inclusao","exclusao","transferencia","faturas","comissoes","seguradoras","produtos","colaboradores","relatorios","robo","exportar"];
+
+const DEFAULT_ACCESS = {
+  Master: ALL_PAGES,
+  Diretoria: ["dashboard","adesao","empresarial","inclusao","exclusao","transferencia","faturas","comissoes","seguradoras","produtos","colaboradores","relatorios","robo"],
+  Gerencia: ["dashboard","adesao","empresarial","inclusao","exclusao","transferencia","faturas","comissoes","seguradoras","produtos","relatorios"],
+  Analista: ["dashboard","adesao","inclusao","exclusao","transferencia"]
+};
+
+const getInitialAccess = () => {
+  const raw = localStorage.getItem('doncor_access');
+  if (!raw) return DEFAULT_ACCESS;
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      ...DEFAULT_ACCESS,
+      ...parsed,
+      Master: ALL_PAGES,
+    };
+  } catch {
+    return DEFAULT_ACCESS;
+  }
 };
 
 const pageComponents = { dashboard: Dashboard, adesao: Adesao, empresarial: Empresarial, inclusao: Inclusao, exclusao: Exclusao, transferencia: Transferencia, faturas: Faturas, comissoes: Comissoes, seguradoras: Seguradoras, produtos: Produtos, colaboradores: Colaboradores, relatorios: Relatorios, robo: Robo };
@@ -87,7 +110,7 @@ function MainApp({ session, onLogout, accessByRole, onAccessChange }) {
   const [activeTab, setActiveTab] = useState("dashboard");
 
   const role = session?.role || 'Diretoria';
-  const allowedPages = accessByRole[role] || [];
+  const allowedPages = useMemo(() => accessByRole[role] || accessByRole.Diretoria || [], [accessByRole, role]);
 
   const openTab = useCallback((item) => {
     if (!allowedPages.includes(item.page) && item.page !== 'dashboard') return;
@@ -128,12 +151,12 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(() => JSON.parse(localStorage.getItem('doncor_session') || 'null'));
   const [error, setError] = useState('');
-  const [accessByRole, setAccessByRole] = useState(() => JSON.parse(localStorage.getItem('doncor_access') || '{"Diretoria":["adesao","empresarial","inclusao","exclusao","transferencia","faturas","comissoes","seguradoras","produtos","colaboradores","relatorios","robo"],"Gerencia":["dashboard","adesao","empresarial","inclusao","exclusao","transferencia","faturas","comissoes","seguradoras","produtos","relatorios"],"Analista":["dashboard","adesao","inclusao","exclusao","transferencia"]}'));
+  const [accessByRole, setAccessByRole] = useState(getInitialAccess);
 
   const handleLoadingFinish = useCallback(() => setLoading(false), []);
   const handleLogin = (username, password) => {
     if (username === MASTER_USER.username && password === MASTER_USER.password) {
-      const masterSession = { username: 'Donfm', role: 'Master' };
+      const masterSession = { username: 'Donfim', role: 'Master' };
       setSession(masterSession);
       localStorage.setItem('doncor_session', JSON.stringify(masterSession));
       setError('');
