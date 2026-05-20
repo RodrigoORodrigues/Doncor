@@ -45,6 +45,7 @@ export const menuItems = [
     section: "Automação",
     items: [
       { id: "robo", label: "Robô", icon: "Bot", page: "robo" },
+      { id: "robo-config", label: "Configuração do Robô", icon: "Settings", page: "robo-config" },
     ],
   },
   {
