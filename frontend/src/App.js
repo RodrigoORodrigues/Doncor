@@ -83,9 +83,9 @@ const ALL_PAGES = ["dashboard","adesao","empresarial","inclusao","exclusao","tra
 
 const DEFAULT_ACCESS = {
   Master: ALL_PAGES,
-  Diretoria: ["dashboard","adesao","empresarial","inclusao","exclusao","transferencia","faturas","comissoes","seguradoras","produtos","colaboradores","relatorios","robo"],
-  Gerencia: ["dashboard","adesao","empresarial","inclusao","exclusao","transferencia","faturas","comissoes","seguradoras","produtos","relatorios"],
-  Analista: ["dashboard","adesao","inclusao","exclusao","transferencia"]
+  Diretoria: ["dashboard","adesao","empresarial","inclusao","exclusao","transferencia","faturas","comissoes","seguradoras","produtos","colaboradores","relatorios","robo","perfil","configuracoes","suporte"],
+  Gerencia: ["dashboard","adesao","empresarial","inclusao","exclusao","transferencia","faturas","comissoes","seguradoras","produtos","relatorios","perfil","configuracoes","suporte"],
+  Analista: ["dashboard","adesao","inclusao","exclusao","transferencia","perfil","configuracoes","suporte"]
 };
 
 const getInitialAccess = () => {
