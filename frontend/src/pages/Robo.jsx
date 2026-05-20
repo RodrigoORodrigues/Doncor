@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Bot, PlayCircle, PauseCircle, Activity, Loader2, RefreshCw } from 'lucide-react';
 import { Badge } from '../components/ui/badge';
-import { fetchRoboStatus, fetchRoboExecucoes, startRobo, pauseRobo } from '../services/api';
+import { fetchRoboStatus, fetchRoboExecucoes, fetchRoboConfig, startRobo, pauseRobo, triggerRoboReal } from '../services/api';
 
 const cardStyle = {
   background: '#fff',
@@ -20,6 +20,7 @@ const Robo = () => {
   const [updating, setUpdating] = useState(false);
   const [statusFilter, setStatusFilter] = useState('todos');
   const [currentPage, setCurrentPage] = useState(1);
+  const [lastTriggerMessage, setLastTriggerMessage] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -96,8 +97,28 @@ const Robo = () => {
     try {
       setUpdating(true);
       await startRobo();
+
+      const roboConfig = await fetchRoboConfig();
+      const user_id = window.prompt('Informe o user_id para execução real do RPA:');
+      const unique_login_code = window.prompt('Informe o unique_login_code do segurado:');
+      const apolice_id = window.prompt('Informe o apolice_id:');
+
+      if (user_id && unique_login_code && apolice_id) {
+        const triggerResult = await triggerRoboReal({
+          user_id,
+          unique_login_code,
+          apolice_id,
+          operadora_nome: roboConfig?.operadoras?.[0]?.nome || '',
+        });
+        setLastTriggerMessage(triggerResult?.message || 'RPA acionado com sucesso');
+      } else {
+        setLastTriggerMessage('RPA não acionado: parâmetros obrigatórios não informados.');
+      }
+
       const updated = await fetchRoboStatus();
+      const execData = await fetchRoboExecucoes();
       setStatus(updated);
+      setExecucoes(execData);
     } catch (error) {
       console.error('Erro ao iniciar robô', error);
     } finally {
@@ -146,7 +167,7 @@ const Robo = () => {
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px', color: '#5E6E82' }}>
           {updating && <RefreshCw size={14} className="animate-spin" />}
-          <span style={{ fontSize: '0.85rem' }}>{updating ? 'Atualizando...' : 'Sem atualização pendente'}</span>
+          <span style={{ fontSize: '0.85rem' }}>{updating ? 'Atualizando...' : (lastTriggerMessage || 'Sem atualização pendente')}</span>
         </div>
       </div>
 

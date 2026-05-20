@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Bot, Save, ShieldCheck, KeyRound, Globe, ServerCog, Plus, Trash2 } from 'lucide-react';
+import { fetchRoboConfig, saveRoboConfig } from '../services/api';
 
 const emptyOperadora = { nome: '', url: '', usuario: '', senha: '' };
 
@@ -19,6 +20,14 @@ const RoboConfig = () => {
     supabaseBucketBoletos: 'boletos',
     logNivel: 'INFO',
   });
+
+  useEffect(() => {
+    fetchRoboConfig().then((data) => {
+      if (data && Object.keys(data).length) {
+        setConfig((prev) => ({ ...prev, ...data, operadoras: data.operadoras?.length ? data.operadoras : prev.operadoras }));
+      }
+    }).catch(console.error);
+  }, []);
 
   const requiredFields = useMemo(() => {
     const base = ['supabaseUrl', 'supabaseServiceRoleKey'];
@@ -124,7 +133,7 @@ const RoboConfig = () => {
           {missingCount ? `Campos obrigatórios pendentes: ${missingCount}` : 'Todos os campos obrigatórios foram preenchidos.'}
         </div>
 
-        <button style={{ marginTop:'14px', background:'#2C7BE5', color:'#fff', border:'none', borderRadius:'6px', padding:'8px 12px', display:'flex', alignItems:'center', gap:'6px' }}>
+        <button onClick={() => saveRoboConfig(config).then(() => alert('Configuração salva com sucesso.')).catch((e) => alert(e.message))} style={{ marginTop:'14px', background:'#2C7BE5', color:'#fff', border:'none', borderRadius:'6px', padding:'8px 12px', display:'flex', alignItems:'center', gap:'6px' }}>
           <Save size={14} /> Salvar parâmetros
         </button>
       </div>
