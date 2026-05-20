@@ -61,6 +61,27 @@ def _next_protocol(prefix: str, seq: int):
 
 
 
+async def _get_robo_config_latest():
+    cfg = await db.robo_config.find_one({}, _proj(), sort=[("updatedAt", -1), ("_id", -1)])
+    if cfg:
+        return cfg
+    return {
+        "intervaloMinutos": 15,
+        "tentativas": 3,
+        "notificacoes": True,
+        "modoSeguro": True,
+        "ambienteExecucao": "backend_fastapi",
+        "triggerEndpoint": "/api/v1/trigger-rpa",
+        "rpaServiceUrl": "",
+        "timeoutSegundos": 120,
+        "operadoras": [],
+        "supabaseUrl": "",
+        "supabaseServiceRoleKey": "",
+        "supabaseBucketBoletos": "boletos",
+        "logNivel": "INFO",
+    }
+
+
 async def _run_rpa_job(payload: dict, config: dict):
     """Execução simplificada do RPA real: chama serviço externo quando configurado."""
     service_url = config.get("rpaServiceUrl")
@@ -616,7 +637,7 @@ async def robo_pausar():
 
 @api_router.get("/robo/config")
 async def get_robo_config():
-    cfg = await db.robo_config.find_one({"id": "default"}, _proj())
+    cfg = await _get_robo_config_latest()
     return cfg or {
         "id": "default",
         "intervaloMinutos": 15,
@@ -638,15 +659,18 @@ async def get_robo_config():
 @api_router.post("/robo/config")
 async def save_robo_config(data: RoboConfigPayload):
     payload = data.model_dump()
-    payload["id"] = "default"
     payload["updatedAt"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-    await db.robo_config.update_one({"id": "default"}, {"$set": payload}, upsert=True)
+    current = await db.robo_config.find_one({}, {"_id": 1}, sort=[("updatedAt", -1), ("_id", -1)])
+    if current:
+        await db.robo_config.update_one({"_id": current["_id"]}, {"$set": payload})
+    else:
+        await db.robo_config.insert_one(payload)
     return {"message": "Configuração salva", "config": payload}
 
 
 @api_router.post("/robo/trigger-real")
 async def trigger_robo_real(data: RoboTriggerPayload):
-    cfg = await db.robo_config.find_one({"id": "default"}, _proj()) or {}
+    cfg = await _get_robo_config_latest() or {}
     if not cfg.get("operadoras"):
         raise HTTPException(status_code=400, detail="Nenhuma operadora configurada no RoboConfig")
 
