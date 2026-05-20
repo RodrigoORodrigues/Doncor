@@ -1,24 +1,19 @@
-// src/lib/supabaseClient.js
 import { createClient } from '@supabase/supabase-js';
 
-// Tenta obter as chaves das variáveis de ambiente
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
+const supabaseUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  process.env.REACT_APP_SUPABASE_URL;
 
-// Verifica se as chaves estão configuradas
+const supabaseAnonKey =
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.REACT_APP_SUPABASE_PUBLISHABLE_KEY ||
+  process.env.REACT_APP_SUPABASE_ANON_KEY;
+
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn(
-    'Supabase URL ou Anon Key não encontradas nas variáveis de ambiente. ' +
-    'Verifique o seu arquivo .env.local ou as configurações de ambiente.'
+    'Supabase URL ou chave publishable/anon não encontradas nas variáveis de ambiente.'
   );
 }
 
-// Inicializa o cliente Supabase
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-/**
- * Exemplo de uso:
- * import { supabase } from '../lib/supabaseClient';
- * 
- * const { data, error } = await supabase.from('perfis').select('*');
- */

@@ -4,13 +4,13 @@ import {
   Users, Handshake, UserPlus, UserMinus, ArrowLeftRight,
   Receipt, DollarSign, Building2, Package, UserCog,
   BarChart3, Download, LayoutDashboard,
-  Menu, Bot
+  Menu, Bot, Settings, User, HelpCircle
 } from 'lucide-react';
 
 const iconMap = {
   Users, Handshake, UserPlus, UserMinus, ArrowLeftRight,
   Receipt, DollarSign, Building2, Package, UserCog,
-  BarChart3, Download, LayoutDashboard, Menu, Bot
+  BarChart3, Download, LayoutDashboard, Menu, Bot, Settings, User, HelpCircle
 };
 
 const Sidebar = ({ collapsed, onToggle, onMenuClick, activeItem, allowedPages = [] }) => {

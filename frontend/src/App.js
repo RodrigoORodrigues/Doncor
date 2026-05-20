@@ -18,6 +18,7 @@ import Produtos from "./pages/Produtos";
 import Colaboradores from "./pages/Colaboradores";
 import Relatorios from "./pages/Relatorios";
 import Robo from "./pages/Robo";
+import RoboConfig from "./pages/RoboConfig";
 import { Loader2 } from "lucide-react";
 
 const MASTER_USER = { username: 'Donfim', password: '121418', role: 'Master' };
@@ -78,13 +79,13 @@ const LoginScreen = ({ onLogin, error }) => {
 };
 
 
-const ALL_PAGES = ["dashboard","adesao","empresarial","inclusao","exclusao","transferencia","faturas","comissoes","seguradoras","produtos","colaboradores","relatorios","robo","exportar"];
+const ALL_PAGES = ["dashboard","adesao","empresarial","inclusao","exclusao","transferencia","faturas","comissoes","seguradoras","produtos","colaboradores","relatorios","robo","robo-config","exportar","perfil","configuracoes","suporte"];
 
 const DEFAULT_ACCESS = {
   Master: ALL_PAGES,
-  Diretoria: ["dashboard","adesao","empresarial","inclusao","exclusao","transferencia","faturas","comissoes","seguradoras","produtos","colaboradores","relatorios","robo"],
-  Gerencia: ["dashboard","adesao","empresarial","inclusao","exclusao","transferencia","faturas","comissoes","seguradoras","produtos","relatorios"],
-  Analista: ["dashboard","adesao","inclusao","exclusao","transferencia"]
+  Diretoria: ["dashboard","adesao","empresarial","inclusao","exclusao","transferencia","faturas","comissoes","seguradoras","produtos","colaboradores","relatorios","robo","perfil","configuracoes","suporte"],
+  Gerencia: ["dashboard","adesao","empresarial","inclusao","exclusao","transferencia","faturas","comissoes","seguradoras","produtos","relatorios","perfil","configuracoes","suporte"],
+  Analista: ["dashboard","adesao","inclusao","exclusao","transferencia","perfil","configuracoes","suporte"]
 };
 
 const getInitialAccess = () => {
@@ -102,7 +103,7 @@ const getInitialAccess = () => {
   }
 };
 
-const pageComponents = { dashboard: Dashboard, adesao: Adesao, empresarial: Empresarial, inclusao: Inclusao, exclusao: Exclusao, transferencia: Transferencia, faturas: Faturas, comissoes: Comissoes, seguradoras: Seguradoras, produtos: Produtos, colaboradores: Colaboradores, relatorios: Relatorios, robo: Robo };
+const pageComponents = { dashboard: Dashboard, adesao: Adesao, empresarial: Empresarial, inclusao: Inclusao, exclusao: Exclusao, transferencia: Transferencia, faturas: Faturas, comissoes: Comissoes, seguradoras: Seguradoras, produtos: Produtos, colaboradores: Colaboradores, relatorios: Relatorios, robo: Robo, "robo-config": RoboConfig, perfil: GenericPage, configuracoes: GenericPage, suporte: GenericPage };
 
 function MainApp({ session, onLogout, accessByRole, onAccessChange }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -139,7 +140,7 @@ function MainApp({ session, onLogout, accessByRole, onAccessChange }) {
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} onMenuClick={openTab} activeItem={activeTab} allowedPages={allowedPages} />
       <div className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`} style={{ flex: 1 }}>
-        <TopNav onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)} sidebarCollapsed={sidebarCollapsed} currentUser={{ name: session.username, role: session.role }} onLogout={onLogout} />
+        <TopNav onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)} sidebarCollapsed={sidebarCollapsed} currentUser={{ name: session.username, role: session.role }} onLogout={onLogout} onQuickOpen={openTab} />
         <TabSystem tabs={tabs} activeTab={activeTab} onTabClick={setActiveTab} onTabClose={closeTab} onRefresh={refreshTab} />
         <div className="content-area">{renderContent()}</div>
       </div>

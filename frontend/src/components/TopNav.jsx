@@ -13,7 +13,7 @@ import {
 } from './ui/dropdown-menu';
 import { Badge } from './ui/badge';
 
-const TopNav = ({ onToggleSidebar, sidebarCollapsed, currentUser, onLogout }) => {
+const TopNav = ({ onToggleSidebar, sidebarCollapsed, currentUser, onLogout, onQuickOpen }) => {
   const [saldoVidas, setSaldoVidas] = useState({ percentual_total: 0 });
   const userData = {
     name: currentUser?.name || 'Usuário',
@@ -202,13 +202,13 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, currentUser, onLogout }) =>
               <div style={{ fontSize: '0.7rem', color: '#8a8d93' }}>{userData.email}</div>
               <div style={{ fontSize: '0.65rem', color: '#8a8d93', marginTop: '2px' }}>{userData.company}</div>
             </div>
-            <DropdownMenuItem style={{ cursor: 'pointer', fontSize: '0.8rem' }}>
+            <DropdownMenuItem style={{ cursor: 'pointer', fontSize: '0.8rem' }} onClick={() => onQuickOpen?.({ id: 'perfil', label: 'Meu Perfil', icon: 'User', page: 'perfil' })}>
               <User size={14} style={{ marginRight: '8px' }} /> Meu Perfil
             </DropdownMenuItem>
-            <DropdownMenuItem style={{ cursor: 'pointer', fontSize: '0.8rem' }}>
+            <DropdownMenuItem style={{ cursor: 'pointer', fontSize: '0.8rem' }} onClick={() => onQuickOpen?.({ id: 'configuracoes', label: 'Configurações', icon: 'Settings', page: 'configuracoes' })}>
               <Settings size={14} style={{ marginRight: '8px' }} /> Configurações
             </DropdownMenuItem>
-            <DropdownMenuItem style={{ cursor: 'pointer', fontSize: '0.8rem' }}>
+            <DropdownMenuItem style={{ cursor: 'pointer', fontSize: '0.8rem' }} onClick={() => onQuickOpen?.({ id: 'suporte', label: 'Suporte', icon: 'HelpCircle', page: 'suporte' })}>
               <HelpCircle size={14} style={{ marginRight: '8px' }} /> Suporte
             </DropdownMenuItem>
             <DropdownMenuSeparator />
