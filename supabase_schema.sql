@@ -1,104 +1,44 @@
--- Esquema do Banco de Dados para Supabase
+-- MIGRACAO CONSOLIDADA (compatível com robo_config.id bigint)
+create extension if not exists "pgcrypto";
 
--- Tabela de Perfis de Usuários (extensão de auth.users)
-CREATE TABLE public.perfis (
-    id uuid REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
-    username TEXT UNIQUE NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    role TEXT NOT NULL DEFAULT 'cliente' CHECK (role IN ('admin', 'agente', 'cliente')),
-    codigo_login_unico TEXT UNIQUE -- Usado para match com o RPA
+create table if not exists public.robo_config (
+  id bigserial primary key
 );
 
--- Habilitar Row Level Security (RLS) para a tabela perfis
-ALTER TABLE public.perfis ENABLE ROW LEVEL SECURITY;
+alter table public.robo_config
+  add column if not exists intervalo_minutos integer not null default 15,
+  add column if not exists tentativas integer not null default 3,
+  add column if not exists notificacoes boolean not null default true,
+  add column if not exists modo_seguro boolean not null default true,
+  add column if not exists ambiente_execucao text not null default 'backend_fastapi',
+  add column if not exists trigger_endpoint text not null default '/api/v1/trigger-rpa',
+  add column if not exists rpa_service_url text not null default '',
+  add column if not exists timeout_segundos integer not null default 120,
+  add column if not exists operadoras jsonb not null default '[]'::jsonb,
+  add column if not exists supabase_url text not null default '',
+  add column if not exists supabase_service_role_key text not null default '',
+  add column if not exists supabase_bucket_boletos text not null default 'boletos',
+  add column if not exists log_nivel text not null default 'INFO',
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now();
 
--- Política para administradores: podem ver e editar todos os perfis
-CREATE POLICY "Admins can view and update all profiles" ON public.perfis
-FOR ALL USING (get_user_role() = 'admin') WITH CHECK (get_user_role() = 'admin');
+insert into public.robo_config (
+  intervalo_minutos, tentativas, notificacoes, modo_seguro,
+  ambiente_execucao, trigger_endpoint, rpa_service_url, timeout_segundos,
+  operadoras, supabase_url, supabase_service_role_key, supabase_bucket_boletos, log_nivel
+)
+select
+  15, 3, true, true,
+  'backend_fastapi', '/api/v1/trigger-rpa', '', 120,
+  '[]'::jsonb, '', '', 'boletos', 'INFO'
+where not exists (select 1 from public.robo_config);
 
--- Política para agentes: podem ver perfis de clientes
-CREATE POLICY "Agents can view client profiles" ON public.perfis
-FOR SELECT USING (get_user_role() = 'agente' AND role = 'cliente');
-
--- Política para clientes: podem ver e editar apenas seu próprio perfil
-CREATE POLICY "Users can view and update their own profile" ON public.perfis
-FOR ALL USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
-
--- Função para obter o papel do usuário logado (necessário para RLS)
-CREATE OR REPLACE FUNCTION public.get_user_role() RETURNS text LANGUAGE plpgsql SECURITY DEFINER AS $$
-BEGIN
-  RETURN (SELECT role FROM public.perfis WHERE id = auth.uid());
-END;
-$$;
-
--- Tabela de Apólices
-CREATE TABLE public.apolices (
-    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-    numero TEXT UNIQUE NOT NULL,
-    seguradora TEXT NOT NULL,
-    produto TEXT NOT NULL,
-    administradora TEXT, -- Opcional para apólices empresariais
-    empresa TEXT,        -- Opcional para apólices de adesão
-    cnpj TEXT,           -- Opcional para apólices de adesão
-    vigencia DATE NOT NULL,
-    vencimento DATE,     -- Opcional para apólices de adesão
-    vidas INTEGER NOT NULL DEFAULT 0,
-    status TEXT NOT NULL DEFAULT 'Ativo',
-    valor_mensal NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
-    tipo_contrato TEXT NOT NULL CHECK (tipo_contrato IN ('adesao', 'empresarial')),
-    user_id uuid REFERENCES public.perfis(id) ON DELETE CASCADE -- Link para o perfil do cliente/agente
+create table if not exists public.robo_execucoes (
+  id uuid primary key default gen_random_uuid(),
+  processo text not null,
+  inicio timestamptz not null default now(),
+  duracao text,
+  status text not null,
+  resultado jsonb,
+  created_at timestamptz not null default now()
 );
-
--- Habilitar RLS para a tabela apolices
-ALTER TABLE public.apolices ENABLE ROW LEVEL SECURITY;
-
--- Política para administradores: podem ver e editar todas as apólices
-CREATE POLICY "Admins can manage all policies" ON public.apolices
-FOR ALL USING (get_user_role() = 'admin') WITH CHECK (get_user_role() = 'admin');
-
--- Política para agentes: podem ver apólices de clientes que gerenciam (assumindo que o agente tem uma relação com o cliente)
--- Para simplificar, vamos permitir que agentes vejam todas as apólices por enquanto, mas isso pode ser refinado.
-CREATE POLICY "Agents can view all policies" ON public.apolices
-FOR SELECT USING (get_user_role() = 'agente');
-
--- Política para clientes: podem ver e editar apenas suas próprias apólices
-CREATE POLICY "Users can view and update their own policies" ON public.apolices
-FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
--- Tabela de Boletos
-CREATE TABLE public.boletos (
-    id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-    numero TEXT NOT NULL,
-    apolice_id uuid REFERENCES public.apolices(id) ON DELETE CASCADE,
-    seguradora TEXT NOT NULL,
-    competencia DATE NOT NULL,
-    vencimento DATE NOT NULL,
-    valor NUMERIC(10, 2) NOT NULL,
-    valor_pago NUMERIC(10, 2) DEFAULT 0.00,
-    status TEXT NOT NULL DEFAULT 'Aberta',
-    url_boleto TEXT, -- URL para o boleto baixado (armazenado no Supabase Storage)
-    user_id uuid REFERENCES public.perfis(id) ON DELETE CASCADE -- Link para o perfil do cliente
-);
-
--- Habilitar RLS para a tabela boletos
-ALTER TABLE public.boletos ENABLE ROW LEVEL SECURITY;
-
--- Política para administradores: podem ver e editar todos os boletos
-CREATE POLICY "Admins can manage all boletos" ON public.boletos
-FOR ALL USING (get_user_role() = 'admin') WITH CHECK (get_user_role() = 'admin');
-
--- Política para agentes: podem ver boletos de clientes que gerenciam
-CREATE POLICY "Agents can view client boletos" ON public.boletos
-FOR SELECT USING (get_user_role() = 'agente');
-
--- Política para clientes: podem ver e editar apenas seus próprios boletos
-CREATE POLICY "Users can view and update their own boletos" ON public.boletos
-FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
--- Inserir o superusuário 'Donfim' na tabela de perfis (exemplo, deve ser feito via autenticação)
--- Nota: O ID do usuário 'Donfim' será gerado pelo Supabase Auth. Este INSERT é apenas um placeholder.
--- Você precisará criar o usuário 'Donfim' via Supabase Auth e então atualizar seu perfil com a role 'admin'.
--- INSERT INTO public.perfis (id, username, email, role) VALUES ('<UUID_DO_DONFIM>', 'Donfim', 'donfim@example.com', 'admin');
-
--- Habilitar a extensão uuid-ossp para gerar UUIDs
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
