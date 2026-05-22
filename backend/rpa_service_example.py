@@ -1,12 +1,5 @@
 """
 Serviço RPA real (base) para plugar no RPA_SERVICE_URL.
-
-Execute:
-  uvicorn rpa_service_example:app --host 0.0.0.0 --port 9000 --reload
-
-Dependências:
-  pip install fastapi uvicorn playwright
-  playwright install chromium
 """
 
 from fastapi import FastAPI, HTTPException
@@ -18,7 +11,7 @@ import time
 
 try:
     from playwright.async_api import async_playwright
-except Exception:  # playwright pode não estar instalado no ambiente
+except Exception:
     async_playwright = None
 
 
@@ -31,6 +24,23 @@ class RunRpaPayload(BaseModel):
 
 
 app = FastAPI(title="Doncor RPA Service")
+
+RPA_CONFIG_STORE: Dict[str, Any] = {
+    "intervaloMinutos": 15,
+    "tentativas": 3,
+    "notificacoes": True,
+    "modoSeguro": True,
+    "ambienteExecucao": "servico_externo",
+    "triggerEndpoint": "/api/v1/trigger-rpa",
+    "rpaServiceUrl": "",
+    "timeoutSegundos": 120,
+    "operadoras": [],
+    "supabaseUrl": "",
+    "supabaseServiceRoleKey": "",
+    "supabaseBucketBoletos": "boletos",
+    "logNivel": "INFO",
+}
+RPA_EXECUTIONS: List[Dict[str, Any]] = []
 
 
 @app.get("/health")
@@ -54,14 +64,11 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
         page = await browser.new_page()
         try:
             await page.goto(portal_url, wait_until="domcontentloaded", timeout=60000)
-
-            # Ajuste os seletores abaixo conforme portal real da operadora
             await page.fill('input[name="username"], input#username, input[type="email"]', username)
             await page.fill('input[name="password"], input#password, input[type="password"]', password)
             await page.click('button[type="submit"], button:has-text("Entrar"), button:has-text("Login")')
             await page.wait_for_timeout(3000)
 
-            # Exemplo: tentar encontrar links de boletos para download
             links = await page.locator('a[href*="boleto"], a.download-boleto').all()
             for idx, link in enumerate(links[:3]):
                 async with page.expect_download(timeout=20000) as download_info:
@@ -72,7 +79,6 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
                 await download.save_as(path)
                 downloaded_files.append(path)
 
-            # Fallback para demonstração, caso nenhum download encontrado
             if not downloaded_files:
                 fd, path = tempfile.mkstemp(prefix=f"boleto_{payload.apolice_id}_", suffix=".pdf")
                 os.close(fd)
@@ -93,13 +99,8 @@ async def run_rpa(payload: RunRpaPayload):
         raise HTTPException(status_code=400, detail="Operadora senha não informada")
 
     start = time.time()
-
     files = await _run_playwright_flow(payload)
-
     elapsed = round(time.time() - start, 2)
-
-    # TODO: subir arquivos em payload.supabase['bucket'] usando serviceRoleKey
-    # TODO: registrar metadados no banco (boletos/processamento)
 
     return {
         "status": "success",
@@ -111,3 +112,51 @@ async def run_rpa(payload: RunRpaPayload):
         "operadora": payload.operadora.get("nome", "Operadora"),
         "files": files,
     }
+
+
+# Compat layer: permite frontend Doncor apontado direto para este serviço
+@app.get("/api/robo/config")
+async def get_robo_config_api():
+    return RPA_CONFIG_STORE
+
+
+@app.post("/api/robo/config")
+async def save_robo_config_api(config: Dict[str, Any]):
+    RPA_CONFIG_STORE.update(config)
+    return {"message": "Configuração salva", "config": RPA_CONFIG_STORE}
+
+
+@app.post("/api/robo/trigger-real")
+async def trigger_real_api(payload: Dict[str, Any]):
+    operadora = payload.get("operadora")
+    if not operadora:
+        operadoras = RPA_CONFIG_STORE.get("operadoras") or []
+        operadora = operadoras[0] if operadoras else {}
+
+    run_payload = RunRpaPayload(
+        user_id=payload.get("user_id", ""),
+        unique_login_code=payload.get("unique_login_code", ""),
+        apolice_id=payload.get("apolice_id", ""),
+        operadora=operadora,
+        supabase={
+            "url": RPA_CONFIG_STORE.get("supabaseUrl", ""),
+            "serviceRoleKey": RPA_CONFIG_STORE.get("supabaseServiceRoleKey", ""),
+            "bucket": RPA_CONFIG_STORE.get("supabaseBucketBoletos", "boletos"),
+        },
+    )
+
+    result = await run_rpa(run_payload)
+    RPA_EXECUTIONS.insert(0, {
+        "id": str(time.time()),
+        "processo": "Extração de boletos RPA",
+        "inicio": time.strftime("%d/%m/%Y %H:%M"),
+        "duracao": f"{result.get('duration_seconds', 0)}s",
+        "status": "Concluído" if result.get("status") == "success" else "Finalizado",
+        "resultado": result,
+    })
+    return {"message": "RPA acionado", "result": result}
+
+
+@app.get("/api/robo/execucoes")
+async def robo_execucoes_api():
+    return RPA_EXECUTIONS
