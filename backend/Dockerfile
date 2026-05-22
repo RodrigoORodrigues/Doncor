@@ -6,6 +6,6 @@ COPY . /app
 
 RUN pip install --no-cache-dir fastapi uvicorn playwright
 
-EXPOSE 8000
+EXPOSE 9000
 
-CMD ["sh", "-c", "python -m uvicorn rpa_service_example:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["python", "-m", "uvicorn", "rpa_service_example:app", "--host", "0.0.0.0", "--port", "9000"]
