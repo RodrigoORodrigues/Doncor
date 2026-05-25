@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, Query, HTTPException
+from fastapi import FastAPI, APIRouter, Query, HTTPException, Header, Depends
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -35,6 +35,13 @@ api_router = APIRouter(prefix="/api")
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+
+def _require_robo_role(x_user_role: Optional[str] = Header(default=None)):
+    if not x_user_role:
+        raise HTTPException(status_code=401, detail="Não autenticado")
+    if x_user_role.lower() != "admin":
+        raise HTTPException(status_code=403, detail="Acesso negado")
 
 
 # ─── Startup: Seed DB ─────────────────────────────────────────
@@ -573,7 +580,7 @@ async def robo_status():
 
 
 @api_router.post("/robo/iniciar")
-async def robo_iniciar():
+async def robo_iniciar(_: None = Depends(_require_robo_role)):
     now = datetime.now().strftime("%d/%m/%Y %H:%M")
     await db.robo_estado.update_one(
         {"id": "default"},
@@ -584,7 +591,7 @@ async def robo_iniciar():
 
 
 @api_router.post("/robo/pausar")
-async def robo_pausar():
+async def robo_pausar(_: None = Depends(_require_robo_role)):
     now = datetime.now().strftime("%d/%m/%Y %H:%M")
     await db.robo_estado.update_one(
         {"id": "default"},
@@ -595,7 +602,7 @@ async def robo_pausar():
 
 
 @api_router.get("/robo/execucoes")
-async def robo_execucoes():
+async def robo_execucoes(_: None = Depends(_require_robo_role)):
     return [
         {"id": "rb-001", "processo": "Importação de faturas", "inicio": "19/05/2026 08:15", "duracao": "01m42s", "status": "Concluído"},
         {"id": "rb-002", "processo": "Validação de contratos", "inicio": "19/05/2026 09:10", "duracao": "03m05s", "status": "Concluído"},
