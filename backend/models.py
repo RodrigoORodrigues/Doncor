@@ -195,3 +195,33 @@ class Colaborador(ColaboradorBase):
 
 class ColaboradorCreate(ColaboradorBase):
     pass
+
+
+class OperadoraCredencial(BaseModel):
+    nome: str = ""
+    url: str
+    usuario: str
+    senha: str
+
+
+class RoboConfigPayload(BaseModel):
+    intervaloMinutos: int = 15
+    tentativas: int = 3
+    notificacoes: bool = True
+    modoSeguro: bool = True
+    ambienteExecucao: str = "backend_fastapi"
+    triggerEndpoint: str = "/api/v1/trigger-rpa"
+    rpaServiceUrl: str = ""
+    timeoutSegundos: int = 120
+    operadoras: list[OperadoraCredencial] = []
+    supabaseUrl: str = ""
+    supabaseServiceRoleKey: str = ""
+    supabaseBucketBoletos: str = "boletos"
+    logNivel: str = "INFO"
+
+
+class RoboTriggerPayload(BaseModel):
+    user_id: str
+    unique_login_code: str
+    apolice_id: str
+    operadora_nome: str = ""
