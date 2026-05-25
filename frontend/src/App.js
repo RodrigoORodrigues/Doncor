@@ -20,6 +20,9 @@ import Relatorios from "./pages/Relatorios";
 import Robo from "./pages/Robo";
 import { Loader2 } from "lucide-react";
 
+const DEFAULT_ACCESS = "dashboard";
+const getInitialAccess = () => DEFAULT_ACCESS;
+
 const LoadingScreen = ({ onFinish }) => {
   const [validating, setValidating] = useState(true);
   const [error, setError] = useState(false);
@@ -94,14 +97,17 @@ const pageComponents = {
   colaboradores: Colaboradores,
   relatorios: Relatorios,
   robo: Robo,
+  perfil: GenericPage,
+  configuracoes: GenericPage,
+  suporte: GenericPage,
 };
 
 function MainApp() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [tabs, setTabs] = useState([
-    { id: "dashboard", label: "Dashboard do Usuário", icon: "LayoutDashboard", page: "dashboard", closable: false },
+    { id: getInitialAccess(), label: "Dashboard do Usuário", icon: "LayoutDashboard", page: getInitialAccess(), closable: false },
   ]);
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = useState(getInitialAccess());
 
   const openTab = useCallback((item) => {
     const existingTab = tabs.find((t) => t.id === item.id);
@@ -151,6 +157,7 @@ function MainApp() {
         <TopNav
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
           sidebarCollapsed={sidebarCollapsed}
+          onMenuClick={openTab}
         />
         <TabSystem
           tabs={tabs}
