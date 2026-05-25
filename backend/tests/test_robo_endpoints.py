@@ -4,7 +4,12 @@ os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
 os.environ.setdefault("DB_NAME", "test_db")
 
 from fastapi.testclient import TestClient
-import backend.server as server
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "backend"))
+import server
 
 
 class FakeCollection:
