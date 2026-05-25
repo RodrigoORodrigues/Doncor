@@ -203,4 +203,8 @@ export const startRobo = () => api.post("/robo/iniciar").then((r) => r.data);
 
 export const pauseRobo = () => api.post("/robo/pausar").then((r) => r.data);
 
+export const fetchRoboConfig = () => getObject("/robo/config", {});
+export const saveRoboConfig = (data) => api.post("/robo/config", data).then((r) => r.data);
+export const triggerRoboReal = (data) => api.post("/robo/trigger-real", data).then((r) => r.data);
+
 export default api;
