@@ -54,38 +54,23 @@ const LoadingScreen = ({ onFinish }) => {
   );
 };
 
-const LoginScreen = ({ onLogin, error }) => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-
-  const submit = (e) => {
-    e.preventDefault();
-    onLogin(username, password);
-  };
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow p-8">
-        <h2 style={{ fontSize: '1.8rem', textAlign: 'center', marginBottom: '20px', color: '#344050' }}>Doncor</h2>
-        {error && <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', color: '#b91c1c', padding: '10px', borderRadius: '6px', marginBottom: '12px' }}>{error}</div>}
-        <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <input placeholder="Usuário" value={username} onChange={(e) => setUsername(e.target.value)} style={{ border: '1px solid #d8e2ef', borderRadius: '6px', padding: '10px' }} required />
-          <input type="password" placeholder="Senha" value={password} onChange={(e) => setPassword(e.target.value)} style={{ border: '1px solid #d8e2ef', borderRadius: '6px', padding: '10px' }} required />
-          <button type="submit" style={{ background: '#2C7BE5', color: 'white', border: 'none', borderRadius: '6px', padding: '10px', fontWeight: 600 }}>Entrar</button>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-
-const ALL_PAGES = ["dashboard","adesao","empresarial","inclusao","exclusao","transferencia","faturas","comissoes","seguradoras","produtos","colaboradores","relatorios","robo","robo-config","exportar","perfil","configuracoes","suporte"];
-
-const DEFAULT_ACCESS = {
-  Master: ALL_PAGES,
-  Diretoria: ["dashboard","adesao","empresarial","inclusao","exclusao","transferencia","faturas","comissoes","seguradoras","produtos","colaboradores","relatorios","robo","perfil","configuracoes","suporte"],
-  Gerencia: ["dashboard","adesao","empresarial","inclusao","exclusao","transferencia","faturas","comissoes","seguradoras","produtos","relatorios","perfil","configuracoes","suporte"],
-  Analista: ["dashboard","adesao","inclusao","exclusao","transferencia","perfil","configuracoes","suporte"]
+const pageComponents = {
+  dashboard: Dashboard,
+  adesao: Adesao,
+  empresarial: Empresarial,
+  inclusao: Inclusao,
+  exclusao: Exclusao,
+  transferencia: Transferencia,
+  faturas: Faturas,
+  comissoes: Comissoes,
+  seguradoras: Seguradoras,
+  produtos: Produtos,
+  colaboradores: Colaboradores,
+  relatorios: Relatorios,
+  robo: Robo,
+  perfil: GenericPage,
+  configuracoes: GenericPage,
+  suporte: GenericPage,
 };
 
 const getInitialAccess = () => {
@@ -140,9 +125,21 @@ function MainApp({ session, onLogout, accessByRole, onAccessChange }) {
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} onMenuClick={openTab} activeItem={activeTab} allowedPages={allowedPages} />
       <div className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`} style={{ flex: 1 }}>
-        <TopNav onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)} sidebarCollapsed={sidebarCollapsed} currentUser={{ name: session.username, role: session.role }} onLogout={onLogout} onQuickOpen={openTab} />
-        <TabSystem tabs={tabs} activeTab={activeTab} onTabClick={setActiveTab} onTabClose={closeTab} onRefresh={refreshTab} />
-        <div className="content-area">{renderContent()}</div>
+        <TopNav
+          onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+          sidebarCollapsed={sidebarCollapsed}
+          onMenuClick={openTab}
+        />
+        <TabSystem
+          tabs={tabs}
+          activeTab={activeTab}
+          onTabClick={setActiveTab}
+          onTabClose={closeTab}
+          onRefresh={refreshTab}
+        />
+        <div className="content-area">
+          {renderContent()}
+        </div>
       </div>
     </div>
   );

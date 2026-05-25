@@ -2,6 +2,7 @@ import React from 'react';
 import { Construction } from 'lucide-react';
 
 const GenericPage = ({ pageId, pageLabel }) => {
+  const isSupport = pageId === "suporte";
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 200px)' }}>
       <div style={{
@@ -32,6 +33,25 @@ const GenericPage = ({ pageId, pageLabel }) => {
         <p style={{ fontSize: '0.72rem', color: '#b0b7c3', margin: '8px 0 0' }}>
           Em breve estará disponível para uso.
         </p>
+        {isSupport && (
+          <a
+            href="mailto:donfim@gmail.com?subject=Suporte%20Don%20Cor"
+            style={{
+              display: 'inline-block',
+              marginTop: '16px',
+              padding: '8px 14px',
+              borderRadius: '6px',
+              background: '#4979bb',
+              color: '#fff',
+              textDecoration: 'none',
+              fontSize: '0.8rem',
+              fontWeight: 600
+            }}
+          >
+            Enviar e-mail para suporte
+          </a>
+        )}
+
       </div>
     </div>
   );
