@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
@@ -18,6 +18,7 @@ import Produtos from "./pages/Produtos";
 import Colaboradores from "./pages/Colaboradores";
 import Relatorios from "./pages/Relatorios";
 import Robo from "./pages/Robo";
+import RoboConfig from "./pages/RoboConfig";
 import { Loader2 } from "lucide-react";
 
 const DEFAULT_ACCESS = "dashboard";
@@ -25,7 +26,6 @@ const getInitialAccess = () => DEFAULT_ACCESS;
 
 const LoadingScreen = ({ onFinish }) => {
   const [validating, setValidating] = useState(true);
-  const [error, setError] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -34,49 +34,21 @@ const LoadingScreen = ({ onFinish }) => {
         onFinish();
       }, 800);
       return () => clearTimeout(timer2);
-    }, 2000);
+    }, 1200);
     return () => clearTimeout(timer);
   }, [onFinish]);
 
   return (
     <div className="loading-screen">
-      <div className="loading-corner-tl" />
-      <div className="loading-corner-tr" />
-      <div className="loading-corner-br" />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '70px', overflow: 'hidden', width: '380px', zIndex: 1 }}>
-        <svg width="50" height="50" viewBox="0 0 100 100" style={{ marginRight: '10px' }}>
-          <circle cx="50" cy="50" r="45" fill="#3a5a8c" />
-          <path d="M35 25 Q35 75 65 75 Q45 75 45 50 Q45 25 65 25 Q35 25 35 25Z" fill="white" />
-        </svg>
-        <span style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 500, fontSize: '40pt', color: '#4979bb', fontFamily: 'Poppins, sans-serif', letterSpacing: '-1px' }}>
-          Don Cor
-        </span>
-      </div>
-      <span style={{ fontSize: '18pt', fontWeight: 600, color: '#e6832a', marginTop: '4px', zIndex: 1 }}>
-        Gestão de Apólices - Don Cor
-      </span>
+      <span style={{ fontSize: '18pt', fontWeight: 600, color: '#e6832a', marginTop: '4px', zIndex: 1 }}>Gestão de Apólices - Don Cor</span>
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', zIndex: 1, marginTop: '16px' }}>
         {validating ? (
           <span style={{ fontSize: '13pt', fontWeight: 600, color: '#2C7BE5', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Loader2 size={18} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
             Validando o usuário...
           </span>
-        ) : error ? (
-          <>
-            <span style={{ fontSize: '13pt', fontWeight: 600, color: '#e63757' }}>
-              Usuário não identificado!!
-            </span>
-            <button
-              onClick={() => window.location.reload()}
-              style={{ marginTop: '8px', background: '#e63757', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: '5px', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}
-            >
-              ACESSAR NOVAMENTE
-            </button>
-          </>
         ) : (
-          <span style={{ fontSize: '13pt', fontWeight: 600, color: '#27ae60', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            Acesso validado com sucesso!
-          </span>
+          <span style={{ fontSize: '13pt', fontWeight: 600, color: '#27ae60' }}>Acesso validado com sucesso!</span>
         )}
       </div>
     </div>
@@ -102,7 +74,7 @@ const pageComponents = {
   suporte: GenericPage,
 };
 
-function MainApp() {
+function MainApp({ session, onLogout, accessByRole, onAccessChange }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [tabs, setTabs] = useState([
     { id: getInitialAccess(), label: "Dashboard do Usuário", icon: "LayoutDashboard", page: getInitialAccess(), closable: false },
@@ -110,49 +82,31 @@ function MainApp() {
   const [activeTab, setActiveTab] = useState(getInitialAccess());
 
   const openTab = useCallback((item) => {
-    const existingTab = tabs.find((t) => t.id === item.id);
-    if (existingTab) {
-      setActiveTab(item.id);
-    } else {
-      setTabs((prev) => [
-        ...prev,
-        { id: item.id, label: item.label, icon: item.icon, page: item.page, closable: true },
-      ]);
-      setActiveTab(item.id);
-    }
-  }, [tabs]);
+    if (!allowedPages.includes(item.page) && item.page !== 'dashboard') return;
+    setTabs((prev) => prev.find((t) => t.id === item.id) ? prev : [...prev, { id: item.id, label: item.label, icon: item.icon, page: item.page, closable: true }]);
+    setActiveTab(item.id);
+  }, [allowedPages]);
 
   const closeTab = useCallback((tabId) => {
     setTabs((prev) => {
       const filtered = prev.filter((t) => t.id !== tabId);
-      if (activeTab === tabId && filtered.length > 0) {
-        setActiveTab(filtered[filtered.length - 1].id);
-      }
+      if (activeTab === tabId && filtered.length > 0) setActiveTab(filtered[filtered.length - 1].id);
       return filtered;
     });
   }, [activeTab]);
 
-  const refreshTab = useCallback(() => {
-    const current = activeTab;
-    setActiveTab("");
-    setTimeout(() => setActiveTab(current), 50);
-  }, [activeTab]);
+  const refreshTab = useCallback(() => { const current = activeTab; setActiveTab(""); setTimeout(() => setActiveTab(current), 50); }, [activeTab]);
 
   const renderContent = () => {
     const tab = tabs.find((t) => t.id === activeTab);
     if (!tab) return null;
     const Component = pageComponents[tab.page] || GenericPage;
-    return <Component key={tab.id} pageId={tab.page} pageLabel={tab.label} />;
+    return <Component key={tab.id} pageId={tab.page} pageLabel={tab.label} session={session} accessByRole={accessByRole} onAccessChange={onAccessChange} />;
   };
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        onMenuClick={openTab}
-        activeItem={activeTab}
-      />
+      <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} onMenuClick={openTab} activeItem={activeTab} allowedPages={allowedPages} />
       <div className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`} style={{ flex: 1 }}>
         <TopNav
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -176,21 +130,35 @@ function MainApp() {
 
 function App() {
   const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState(() => JSON.parse(localStorage.getItem('doncor_session') || 'null'));
+  const [error, setError] = useState('');
+  const [accessByRole, setAccessByRole] = useState(getInitialAccess);
 
-  const handleLoadingFinish = useCallback(() => {
-    setLoading(false);
-  }, []);
+  const handleLoadingFinish = useCallback(() => setLoading(false), []);
+  const handleLogin = (username, password) => {
+    if (username === MASTER_USER.username && password === MASTER_USER.password) {
+      const masterSession = { username: 'Donfim', role: 'Master' };
+      setSession(masterSession);
+      localStorage.setItem('doncor_session', JSON.stringify(masterSession));
+      setError('');
+      return;
+    }
+    if (['Diretoria', 'Gerencia', 'Analista'].includes(username) && password === '123456') {
+      const userSession = { username, role: username };
+      setSession(userSession);
+      localStorage.setItem('doncor_session', JSON.stringify(userSession));
+      setError('');
+      return;
+    }
+    setError('Credenciais inválidas.');
+  };
 
-  return (
-    <BrowserRouter>
-      {loading && <LoadingScreen onFinish={handleLoadingFinish} />}
-      {!loading && (
-        <Routes>
-          <Route path="/*" element={<MainApp />} />
-        </Routes>
-      )}
-    </BrowserRouter>
-  );
+  const onLogout = () => { setSession(null); localStorage.removeItem('doncor_session'); };
+  const onAccessChange = (next) => { setAccessByRole(next); localStorage.setItem('doncor_access', JSON.stringify(next)); };
+
+  if (!session) return <LoginScreen onLogin={handleLogin} error={error} />;
+
+  return <BrowserRouter>{loading && <LoadingScreen onFinish={handleLoadingFinish} />}{!loading && <Routes><Route path="/*" element={<MainApp session={session} onLogout={onLogout} accessByRole={accessByRole} onAccessChange={onAccessChange} />} /></Routes>}</BrowserRouter>;
 }
 
 export default App;
