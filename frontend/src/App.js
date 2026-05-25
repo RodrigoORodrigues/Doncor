@@ -94,6 +94,9 @@ const pageComponents = {
   colaboradores: Colaboradores,
   relatorios: Relatorios,
   robo: Robo,
+  perfil: GenericPage,
+  configuracoes: GenericPage,
+  suporte: GenericPage,
 };
 
 function MainApp() {
@@ -151,6 +154,7 @@ function MainApp() {
         <TopNav
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
           sidebarCollapsed={sidebarCollapsed}
+          onMenuClick={openTab}
         />
         <TabSystem
           tabs={tabs}
