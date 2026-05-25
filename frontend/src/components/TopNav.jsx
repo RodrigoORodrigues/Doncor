@@ -15,7 +15,12 @@ import { Badge } from './ui/badge';
 
 const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick }) => {
   const [saldoVidas, setSaldoVidas] = useState({ percentual_total: 0 });
-  const currentUser = { name: 'Carlos Eduardo Silva', email: 'carlos.silva@corretora.com.br', role: 'Administrador', company: 'Corretora Premium Seguros' };
+  const userData = {
+    name: currentUser?.name || 'Usuário',
+    email: `${(currentUser?.name || 'usuario').toLowerCase()}@doncor.local`,
+    role: currentUser?.role || 'Colaborador',
+    company: 'Don Cor'
+  };
 
   useEffect(() => {
     fetchSaldoVidas().then(setSaldoVidas).catch(console.error);
@@ -178,14 +183,14 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick }) => {
                 fontSize: '0.75rem',
                 fontWeight: 600
               }}>
-                {currentUser.name.split(' ').map(n => n[0]).slice(0, 2).join('')}
+                {userData.name.split(' ').map(n => n[0]).slice(0, 2).join('')}
               </div>
               <div style={{ textAlign: 'left' }}>
                 <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#344050', lineHeight: 1.2 }}>
-                  {currentUser.name.split(' ').slice(0, 2).join(' ')}
+                  {userData.name.split(' ').slice(0, 2).join(' ')}
                 </div>
                 <div style={{ fontSize: '0.62rem', color: '#8a8d93' }}>
-                  {currentUser.role}
+                  {userData.role}
                 </div>
               </div>
               <ChevronDown size={14} color="#5E6E82" />
@@ -193,9 +198,9 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick }) => {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" style={{ minWidth: '200px' }}>
             <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f2f5' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#344050' }}>{currentUser.name}</div>
-              <div style={{ fontSize: '0.7rem', color: '#8a8d93' }}>{currentUser.email}</div>
-              <div style={{ fontSize: '0.65rem', color: '#8a8d93', marginTop: '2px' }}>{currentUser.company}</div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#344050' }}>{userData.name}</div>
+              <div style={{ fontSize: '0.7rem', color: '#8a8d93' }}>{userData.email}</div>
+              <div style={{ fontSize: '0.65rem', color: '#8a8d93', marginTop: '2px' }}>{userData.company}</div>
             </div>
             <DropdownMenuItem
               style={{ cursor: 'pointer', fontSize: '0.8rem' }}
@@ -216,7 +221,7 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick }) => {
               <HelpCircle size={14} style={{ marginRight: '8px' }} /> Suporte
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem style={{ cursor: 'pointer', fontSize: '0.8rem', color: '#e63757' }}>
+            <DropdownMenuItem style={{ cursor: 'pointer', fontSize: '0.8rem', color: '#e63757' }} onClick={onLogout}>
               <LogOut size={14} style={{ marginRight: '8px' }} /> Sair
             </DropdownMenuItem>
           </DropdownMenuContent>

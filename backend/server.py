@@ -18,6 +18,7 @@ from models import (
     Seguradora, SeguradoraCreate,
     Produto, ProdutoCreate,
     Colaborador, ColaboradorCreate,
+    RoboConfigPayload, RoboTriggerPayload,
 )
 from seed_data import seed_database
 
@@ -64,6 +65,42 @@ def _proj():
 def _next_protocol(prefix: str, seq: int):
     return f"{prefix}-{datetime.now().year}-{seq:04d}"
 
+
+
+
+async def _get_robo_config_latest():
+    cfg = await db.robo_config.find_one({}, _proj(), sort=[("updatedAt", -1), ("_id", -1)])
+    if cfg:
+        return cfg
+    return {
+        "intervaloMinutos": 15,
+        "tentativas": 3,
+        "notificacoes": True,
+        "modoSeguro": True,
+        "ambienteExecucao": "backend_fastapi",
+        "triggerEndpoint": "/api/v1/trigger-rpa",
+        "rpaServiceUrl": "",
+        "timeoutSegundos": 120,
+        "operadoras": [],
+        "supabaseUrl": "",
+        "supabaseServiceRoleKey": "",
+        "supabaseBucketBoletos": "boletos",
+        "logNivel": "INFO",
+    }
+
+
+async def _run_rpa_job(payload: dict, config: dict):
+    service_url = config.get("rpaServiceUrl")
+    if service_url:
+        import requests
+        resp = requests.post(service_url, json=payload, timeout=config.get("timeoutSegundos", 120))
+        if resp.status_code >= 400:
+            raise HTTPException(status_code=502, detail=f"Falha no serviço RPA externo: {resp.text}")
+        if resp.headers.get("content-type", "").startswith("application/json"):
+            return resp.json()
+        return {"status": "success", "message": "RPA externo executado"}
+
+    return {"status": "success", "message": "RPA executado em modo simulado"}
 
 # ─── Root ──────────────────────────────────────────────────────
 @api_router.get("/")
@@ -600,6 +637,62 @@ async def robo_pausar(_: None = Depends(_require_robo_role)):
     )
     return {"message": "Robô pausado com sucesso", "status": "ready", "lastRunAt": now}
 
+
+
+
+@api_router.get("/robo/config")
+async def get_robo_config():
+    return await _get_robo_config_latest()
+
+
+@api_router.post("/robo/config")
+async def save_robo_config(data: RoboConfigPayload):
+    payload = data.model_dump()
+    payload["updatedAt"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+    current = await db.robo_config.find_one({}, {"_id": 1}, sort=[("updatedAt", -1), ("_id", -1)])
+    if current:
+        await db.robo_config.update_one({"_id": current["_id"]}, {"$set": payload})
+    else:
+        await db.robo_config.insert_one(payload)
+    return {"message": "Configuração salva", "config": payload}
+
+
+@api_router.post("/robo/trigger-real")
+async def trigger_robo_real(data: RoboTriggerPayload):
+    cfg = await _get_robo_config_latest()
+    if not cfg.get("operadoras"):
+        raise HTTPException(status_code=400, detail="Nenhuma operadora configurada no RoboConfig")
+
+    selected = cfg.get("operadoras", [])[0]
+    if data.operadora_nome:
+        for op in cfg.get("operadoras", []):
+            if (op.get("nome") or "").lower() == data.operadora_nome.lower():
+                selected = op
+                break
+
+    job_payload = {
+        "user_id": data.user_id,
+        "unique_login_code": data.unique_login_code,
+        "apolice_id": data.apolice_id,
+        "operadora": selected,
+        "supabase": {
+            "url": cfg.get("supabaseUrl"),
+            "serviceRoleKey": cfg.get("supabaseServiceRoleKey"),
+            "bucket": cfg.get("supabaseBucketBoletos", "boletos"),
+        },
+    }
+    result = await _run_rpa_job(job_payload, cfg)
+
+    exec_item = {
+        "id": str(uuid.uuid4()),
+        "processo": "Extração de boletos RPA",
+        "inicio": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "duracao": "--",
+        "status": "Concluído" if result.get("status") == "success" else "Finalizado",
+        "resultado": result,
+    }
+    await db.robo_execucoes_log.insert_one(exec_item)
+    return {"message": "RPA acionado", "result": result}
 
 @api_router.get("/robo/execucoes")
 async def robo_execucoes(_: None = Depends(_require_robo_role)):
