@@ -21,7 +21,7 @@ import Robo from "./pages/Robo";
 import RoboConfig from "./pages/RoboConfig";
 import { Loader2 } from "lucide-react";
 
-const MASTER_USER = { username: 'Donfim', password: '1214', role: 'Master' };
+const DEFAULT_ACCESS = "dashboard";
 
 const LoadingScreen = ({ onFinish }) => {
   const [validating, setValidating] = useState(true);
@@ -73,25 +73,12 @@ const pageComponents = {
   suporte: GenericPage,
 };
 
-const getInitialAccess = () => {
-  const raw = localStorage.getItem('doncor_access');
-  if (!raw) return DEFAULT_ACCESS;
-  try {
-    const parsed = JSON.parse(raw);
-    return {
-      ...DEFAULT_ACCESS,
-      ...parsed,
-      Master: ALL_PAGES,
-    };
-  } catch {
-    return DEFAULT_ACCESS;
-  }
-};
-
 function MainApp({ session, onLogout, accessByRole, onAccessChange }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [tabs, setTabs] = useState([{ id: "dashboard", label: "Dashboard do Usuário", icon: "LayoutDashboard", page: "dashboard", closable: false }]);
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [tabs, setTabs] = useState([
+    { id: DEFAULT_ACCESS, label: "Dashboard do Usuário", icon: "LayoutDashboard", page: DEFAULT_ACCESS, closable: false },
+  ]);
+  const [activeTab, setActiveTab] = useState(DEFAULT_ACCESS);
 
   const role = session?.role || 'Diretoria';
   const allowedPages = useMemo(() => accessByRole[role] || accessByRole.Diretoria || [], [accessByRole, role]);
