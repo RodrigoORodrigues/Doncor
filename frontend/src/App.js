@@ -22,7 +22,6 @@ import RoboConfig from "./pages/RoboConfig";
 import { Loader2 } from "lucide-react";
 
 const DEFAULT_ACCESS = "dashboard";
-const getInitialAccess = () => DEFAULT_ACCESS;
 
 const LoadingScreen = ({ onFinish }) => {
   const [validating, setValidating] = useState(true);
@@ -77,9 +76,12 @@ const pageComponents = {
 function MainApp({ session, onLogout, accessByRole, onAccessChange }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [tabs, setTabs] = useState([
-    { id: getInitialAccess(), label: "Dashboard do Usuário", icon: "LayoutDashboard", page: getInitialAccess(), closable: false },
+    { id: DEFAULT_ACCESS, label: "Dashboard do Usuário", icon: "LayoutDashboard", page: DEFAULT_ACCESS, closable: false },
   ]);
-  const [activeTab, setActiveTab] = useState(getInitialAccess());
+  const [activeTab, setActiveTab] = useState(DEFAULT_ACCESS);
+
+  const role = session?.role || 'Diretoria';
+  const allowedPages = useMemo(() => accessByRole[role] || accessByRole.Diretoria || [], [accessByRole, role]);
 
   const openTab = useCallback((item) => {
     if (!allowedPages.includes(item.page) && item.page !== 'dashboard') return;
