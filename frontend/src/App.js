@@ -21,7 +21,7 @@ import Robo from "./pages/Robo";
 import RoboConfig from "./pages/RoboConfig";
 import { Loader2 } from "lucide-react";
 
-const MASTER_USER = { username: 'Donfim', password: '121418', role: 'Master' };
+const MASTER_USER = { username: 'Donfim', password: '1214', role: 'Master' };
 
 const LoadingScreen = ({ onFinish }) => {
   const [validating, setValidating] = useState(true);
@@ -87,8 +87,6 @@ const getInitialAccess = () => {
     return DEFAULT_ACCESS;
   }
 };
-
-const pageComponents = { dashboard: Dashboard, adesao: Adesao, empresarial: Empresarial, inclusao: Inclusao, exclusao: Exclusao, transferencia: Transferencia, faturas: Faturas, comissoes: Comissoes, seguradoras: Seguradoras, produtos: Produtos, colaboradores: Colaboradores, relatorios: Relatorios, robo: Robo, "robo-config": RoboConfig, perfil: GenericPage, configuracoes: GenericPage, suporte: GenericPage };
 
 function MainApp({ session, onLogout, accessByRole, onAccessChange }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
