@@ -13,7 +13,7 @@ import {
 } from './ui/dropdown-menu';
 import { Badge } from './ui/badge';
 
-const TopNav = ({ onToggleSidebar, sidebarCollapsed }) => {
+const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick }) => {
   const [saldoVidas, setSaldoVidas] = useState({ percentual_total: 0 });
   const currentUser = { name: 'Carlos Eduardo Silva', email: 'carlos.silva@corretora.com.br', role: 'Administrador', company: 'Corretora Premium Seguros' };
 
@@ -197,13 +197,22 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed }) => {
               <div style={{ fontSize: '0.7rem', color: '#8a8d93' }}>{currentUser.email}</div>
               <div style={{ fontSize: '0.65rem', color: '#8a8d93', marginTop: '2px' }}>{currentUser.company}</div>
             </div>
-            <DropdownMenuItem style={{ cursor: 'pointer', fontSize: '0.8rem' }}>
+            <DropdownMenuItem
+              style={{ cursor: 'pointer', fontSize: '0.8rem' }}
+              onClick={() => onMenuClick?.({ id: 'perfil', label: 'Meu Perfil', icon: 'User', page: 'perfil' })}
+            >
               <User size={14} style={{ marginRight: '8px' }} /> Meu Perfil
             </DropdownMenuItem>
-            <DropdownMenuItem style={{ cursor: 'pointer', fontSize: '0.8rem' }}>
+            <DropdownMenuItem
+              style={{ cursor: 'pointer', fontSize: '0.8rem' }}
+              onClick={() => onMenuClick?.({ id: 'configuracoes', label: 'Configurações', icon: 'Settings', page: 'configuracoes' })}
+            >
               <Settings size={14} style={{ marginRight: '8px' }} /> Configurações
             </DropdownMenuItem>
-            <DropdownMenuItem style={{ cursor: 'pointer', fontSize: '0.8rem' }}>
+            <DropdownMenuItem
+              style={{ cursor: 'pointer', fontSize: '0.8rem' }}
+              onClick={() => onMenuClick?.({ id: 'suporte', label: 'Suporte', icon: 'HelpCircle', page: 'suporte' })}
+            >
               <HelpCircle size={14} style={{ marginRight: '8px' }} /> Suporte
             </DropdownMenuItem>
             <DropdownMenuSeparator />
