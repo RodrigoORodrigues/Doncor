@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install backend deps
+        run: pip install -r backend/requirements.txt pytest
+
+      - name: Install frontend deps
+        run: npm run install:frontend
+
+      - name: Backend tests
+        run: pytest backend/tests -q
+
+      - name: Frontend tests
+        run: cd frontend && CI=true npm test -- --watch=false --runInBand
