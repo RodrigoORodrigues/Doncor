@@ -17,6 +17,20 @@ async def railway_root():
     }
 
 
+async def health_check_response():
+    return {"status": "ok"}
+
+
 @app.get("/health")
 async def health_check():
-    return {"status": "ok"}
+    return await health_check_response()
+
+
+@app.get("/saude")
+async def health_check_pt_br_ascii():
+    return await health_check_response()
+
+
+@app.get("/saúde")
+async def health_check_pt_br():
+    return await health_check_response()
