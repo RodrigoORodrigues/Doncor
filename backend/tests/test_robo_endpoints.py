@@ -2,6 +2,8 @@ import os
 
 os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
 os.environ.setdefault("DB_NAME", "test_db")
+os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
+os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
 
 from fastapi.testclient import TestClient
 import sys
@@ -27,11 +29,21 @@ class FakeCollection:
     async def count_documents(self, *_args, **_kwargs):
         return 2
 
+    def find(self, *_args, **_kwargs):
+        class Cursor:
+            def sort(self, *_args, **_kwargs):
+                return self
+
+            async def to_list(self, *_args, **_kwargs):
+                return []
+        return Cursor()
+
 
 class FakeDb:
     def __init__(self):
         self.robo_estado = FakeCollection()
         self.tarefas_pendentes = FakeCollection()
+        self.robo_execucoes_log = FakeCollection()
 
 
 server.db = FakeDb()
