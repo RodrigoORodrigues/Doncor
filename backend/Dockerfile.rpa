@@ -12,8 +12,6 @@ RUN python -m playwright install chromium
 
 COPY backend/ ./
 
-RUN chmod +x /app/start_rpa.sh
-
 EXPOSE 8000
 
-CMD ["/app/start_rpa.sh"]
+CMD ["python", "start_rpa.py"]
