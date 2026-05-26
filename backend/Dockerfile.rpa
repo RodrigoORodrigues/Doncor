@@ -12,6 +12,8 @@ RUN python -m playwright install chromium
 
 COPY backend/ ./
 
+RUN chmod +x /app/start_rpa.sh
+
 EXPOSE 8000
 
-CMD ["sh", "-c", "python -m uvicorn rpa_service_example:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["/app/start_rpa.sh"]
