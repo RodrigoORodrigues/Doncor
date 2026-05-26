@@ -1,17 +1,4 @@
-"""Mongo-like compatibility layer backed by Supabase/Postgres.
-
-This adapter lets the existing FastAPI code keep using a small subset of the
-Motor/Mongo API while data is stored in Supabase tables with this shape:
-
-  id text primary key
-  payload jsonb not null
-  created_at timestamptz
-  updated_at timestamptz
-
-It is intentionally simple and optimized for the current Doncor CRUD workload.
-For high-volume production usage, replace compatibility filtering with native
-SQL/PostgREST queries and indexes per business field.
-"""
+"""Mongo-like adapter using Supabase, with in-memory fallback for tests."""
 
 from __future__ import annotations
 
@@ -20,7 +7,7 @@ import os
 import re
 import uuid
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 from supabase import create_client
 
@@ -37,94 +24,101 @@ class DeleteResult:
 
 class SupabaseCursor:
     def __init__(self, items: list[dict[str, Any]]):
-        self._items = items
+        self.items = items
 
     def sort(self, key: str, direction: int = 1):
-        reverse = direction == -1
-        normalized_key = _normalize_field(key)
-        self._items.sort(key=lambda item: item.get(normalized_key) or "", reverse=reverse)
+        field = _normalize_field(key)
+        self.items.sort(key=lambda item: item.get(field) or "", reverse=direction == -1)
         return self
 
     async def to_list(self, length: int | None = None):
-        if length is None:
-            return self._items
-        return self._items[:length]
+        return self.items if length is None else self.items[:length]
 
 
 class SupabaseCollection:
-    def __init__(self, supabase_client, table_name: str):
-        self.client = supabase_client
+    def __init__(self, client, table_name: str, memory_store: dict[str, dict[str, dict[str, Any]]]):
+        self.client = client
         self.table_name = table_name
+        self.memory_store = memory_store
 
     def _table(self):
         return self.client.table(self.table_name)
 
-    def _rows_to_items(self, rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-        items: list[dict[str, Any]] = []
-        for row in rows or []:
+    def _memory_table(self):
+        return self.memory_store.setdefault(self.table_name, {})
+
+    def _all_items(self):
+        if self.client is None:
+            return [copy.deepcopy(item) for item in self._memory_table().values()]
+
+        response = self._table().select("id,payload").execute()
+        items = []
+        for row in response.data or []:
             payload = copy.deepcopy(row.get("payload") or {})
             payload.setdefault("id", row.get("id"))
             payload.setdefault("_id", row.get("id"))
             items.append(payload)
         return items
 
-    def _all_items(self) -> list[dict[str, Any]]:
-        response = self._table().select("id,payload").execute()
-        return self._rows_to_items(response.data or [])
-
-    def _select_matching(self, query: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    def _select_matching(self, query: dict[str, Any] | None = None):
         query = query or {}
         return [item for item in self._all_items() if _matches_query(item, query)]
 
     def find(self, query: dict[str, Any] | None = None, projection: dict[str, Any] | None = None):
         return SupabaseCursor(_apply_projection(self._select_matching(query), projection))
 
-    async def find_one(
-        self,
-        query: dict[str, Any] | None = None,
-        projection: dict[str, Any] | None = None,
-        sort: list[tuple[str, int]] | None = None,
-    ):
-        items = self._select_matching(query)
+    async def find_one(self, query=None, projection=None, sort=None):
+        items = self._select_matching(query or {})
         if sort:
             for key, direction in reversed(sort):
-                normalized_key = _normalize_field(key)
-                items.sort(key=lambda item: item.get(normalized_key) or "", reverse=direction == -1)
+                field = _normalize_field(key)
+                items.sort(key=lambda item: item.get(field) or "", reverse=direction == -1)
         items = _apply_projection(items, projection)
         return items[0] if items else None
 
-    async def count_documents(self, query: dict[str, Any] | None = None):
-        return len(self._select_matching(query))
+    async def count_documents(self, query=None):
+        return len(self._select_matching(query or {}))
 
     async def insert_one(self, document: dict[str, Any]):
         payload = copy.deepcopy(document)
         item_id = str(payload.get("id") or payload.get("_id") or uuid.uuid4())
         payload["id"] = item_id
         payload.pop("_id", None)
-        self._table().upsert({"id": item_id, "payload": payload}).execute()
+
+        if self.client is None:
+            self._memory_table()[item_id] = payload
+        else:
+            self._table().upsert({"id": item_id, "payload": payload}).execute()
         return {"inserted_id": item_id}
 
     async def update_one(self, query: dict[str, Any], update: dict[str, Any], upsert: bool = False):
         current = await self.find_one(query)
         if not current and not upsert:
-            return UpdateResult(matched_count=0)
+            return UpdateResult(0)
 
         payload = copy.deepcopy(current or {})
-        set_values = update.get("$set", update)
-        payload.update(set_values)
-        item_id = str(payload.get("id") or payload.get("_id") or query.get("id") or query.get("_id") or uuid.uuid4())
+        payload.update(update.get("$set", update))
+        item_id = str(payload.get("id") or query.get("id") or query.get("_id") or uuid.uuid4())
         payload["id"] = item_id
         payload.pop("_id", None)
-        self._table().upsert({"id": item_id, "payload": payload}).execute()
-        return UpdateResult(matched_count=1 if current else 0)
+
+        if self.client is None:
+            self._memory_table()[item_id] = payload
+        else:
+            self._table().upsert({"id": item_id, "payload": payload}).execute()
+        return UpdateResult(1 if current else 0)
 
     async def delete_one(self, query: dict[str, Any]):
         current = await self.find_one(query)
         if not current:
-            return DeleteResult(deleted_count=0)
+            return DeleteResult(0)
+
         item_id = str(current.get("id") or current.get("_id"))
-        self._table().delete().eq("id", item_id).execute()
-        return DeleteResult(deleted_count=1)
+        if self.client is None:
+            self._memory_table().pop(item_id, None)
+        else:
+            self._table().delete().eq("id", item_id).execute()
+        return DeleteResult(1)
 
     def aggregate(self, pipeline: list[dict[str, Any]]):
         items = self._all_items()
@@ -137,30 +131,27 @@ class SupabaseCollection:
 
 
 class SupabaseMongoDatabase:
-    def __init__(self, supabase_url: str | None = None, service_role_key: str | None = None):
+    def __init__(self, supabase_url: str | None = None, service_key: str | None = None):
         url = supabase_url or os.getenv("SUPABASE_URL")
-        key = service_role_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_KEY")
-        if not url or not key:
-            raise RuntimeError("Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no ambiente do backend.")
-        self.client = create_client(url, key)
-        self._collections: dict[str, SupabaseCollection] = {}
+        key = service_key or os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_KEY")
+        self.client = create_client(url, key) if url and key else None
+        self.memory_store: dict[str, dict[str, dict[str, Any]]] = {}
+        self.collections: dict[str, SupabaseCollection] = {}
 
-    def __getattr__(self, table_name: str) -> SupabaseCollection:
+    def __getattr__(self, table_name: str):
         if table_name.startswith("__"):
             raise AttributeError(table_name)
-        if table_name not in self._collections:
-            self._collections[table_name] = SupabaseCollection(self.client, table_name)
-        return self._collections[table_name]
+        if table_name not in self.collections:
+            self.collections[table_name] = SupabaseCollection(self.client, table_name, self.memory_store)
+        return self.collections[table_name]
 
 
 class SupabaseMongoClient:
-    """Drop-in replacement for AsyncIOMotorClient used by backend/server.py."""
-
     def __init__(self, *_args, **_kwargs):
-        self._db = SupabaseMongoDatabase()
+        self.db = SupabaseMongoDatabase()
 
-    def __getitem__(self, _db_name: str) -> SupabaseMongoDatabase:
-        return self._db
+    def __getitem__(self, _db_name: str):
+        return self.db
 
     def close(self):
         return None
@@ -170,7 +161,7 @@ def _normalize_field(field: str) -> str:
     return "id" if field == "_id" else field
 
 
-def _apply_projection(items: list[dict[str, Any]], projection: dict[str, Any] | None):
+def _apply_projection(items, projection=None):
     if not projection:
         return items
     result = []
@@ -201,20 +192,16 @@ def _matches_query(item: dict[str, Any], query: dict[str, Any]) -> bool:
                     return False
             else:
                 return False
-        else:
-            if value != expected:
-                return False
+        elif value != expected:
+            return False
     return True
 
 
-def _group_items(items: list[dict[str, Any]], spec: dict[str, Any]) -> list[dict[str, Any]]:
+def _group_items(items, spec):
     group_field = spec.get("_id")
-    if isinstance(group_field, str) and group_field.startswith("$"):
-        group_key_field = group_field[1:]
-    else:
-        group_key_field = None
+    group_key_field = group_field[1:] if isinstance(group_field, str) and group_field.startswith("$") else None
+    grouped = {}
 
-    grouped: dict[Any, dict[str, Any]] = {}
     for item in items:
         key = item.get(group_key_field) if group_key_field else None
         target = grouped.setdefault(key, {"_id": key})
@@ -222,9 +209,9 @@ def _group_items(items: list[dict[str, Any]], spec: dict[str, Any]) -> list[dict
             if output_field == "_id":
                 continue
             if isinstance(expression, dict) and "$sum" in expression:
-                sum_value = expression["$sum"]
-                if isinstance(sum_value, str) and sum_value.startswith("$"):
-                    target[output_field] = target.get(output_field, 0) + (item.get(sum_value[1:]) or 0)
+                value = expression["$sum"]
+                if isinstance(value, str) and value.startswith("$"):
+                    target[output_field] = target.get(output_field, 0) + (item.get(value[1:]) or 0)
                 else:
-                    target[output_field] = target.get(output_field, 0) + (sum_value or 0)
+                    target[output_field] = target.get(output_field, 0) + (value or 0)
     return list(grouped.values())
