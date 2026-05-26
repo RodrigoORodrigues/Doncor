@@ -1,13 +1,22 @@
-"""
-Serviço RPA real (base) para plugar no RPA_SERVICE_URL.
+"""Compatibilidade para comandos antigos do Railway.
+
+Antes este arquivo subia apenas um serviço RPA isolado. Alguns deploys antigos da
+Railway ainda podem estar usando `rpa_service_example:app` como start command.
+Para evitar `Not Found` e manter o sistema Doncor funcionando, este módulo agora
+expõe o app principal de `main.py` e adiciona as rotas RPA auxiliares no mesmo app.
 """
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import Any, Dict, List
+from __future__ import annotations
+
 import os
 import tempfile
 import time
+from typing import Any, Dict, List
+
+from fastapi import HTTPException
+from pydantic import BaseModel
+
+from main import app
 
 try:
     from playwright.async_api import async_playwright
@@ -22,8 +31,6 @@ class RunRpaPayload(BaseModel):
     operadora: Dict[str, Any]
     supabase: Dict[str, Any]
 
-
-app = FastAPI(title="Doncor RPA Service")
 
 RPA_CONFIG_STORE: Dict[str, Any] = {
     "intervaloMinutos": 15,
@@ -41,11 +48,6 @@ RPA_CONFIG_STORE: Dict[str, Any] = {
     "logNivel": "INFO",
 }
 RPA_EXECUTIONS: List[Dict[str, Any]] = []
-
-
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
 
 
 async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
@@ -114,19 +116,23 @@ async def run_rpa(payload: RunRpaPayload):
     }
 
 
-# Compat layer: permite frontend Doncor apontado direto para este serviço
-@app.get("/api/robo/config")
+@app.get("/api/rpa/health")
+async def rpa_health():
+    return {"status": "ok", "service": "rpa"}
+
+
+@app.get("/api/robo/config-local")
 async def get_robo_config_api():
     return RPA_CONFIG_STORE
 
 
-@app.post("/api/robo/config")
+@app.post("/api/robo/config-local")
 async def save_robo_config_api(config: Dict[str, Any]):
     RPA_CONFIG_STORE.update(config)
-    return {"message": "Configuração salva", "config": RPA_CONFIG_STORE}
+    return {"message": "Configuração local salva", "config": RPA_CONFIG_STORE}
 
 
-@app.post("/api/robo/trigger-real")
+@app.post("/api/robo/trigger-local")
 async def trigger_real_api(payload: Dict[str, Any]):
     operadora = payload.get("operadora")
     if not operadora:
@@ -154,9 +160,9 @@ async def trigger_real_api(payload: Dict[str, Any]):
         "status": "Concluído" if result.get("status") == "success" else "Finalizado",
         "resultado": result,
     })
-    return {"message": "RPA acionado", "result": result}
+    return {"message": "RPA local acionado", "result": result}
 
 
-@app.get("/api/robo/execucoes")
+@app.get("/api/robo/execucoes-local")
 async def robo_execucoes_api():
     return RPA_EXECUTIONS
