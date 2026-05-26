@@ -1,9 +1,8 @@
-"""Compatibilidade para comandos antigos do Railway.
+"""Serviço RPA do Doncor com Playwright.
 
-Antes este arquivo subia apenas um serviço RPA isolado. Alguns deploys antigos da
-Railway ainda podem estar usando `rpa_service_example:app` como start command.
-Para evitar `Not Found` e manter o sistema Doncor funcionando, este módulo agora
-expõe o app principal de `main.py` e adiciona as rotas RPA auxiliares no mesmo app.
+Use este módulo em um serviço Railway separado para fazer login autorizado em
+portais de operadoras e baixar boletos. Cada operadora pode informar seletores
+personalizados para login e download.
 """
 
 from __future__ import annotations
@@ -13,15 +12,14 @@ import tempfile
 import time
 from typing import Any, Dict, List
 
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from main import app
-
 try:
-    from playwright.async_api import async_playwright
+    from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 except Exception:
     async_playwright = None
+    PlaywrightTimeoutError = Exception
 
 
 class RunRpaPayload(BaseModel):
@@ -29,8 +27,10 @@ class RunRpaPayload(BaseModel):
     unique_login_code: str
     apolice_id: str
     operadora: Dict[str, Any]
-    supabase: Dict[str, Any]
+    supabase: Dict[str, Any] = {}
 
+
+app = FastAPI(title="Doncor RPA Service")
 
 RPA_CONFIG_STORE: Dict[str, Any] = {
     "intervaloMinutos": 15,
@@ -38,7 +38,7 @@ RPA_CONFIG_STORE: Dict[str, Any] = {
     "notificacoes": True,
     "modoSeguro": True,
     "ambienteExecucao": "servico_externo",
-    "triggerEndpoint": "/api/v1/trigger-rpa",
+    "triggerEndpoint": "/run-rpa",
     "rpaServiceUrl": "",
     "timeoutSegundos": 120,
     "operadoras": [],
@@ -50,6 +50,45 @@ RPA_CONFIG_STORE: Dict[str, Any] = {
 RPA_EXECUTIONS: List[Dict[str, Any]] = []
 
 
+@app.get("/")
+async def root():
+    return {"message": "Doncor RPA Service", "status": "online", "health": "/api/rpa/health"}
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "service": "rpa"}
+
+
+@app.get("/api/rpa/health")
+async def rpa_health():
+    return {"status": "ok", "service": "rpa"}
+
+
+def _selector(op: Dict[str, Any], key: str, fallback: str) -> str:
+    selectors = op.get("selectors") or {}
+    return selectors.get(key) or fallback
+
+
+async def _run_optional_steps(page, steps: List[Dict[str, Any]]):
+    for step in steps or []:
+        action = step.get("action")
+        selector = step.get("selector")
+        value = step.get("value", "")
+        timeout = int(step.get("timeout", 30000))
+
+        if action == "click" and selector:
+            await page.locator(selector).first.click(timeout=timeout)
+        elif action == "fill" and selector:
+            await page.locator(selector).first.fill(value, timeout=timeout)
+        elif action == "wait_for_selector" and selector:
+            await page.locator(selector).first.wait_for(timeout=timeout)
+        elif action == "wait" or action == "wait_timeout":
+            await page.wait_for_timeout(int(step.get("ms", 1000)))
+        elif action == "goto" and value:
+            await page.goto(value, wait_until="domcontentloaded", timeout=timeout)
+
+
 async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
     if async_playwright is None:
         raise HTTPException(status_code=500, detail="Playwright não instalado no serviço RPA")
@@ -59,34 +98,51 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
     username = op.get("usuario")
     password = op.get("senha")
 
+    user_selector = _selector(op, "usuario", 'input[name="username"], input#username, input[name="login"], input#login, input[type="email"], input[type="text"]')
+    password_selector = _selector(op, "senha", 'input[name="password"], input#password, input[name="senha"], input#senha, input[type="password"]')
+    submit_selector = _selector(op, "entrar", 'button[type="submit"], input[type="submit"], button:has-text("Entrar"), button:has-text("Login"), button:has-text("Acessar")')
+    boleto_selector = _selector(op, "boleto", 'a[href*="boleto"], a[href*="segunda-via"], a.download-boleto, button:has-text("Boleto"), button:has-text("2ª via"), button:has-text("Segunda via")')
+
     downloaded_files: List[str] = []
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
+        browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+        context = await browser.new_context(accept_downloads=True)
+        page = await context.new_page()
         try:
             await page.goto(portal_url, wait_until="domcontentloaded", timeout=60000)
-            await page.fill('input[name="username"], input#username, input[type="email"]', username)
-            await page.fill('input[name="password"], input#password, input[type="password"]', password)
-            await page.click('button[type="submit"], button:has-text("Entrar"), button:has-text("Login")')
-            await page.wait_for_timeout(3000)
+            await page.locator(user_selector).first.fill(username, timeout=30000)
+            await page.locator(password_selector).first.fill(password, timeout=30000)
+            await page.locator(submit_selector).first.click(timeout=30000)
+            await page.wait_for_load_state("networkidle", timeout=60000)
+            await page.wait_for_timeout(int(op.get("loginWaitMs", 3000)))
 
-            links = await page.locator('a[href*="boleto"], a.download-boleto').all()
-            for idx, link in enumerate(links[:3]):
-                async with page.expect_download(timeout=20000) as download_info:
-                    await link.click()
-                download = await download_info.value
-                fd, path = tempfile.mkstemp(prefix=f"boleto_{payload.apolice_id}_{idx}_", suffix=".pdf")
-                os.close(fd)
-                await download.save_as(path)
-                downloaded_files.append(path)
+            await _run_optional_steps(page, op.get("steps") or [])
 
-            if not downloaded_files:
-                fd, path = tempfile.mkstemp(prefix=f"boleto_{payload.apolice_id}_", suffix=".pdf")
-                os.close(fd)
-                downloaded_files.append(path)
+            links = await page.locator(boleto_selector).all()
+            if not links:
+                raise HTTPException(status_code=404, detail="Nenhum botão/link de boleto encontrado. Ajuste o seletor 'boleto'.")
+
+            max_downloads = int(op.get("maxDownloads", 3))
+            download_timeout = int(op.get("downloadTimeoutMs", 30000))
+
+            for idx, link in enumerate(links[:max_downloads]):
+                try:
+                    async with page.expect_download(timeout=download_timeout) as download_info:
+                        await link.click()
+                    download = await download_info.value
+                    fd, path = tempfile.mkstemp(prefix=f"boleto_{payload.apolice_id}_{idx}_", suffix=".pdf")
+                    os.close(fd)
+                    await download.save_as(path)
+                    downloaded_files.append(path)
+                except PlaywrightTimeoutError:
+                    continue
         finally:
+            await context.close()
             await browser.close()
+
+    if not downloaded_files:
+        raise HTTPException(status_code=404, detail="Boleto localizado, mas nenhum download foi concluído. Ajuste o fluxo ou seletores.")
 
     return downloaded_files
 
@@ -104,7 +160,7 @@ async def run_rpa(payload: RunRpaPayload):
     files = await _run_playwright_flow(payload)
     elapsed = round(time.time() - start, 2)
 
-    return {
+    result = {
         "status": "success",
         "message": "RPA executado com sucesso.",
         "processed": len(files),
@@ -115,10 +171,15 @@ async def run_rpa(payload: RunRpaPayload):
         "files": files,
     }
 
-
-@app.get("/api/rpa/health")
-async def rpa_health():
-    return {"status": "ok", "service": "rpa"}
+    RPA_EXECUTIONS.insert(0, {
+        "id": str(time.time()),
+        "processo": "Extração de boletos RPA",
+        "inicio": time.strftime("%d/%m/%Y %H:%M"),
+        "duracao": f"{elapsed}s",
+        "status": "Concluído",
+        "resultado": result,
+    })
+    return result
 
 
 @app.get("/api/robo/config-local")
@@ -151,16 +212,7 @@ async def trigger_real_api(payload: Dict[str, Any]):
         },
     )
 
-    result = await run_rpa(run_payload)
-    RPA_EXECUTIONS.insert(0, {
-        "id": str(time.time()),
-        "processo": "Extração de boletos RPA",
-        "inicio": time.strftime("%d/%m/%Y %H:%M"),
-        "duracao": f"{result.get('duration_seconds', 0)}s",
-        "status": "Concluído" if result.get("status") == "success" else "Finalizado",
-        "resultado": result,
-    })
-    return {"message": "RPA local acionado", "result": result}
+    return await run_rpa(run_payload)
 
 
 @app.get("/api/robo/execucoes-local")
