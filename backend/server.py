@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
+import asyncio
 
 from models import (
     ContratoAdesao, ContratoAdesaoCreate,
@@ -53,8 +54,8 @@ def _require_robo_role(x_user_role: Optional[str] = Header(default=None)):
 # ─── Startup: Seed DB ─────────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():
-    await seed_database(db)
-    logger.info("Database seeded successfully")
+    asyncio.create_task(seed_database(db))
+    logger.info("Database seeding started in background")
 
 
 @app.on_event("shutdown")
