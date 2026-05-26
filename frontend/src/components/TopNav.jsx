@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchSaldoVidas } from '../services/api';
 import {
-  Menu, Bell, Search, Lightbulb, Signal, ChevronDown,
+  Menu, Bell, Lightbulb, ChevronDown,
   User, Settings, LogOut, HelpCircle
 } from 'lucide-react';
 import {
@@ -11,14 +11,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
-import { Badge } from './ui/badge';
 
-const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick }) => {
+const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, session }) => {
   const [saldoVidas, setSaldoVidas] = useState({ percentual_total: 0 });
+  const userName = session?.username || 'Usuário';
   const userData = {
-    name: currentUser?.name || 'Usuário',
-    email: `${(currentUser?.name || 'usuario').toLowerCase()}@doncor.local`,
-    role: currentUser?.role || 'Colaborador',
+    name: userName,
+    email: `${userName.toLowerCase()}@doncor.local`,
+    role: session?.role || 'Colaborador',
     company: 'Don Cor'
   };
 
@@ -49,7 +49,6 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick }) => {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        {/* Latency Indicator */}
         <button
           style={{
             display: 'flex',
@@ -80,7 +79,6 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick }) => {
           </div>
         </button>
 
-        {/* Tour button */}
         <button
           style={{
             display: 'flex',
@@ -102,7 +100,6 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick }) => {
 
         <div style={{ width: '1px', height: '24px', background: 'rgba(44,123,229,0.2)', margin: '0 4px' }} />
 
-        {/* Notifications */}
         <button
           style={{
             display: 'flex',
@@ -140,7 +137,6 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick }) => {
           </span>
         </button>
 
-        {/* Saldo Vidas */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -157,7 +153,6 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick }) => {
 
         <div style={{ width: '1px', height: '24px', background: 'rgba(44,123,229,0.2)', margin: '0 4px' }} />
 
-        {/* User Profile */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button style={{

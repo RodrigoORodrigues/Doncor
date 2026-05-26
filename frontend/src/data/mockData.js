@@ -2,10 +2,10 @@
 
 export const currentUser = {
   id: 1,
-  name: "Carlos Eduardo Silva",
-  email: "carlos.silva@corretora.com.br",
+  name: "Doncor Admin",
+  email: "admin@doncor.local",
   role: "Administrador",
-  company: "Corretora Premium Seguros",
+  company: "Don Cor",
   avatar: null,
   lastLogin: "06/03/2026 14:30",
 };

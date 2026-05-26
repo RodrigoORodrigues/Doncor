@@ -1,11 +1,40 @@
 import axios from "axios";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
-const API = BACKEND_URL ? `${BACKEND_URL}/api` : "/api";
+const RAW_BACKEND_URL = (
+  process.env.REACT_APP_BACKEND_URL ||
+  process.env.REACT_APP_API_URL ||
+  ""
+).replace(/\/$/, "");
+
+const API = RAW_BACKEND_URL
+  ? RAW_BACKEND_URL.endsWith("/api")
+    ? RAW_BACKEND_URL
+    : `${RAW_BACKEND_URL}/api`
+  : "/api";
 
 const api = axios.create({
   baseURL: API,
-  timeout: 15000,
+  timeout: 120000,
+});
+
+const getStoredSession = () => {
+  try {
+    return JSON.parse(localStorage.getItem("doncor_session") || "null");
+  } catch {
+    return null;
+  }
+};
+
+api.interceptors.request.use((config) => {
+  const session = getStoredSession();
+  const role = session?.role || session?.username;
+
+  if (role) {
+    config.headers = config.headers || {};
+    config.headers["X-User-Role"] = role;
+  }
+
+  return config;
 });
 
 const asArray = (value, endpoint = "") => {
