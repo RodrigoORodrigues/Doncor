@@ -91,6 +91,13 @@ class SupabaseCollection:
             self._table().upsert({"id": item_id, "payload": payload}).execute()
         return {"inserted_id": item_id}
 
+    async def insert_many(self, documents: list[dict[str, Any]]):
+        inserted_ids = []
+        for document in documents:
+            result = await self.insert_one(document)
+            inserted_ids.append(result["inserted_id"])
+        return {"inserted_ids": inserted_ids}
+
     async def update_one(self, query: dict[str, Any], update: dict[str, Any], upsert: bool = False):
         current = await self.find_one(query)
         if not current and not upsert:
