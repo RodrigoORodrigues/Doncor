@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field
-from typing import Optional
+from pydantic import BaseModel, Field, ConfigDict
+from typing import Optional, Any
 import uuid
 
 
@@ -139,7 +139,6 @@ class MovimentacaoRecente(BaseModel):
     status: str = "Pendente"
 
 
-
 class SeguradoraBase(BaseModel):
     nome: str
     codigo: str = ""
@@ -198,10 +197,16 @@ class ColaboradorCreate(ColaboradorBase):
 
 
 class OperadoraCredencial(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     nome: str = ""
     url: str
     usuario: str
     senha: str
+    selectors: dict[str, str] = Field(default_factory=dict)
+    steps: list[dict[str, Any]] = Field(default_factory=list)
+    loginWaitMs: int = 3000
+    downloadTimeoutMs: int = 30000
 
 
 class RoboConfigPayload(BaseModel):
