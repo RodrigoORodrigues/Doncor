@@ -22,6 +22,124 @@ import RoboConfig from "./pages/RoboConfig";
 import { Loader2 } from "lucide-react";
 
 const DEFAULT_ACCESS = "dashboard";
+const MASTER_USERNAME = "Donfim";
+const ALL_PAGES = [
+  "dashboard",
+  "adesao",
+  "empresarial",
+  "inclusao",
+  "exclusao",
+  "transferencia",
+  "faturas",
+  "comissoes",
+  "seguradoras",
+  "produtos",
+  "colaboradores",
+  "relatorios",
+  "robo",
+  "robo-config",
+  "exportar",
+  "perfil",
+  "configuracoes",
+  "suporte",
+];
+
+const DEFAULT_ACCESS_BY_ROLE = {
+  Master: ALL_PAGES,
+  Diretoria: ALL_PAGES,
+  Gerencia: [
+    "dashboard",
+    "adesao",
+    "empresarial",
+    "inclusao",
+    "exclusao",
+    "transferencia",
+    "faturas",
+    "comissoes",
+    "seguradoras",
+    "produtos",
+    "relatorios",
+    "perfil",
+    "suporte",
+  ],
+  Analista: [
+    "dashboard",
+    "adesao",
+    "empresarial",
+    "inclusao",
+    "exclusao",
+    "transferencia",
+    "faturas",
+    "comissoes",
+    "relatorios",
+    "perfil",
+    "suporte",
+  ],
+};
+
+const safeParseJSON = (value, fallback) => {
+  try {
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const normalizeAccessConfig = (value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return DEFAULT_ACCESS_BY_ROLE;
+  }
+
+  return {
+    ...DEFAULT_ACCESS_BY_ROLE,
+    ...value,
+  };
+};
+
+const LoginScreen = ({ onLogin, error }) => {
+  const [username, setUsername] = useState(MASTER_USERNAME);
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    onLogin(username.trim());
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #eef4fb 0%, #f8fafc 100%)", padding: "24px" }}>
+      <form onSubmit={handleSubmit} style={{ width: "100%", maxWidth: "420px", background: "#fff", border: "1px solid #e3e6f0", borderRadius: "16px", padding: "28px", boxShadow: "0 20px 45px rgba(44, 64, 80, 0.12)" }}>
+        <div style={{ textAlign: "center", marginBottom: "22px" }}>
+          <div style={{ width: "54px", height: "54px", borderRadius: "16px", background: "#3a5a8c", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "20px", marginBottom: "12px" }}>DC</div>
+          <h1 style={{ margin: 0, fontSize: "1.35rem", color: "#344050" }}>Don Cor Web</h1>
+          <p style={{ margin: "6px 0 0", color: "#6b7280", fontSize: "0.88rem" }}>Gestão de Apólices - Don Cor</p>
+        </div>
+
+        {error && (
+          <div style={{ background: "#fff1f2", border: "1px solid #fecdd3", color: "#be123c", borderRadius: "8px", padding: "10px 12px", marginBottom: "14px", fontSize: "0.86rem" }}>
+            {error}
+          </div>
+        )}
+
+        <label style={{ display: "block", color: "#344050", fontWeight: 600, fontSize: "0.85rem", marginBottom: "6px" }}>
+          Perfil de acesso
+        </label>
+        <select value={username} onChange={(event) => setUsername(event.target.value)} style={{ width: "100%", border: "1px solid #d8e2ef", borderRadius: "8px", padding: "10px 12px", marginBottom: "16px", fontSize: "0.95rem", background: "#fff" }}>
+          <option value="Donfim">Donfim / Master</option>
+          <option value="Diretoria">Diretoria</option>
+          <option value="Gerencia">Gerencia</option>
+          <option value="Analista">Analista</option>
+        </select>
+
+        <button type="submit" style={{ width: "100%", background: "#2C7BE5", color: "#fff", border: "none", borderRadius: "8px", padding: "11px 14px", fontWeight: 700, cursor: "pointer" }}>
+          Entrar
+        </button>
+
+        <p style={{ margin: "16px 0 0", color: "#8a8d93", fontSize: "0.78rem", textAlign: "center" }}>
+          Acesso local temporário para liberar o frontend. Para produção, use Supabase Auth.
+        </p>
+      </form>
+    </div>
+  );
+};
 
 const LoadingScreen = ({ onFinish }) => {
   const [validating, setValidating] = useState(true);
@@ -68,6 +186,7 @@ const pageComponents = {
   colaboradores: Colaboradores,
   relatorios: Relatorios,
   robo: Robo,
+  "robo-config": RoboConfig,
   perfil: GenericPage,
   configuracoes: GenericPage,
   suporte: GenericPage,
@@ -114,6 +233,8 @@ function MainApp({ session, onLogout, accessByRole, onAccessChange }) {
           onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
           sidebarCollapsed={sidebarCollapsed}
           onMenuClick={openTab}
+          onLogout={onLogout}
+          session={session}
         />
         <TabSystem
           tabs={tabs}
@@ -132,31 +253,43 @@ function MainApp({ session, onLogout, accessByRole, onAccessChange }) {
 
 function App() {
   const [loading, setLoading] = useState(true);
-  const [session, setSession] = useState(() => JSON.parse(localStorage.getItem('doncor_session') || 'null'));
+  const [session, setSession] = useState(() => safeParseJSON(localStorage.getItem('doncor_session'), null));
   const [error, setError] = useState('');
-  const [accessByRole, setAccessByRole] = useState(DEFAULT_ACCESS);
+  const [accessByRole, setAccessByRole] = useState(() => normalizeAccessConfig(safeParseJSON(localStorage.getItem('doncor_access'), DEFAULT_ACCESS_BY_ROLE)));
 
   const handleLoadingFinish = useCallback(() => setLoading(false), []);
-  const handleLogin = (username, password) => {
-    if (username === MASTER_USER.username && password === MASTER_USER.password) {
-      const masterSession = { username: 'Donfim', role: 'Master' };
+  const handleLogin = (username) => {
+    const availableRoles = ["Diretoria", "Gerencia", "Analista"];
+    const matchedRole = availableRoles.find((roleName) => roleName.toLowerCase() === username.toLowerCase());
+    const isMaster = username.toLowerCase() === MASTER_USERNAME.toLowerCase();
+
+    if (isMaster) {
+      const masterSession = { username: MASTER_USERNAME, role: 'Master' };
       setSession(masterSession);
       localStorage.setItem('doncor_session', JSON.stringify(masterSession));
       setError('');
+      setLoading(true);
       return;
     }
-    if (['Diretoria', 'Gerencia', 'Analista'].includes(username) && password === '123456') {
-      const userSession = { username, role: username };
+
+    if (matchedRole) {
+      const userSession = { username: matchedRole, role: matchedRole };
       setSession(userSession);
       localStorage.setItem('doncor_session', JSON.stringify(userSession));
       setError('');
+      setLoading(true);
       return;
     }
-    setError('Credenciais inválidas.');
+
+    setError('Perfil de acesso inválido.');
   };
 
-  const onLogout = () => { setSession(null); localStorage.removeItem('doncor_session'); };
-  const onAccessChange = (next) => { setAccessByRole(next); localStorage.setItem('doncor_access', JSON.stringify(next)); };
+  const onLogout = () => { setSession(null); localStorage.removeItem('doncor_session'); setLoading(true); };
+  const onAccessChange = (next) => {
+    const normalized = normalizeAccessConfig(next);
+    setAccessByRole(normalized);
+    localStorage.setItem('doncor_access', JSON.stringify(normalized));
+  };
 
   if (!session) return <LoginScreen onLogin={handleLogin} error={error} />;
 
