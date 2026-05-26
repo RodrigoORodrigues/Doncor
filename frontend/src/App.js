@@ -134,7 +134,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(() => JSON.parse(localStorage.getItem('doncor_session') || 'null'));
   const [error, setError] = useState('');
-  const [accessByRole, setAccessByRole] = useState(getInitialAccess);
+  const [accessByRole, setAccessByRole] = useState(DEFAULT_ACCESS);
 
   const handleLoadingFinish = useCallback(() => setLoading(false), []);
   const handleLogin = (username, password) => {
