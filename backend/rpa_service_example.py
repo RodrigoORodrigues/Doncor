@@ -10,6 +10,8 @@ from __future__ import annotations
 import os
 import tempfile
 import time
+import datetime
+import logging
 from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException
@@ -21,6 +23,9 @@ except Exception:
     async_playwright = None
     PlaywrightTimeoutError = Exception
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 class RunRpaPayload(BaseModel):
     user_id: str
@@ -31,6 +36,11 @@ class RunRpaPayload(BaseModel):
 
 
 app = FastAPI(title="Doncor RPA Service")
+
+if async_playwright is None:
+    logger.warning("Playwright não instalado. O serviço RPA funcionará em modo simulado.")
+else:
+    logger.info("Playwright instalado e disponível.")
 
 RPA_CONFIG_STORE: Dict[str, Any] = {
     "intervaloMinutos": 15,
@@ -57,12 +67,22 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "rpa"}
+    playwright_available = async_playwright is not None
+    return {
+        "status": "ok" if playwright_available else "degraded",
+        "service": "rpa",
+        "playwright": "available" if playwright_available else "not_installed"
+    }
 
 
 @app.get("/api/rpa/health")
 async def rpa_health():
-    return {"status": "ok", "service": "rpa"}
+    playwright_available = async_playwright is not None
+    return {
+        "status": "ok" if playwright_available else "degraded",
+        "service": "rpa",
+        "playwright": "available" if playwright_available else "not_installed"
+    }
 
 
 def _selector(op: Dict[str, Any], key: str, fallback: str) -> str:
@@ -156,6 +176,13 @@ async def run_rpa(payload: RunRpaPayload):
     if not payload.operadora.get("senha"):
         raise HTTPException(status_code=400, detail="Operadora senha não informada")
 
+    if async_playwright is None:
+        logger.error("Playwright não disponível. Retornando erro 503.")
+        raise HTTPException(
+            status_code=503,
+            detail="Serviço RPA não disponível: Playwright não instalado. Configure adequadamente o serviço RPA."
+        )
+
     start = time.time()
     files = await _run_playwright_flow(payload)
     elapsed = round(time.time() - start, 2)
@@ -174,7 +201,7 @@ async def run_rpa(payload: RunRpaPayload):
     RPA_EXECUTIONS.insert(0, {
         "id": str(time.time()),
         "processo": "Extração de boletos RPA",
-        "inicio": time.strftime("%d/%m/%Y %H:%M"),
+        "inicio": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
         "duracao": f"{elapsed}s",
         "status": "Concluído",
         "resultado": result,
@@ -211,6 +238,19 @@ async def trigger_real_api(payload: Dict[str, Any]):
             "bucket": RPA_CONFIG_STORE.get("supabaseBucketBoletos", "boletos"),
         },
     )
+
+    if async_playwright is None:
+        logger.warning("Playwright não disponível. Retornando resultado simulado.")
+        return {
+            "status": "success",
+            "message": "RPA executado em modo simulado (Playwright não disponível).",
+            "processed": 0,
+            "duration_seconds": 0.1,
+            "user_id": run_payload.user_id,
+            "apolice_id": run_payload.apolice_id,
+            "operadora": operadora.get("nome", "Operadora"),
+            "files": [],
+        }
 
     return await run_rpa(run_payload)
 

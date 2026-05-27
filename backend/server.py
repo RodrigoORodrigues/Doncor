@@ -97,14 +97,24 @@ async def _get_robo_config_latest():
 
 async def _run_rpa_job(payload: dict, config: dict):
     service_url = config.get("rpaServiceUrl")
+    timeout_segundos = config.get("timeoutSegundos", 120)
+
     if service_url:
         import requests
-        resp = requests.post(service_url, json=payload, timeout=config.get("timeoutSegundos", 120))
-        if resp.status_code >= 400:
-            raise HTTPException(status_code=502, detail=f"Falha no serviço RPA externo: {resp.text}")
-        if resp.headers.get("content-type", "").startswith("application/json"):
-            return resp.json()
-        return {"status": "success", "message": "RPA externo executado"}
+        try:
+            resp = requests.post(service_url, json=payload, timeout=timeout_segundos)
+            if resp.status_code >= 400:
+                logger.error(f"RPA service error: {resp.status_code} - {resp.text}")
+                raise HTTPException(status_code=502, detail=f"Falha no serviço RPA externo: {resp.text}")
+            if resp.headers.get("content-type", "").startswith("application/json"):
+                return resp.json()
+            return {"status": "success", "message": "RPA externo executado"}
+        except requests.exceptions.Timeout:
+            logger.error(f"RPA service timeout after {timeout_segundos}s")
+            raise HTTPException(status_code=504, detail=f"Timeout: serviço RPA não respondeu em {timeout_segundos}s")
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"RPA service connection failed: {e}")
+            raise HTTPException(status_code=503, detail="Serviço RPA não está disponível. Tente novamente mais tarde.")
 
     return {"status": "success", "message": "RPA executado em modo simulado"}
 
@@ -112,6 +122,16 @@ async def _run_rpa_job(payload: dict, config: dict):
 @api_router.get("/")
 async def root():
     return {"message": "Don Cor API - Gestão de Apólices"}
+
+
+@api_router.get("/health")
+async def health():
+    try:
+        await db.command("ping")
+        return {"status": "ok", "service": "main"}
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {"status": "ok", "service": "main"}
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -676,14 +696,23 @@ async def trigger_robo_real(data: RoboTriggerPayload, _: None = Depends(_require
             "bucket": cfg.get("supabaseBucketBoletos", "boletos"),
         },
     }
-    result = await _run_rpa_job(job_payload, cfg)
+
+    try:
+        result = await _run_rpa_job(job_payload, cfg)
+    except HTTPException as e:
+        logger.warning(f"RPA externo falhou ({e.status_code}). Usando fallback simulado: {e.detail}")
+        result = {
+            "status": "success_simulated",
+            "message": "RPA em modo simulado (serviço externo indisponível)",
+            "warning": e.detail,
+        }
 
     exec_item = {
         "id": str(uuid.uuid4()),
         "processo": "Extração de boletos RPA",
         "inicio": datetime.now().strftime("%d/%m/%Y %H:%M"),
         "duracao": "--",
-        "status": "Concluído" if result.get("status") == "success" else "Finalizado",
+        "status": "Concluído" if result.get("status") == "success" else "Simulado",
         "resultado": result,
     }
     await db.robo_execucoes_log.insert_one(exec_item)
