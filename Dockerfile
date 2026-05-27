@@ -2,35 +2,24 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 WORKDIR /app
 
-# Instalar dependências do sistema para Playwright
-RUN apt-get update && apt-get install -y \
-    libnss3 \
-    libnspr4 \
-    libdbus-1-3 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libasound2 \
-    libpango-1.0-0 \
-    libpangocairo-1.0-0 \
+# Pacotes básicos para permitir que o Playwright instale as dependências Linux corretas.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
     wget \
+    gnupg \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Instalar Playwright browsers
-RUN playwright install chromium
+# Instala o Chromium e TODAS as dependências Linux exigidas pelo Playwright.
+# Isso cobre tanto a API quanto o serviço RPA quando a Railway usa o Dockerfile da raiz.
+RUN python -m playwright install --with-deps chromium
 
 COPY backend/ ./
 
