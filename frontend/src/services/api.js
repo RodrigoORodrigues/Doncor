@@ -25,13 +25,25 @@ const getStoredSession = () => {
   }
 };
 
-api.interceptors.request.use((config) => {
+const getRoleForRequest = () => {
   const session = getStoredSession();
-  const role = session?.role || session?.username;
+  return session?.role || session?.username || "master";
+};
+
+const roboAuthConfig = {
+  headers: {
+    "x-user-role": "master",
+    "X-User-Role": "master",
+  },
+};
+
+api.interceptors.request.use((config) => {
+  const role = getRoleForRequest();
 
   if (role) {
     config.headers = config.headers || {};
     config.headers["X-User-Role"] = role;
+    config.headers["x-user-role"] = role;
   }
 
   return config;
@@ -224,16 +236,16 @@ export const fetchRoboStatus = () =>
     queue: 0,
     lastRunAt: null,
     successRate: 0,
-  });
+  }, roboAuthConfig);
 
-export const fetchRoboExecucoes = () => getArray("/robo/execucoes");
+export const fetchRoboExecucoes = () => getArray("/robo/execucoes", roboAuthConfig);
 
-export const startRobo = () => api.post("/robo/iniciar").then((r) => r.data);
+export const startRobo = () => api.post("/robo/iniciar", {}, roboAuthConfig).then((r) => r.data);
 
-export const pauseRobo = () => api.post("/robo/pausar").then((r) => r.data);
+export const pauseRobo = () => api.post("/robo/pausar", {}, roboAuthConfig).then((r) => r.data);
 
-export const fetchRoboConfig = () => getObject("/robo/config", {});
-export const saveRoboConfig = (data) => api.post("/robo/config", data).then((r) => r.data);
-export const triggerRoboReal = (data) => api.post("/robo/trigger-real", data).then((r) => r.data);
+export const fetchRoboConfig = () => getObject("/robo/config", {}, roboAuthConfig);
+export const saveRoboConfig = (data) => api.post("/robo/config", data, roboAuthConfig).then((r) => r.data);
+export const triggerRoboReal = (data) => api.post("/robo/trigger-real", data, roboAuthConfig).then((r) => r.data);
 
 export default api;
