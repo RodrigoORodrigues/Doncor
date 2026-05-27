@@ -19,7 +19,7 @@ import datetime
 import logging
 import subprocess
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -37,12 +37,7 @@ _BROWSER_READY = False
 
 
 def ensure_playwright_chromium() -> None:
-    """Garante que o Chromium esperado pelo Playwright exista no container.
-
-    O Railway pode reaproveitar cache ou iniciar o app por comando customizado.
-    Por isso esta validação fica também dentro do serviço RPA, não apenas no
-    Dockerfile/start script.
-    """
+    """Garante que o Chromium esperado pelo Playwright exista no container."""
     global _BROWSER_READY
     if _BROWSER_READY:
         return
@@ -136,6 +131,66 @@ def _selector(op: Dict[str, Any], key: str, fallback: str) -> str:
     return selectors.get(key) or fallback
 
 
+def _split_selectors(selector: str) -> List[str]:
+    return [part.strip() for part in selector.split(",") if part.strip()]
+
+
+async def _first_visible_locator(page, selector: str, timeout_ms: int = 45000):
+    """Procura um seletor visível na página principal e em iframes."""
+    deadline = time.time() + (timeout_ms / 1000)
+    selectors = _split_selectors(selector)
+
+    while time.time() < deadline:
+        frames = [page] + list(page.frames)
+        for frame in frames:
+            for item in selectors:
+                try:
+                    locator = frame.locator(item).first
+                    count = await locator.count()
+                    if count > 0:
+                        try:
+                            if await locator.is_visible(timeout=1000):
+                                return locator
+                        except Exception:
+                            # Alguns campos existem, mas ainda não estão visíveis.
+                            pass
+                except Exception:
+                    pass
+        await page.wait_for_timeout(500)
+
+    return None
+
+
+async def _fill_first(page, selector: str, value: str, label: str, timeout_ms: int = 45000):
+    locator = await _first_visible_locator(page, selector, timeout_ms=timeout_ms)
+    if locator is None:
+        visible_inputs = await page.locator("input, textarea, [contenteditable='true']").evaluate_all(
+            "els => els.slice(0, 25).map((e, i) => ({i, tag:e.tagName, type:e.getAttribute('type'), id:e.id, name:e.getAttribute('name'), placeholder:e.getAttribute('placeholder'), aria:e.getAttribute('aria-label'), cls:e.className}))"
+        )
+        logger.error("Campo %s não encontrado. Inputs detectados: %s", label, visible_inputs)
+        raise HTTPException(
+            status_code=422,
+            detail=f"Campo {label} não encontrado no portal. Ajuste o seletor da operadora. Inputs detectados: {visible_inputs}",
+        )
+    await locator.fill(value, timeout=timeout_ms)
+    return locator
+
+
+async def _click_first(page, selector: str, label: str, timeout_ms: int = 45000):
+    locator = await _first_visible_locator(page, selector, timeout_ms=timeout_ms)
+    if locator is None:
+        buttons = await page.locator("button, input[type='submit'], a").evaluate_all(
+            "els => els.slice(0, 30).map((e, i) => ({i, tag:e.tagName, text:(e.innerText || e.value || '').trim(), id:e.id, href:e.href, type:e.getAttribute('type'), cls:e.className}))"
+        )
+        logger.error("Botão/link %s não encontrado. Elementos detectados: %s", label, buttons)
+        raise HTTPException(
+            status_code=422,
+            detail=f"Botão/link {label} não encontrado no portal. Ajuste o seletor da operadora. Elementos detectados: {buttons}",
+        )
+    await locator.click(timeout=timeout_ms)
+    return locator
+
+
 async def _run_optional_steps(page, steps: List[Dict[str, Any]]):
     for step in steps or []:
         action = step.get("action")
@@ -144,11 +199,13 @@ async def _run_optional_steps(page, steps: List[Dict[str, Any]]):
         timeout = int(step.get("timeout", 30000))
 
         if action == "click" and selector:
-            await page.locator(selector).first.click(timeout=timeout)
+            await _click_first(page, selector, "etapa personalizada", timeout_ms=timeout)
         elif action == "fill" and selector:
-            await page.locator(selector).first.fill(value, timeout=timeout)
+            await _fill_first(page, selector, value, "etapa personalizada", timeout_ms=timeout)
         elif action == "wait_for_selector" and selector:
-            await page.locator(selector).first.wait_for(timeout=timeout)
+            found = await _first_visible_locator(page, selector, timeout_ms=timeout)
+            if found is None:
+                raise HTTPException(status_code=422, detail=f"Seletor personalizado não encontrado: {selector}")
         elif action == "wait" or action == "wait_timeout":
             await page.wait_for_timeout(int(step.get("ms", 1000)))
         elif action == "goto" and value:
@@ -166,10 +223,40 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
     username = op.get("usuario")
     password = op.get("senha")
 
-    user_selector = _selector(op, "usuario", 'input[name="username"], input#username, input[name="login"], input#login, input[type="email"], input[type="text"]')
-    password_selector = _selector(op, "senha", 'input[name="password"], input#password, input[name="senha"], input#senha, input[type="password"]')
-    submit_selector = _selector(op, "entrar", 'button[type="submit"], input[type="submit"], button:has-text("Entrar"), button:has-text("Login"), button:has-text("Acessar")')
-    boleto_selector = _selector(op, "boleto", 'a[href*="boleto"], a[href*="segunda-via"], a.download-boleto, button:has-text("Boleto"), button:has-text("2ª via"), button:has-text("Segunda via")')
+    user_selector = _selector(
+        op,
+        "usuario",
+        "input[name='username'], input#username, input[name='login'], input#login, "
+        "input[name='usuario'], input#usuario, input[name='user'], input#user, "
+        "input[name*='cpf' i], input[id*='cpf' i], input[name*='cnpj' i], input[id*='cnpj' i], "
+        "input[name*='email' i], input[id*='email' i], input[type='email'], "
+        "input[placeholder*='CPF' i], input[placeholder*='CNPJ' i], input[placeholder*='E-mail' i], "
+        "input[placeholder*='email' i], input[placeholder*='Usuário' i], input[placeholder*='Usuario' i], "
+        "input[placeholder*='Login' i], input[placeholder*='Código' i], input[placeholder*='Codigo' i], "
+        "input[aria-label*='CPF' i], input[aria-label*='CNPJ' i], input[aria-label*='Usuário' i], "
+        "input[formcontrolname*='login' i], input[formcontrolname*='usuario' i], input[formcontrolname*='cpf' i], "
+        "input[type='text']",
+    )
+    password_selector = _selector(
+        op,
+        "senha",
+        "input[name='password'], input#password, input[name='senha'], input#senha, "
+        "input[name*='senha' i], input[id*='senha' i], input[name*='password' i], input[id*='password' i], "
+        "input[placeholder*='Senha' i], input[placeholder*='password' i], input[type='password']",
+    )
+    submit_selector = _selector(
+        op,
+        "entrar",
+        "button[type='submit'], input[type='submit'], button:has-text('Entrar'), button:has-text('Login'), "
+        "button:has-text('Acessar'), a:has-text('Entrar'), a:has-text('Acessar'), "
+        "[role='button']:has-text('Entrar'), [role='button']:has-text('Acessar')",
+    )
+    boleto_selector = _selector(
+        op,
+        "boleto",
+        "a[href*='boleto'], a[href*='segunda-via'], a.download-boleto, button:has-text('Boleto'), "
+        "button:has-text('2ª via'), button:has-text('Segunda via'), a:has-text('Boleto'), a:has-text('2ª via'), a:has-text('Segunda via')",
+    )
 
     downloaded_files: List[str] = []
 
@@ -182,17 +269,29 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
             await page.goto(portal_url, wait_until="domcontentloaded", timeout=60000)
             logger.info(f"Portal carregado: {portal_url}")
 
-            await page.locator(user_selector).first.fill(username, timeout=30000)
+            # Portais SPA/Angular podem renderizar depois do domcontentloaded.
+            try:
+                await page.wait_for_load_state("networkidle", timeout=30000)
+            except Exception:
+                logger.info("Networkidle não estabilizou; continuando com espera visual.")
+            await page.wait_for_timeout(int(op.get("initialWaitMs", 7000)))
+
+            await _run_optional_steps(page, op.get("preLoginSteps") or [])
+
+            await _fill_first(page, user_selector, username, "usuário", timeout_ms=int(op.get("fieldTimeoutMs", 60000)))
             logger.info("Usuário preenchido")
 
-            await page.locator(password_selector).first.fill(password, timeout=30000)
+            await _fill_first(page, password_selector, password, "senha", timeout_ms=int(op.get("fieldTimeoutMs", 60000)))
             logger.info("Senha preenchida")
 
-            await page.locator(submit_selector).first.click(timeout=30000)
+            await _click_first(page, submit_selector, "entrar", timeout_ms=int(op.get("fieldTimeoutMs", 60000)))
             logger.info("Botão de login clicado")
 
-            await page.wait_for_load_state("networkidle", timeout=60000)
-            await page.wait_for_timeout(int(op.get("loginWaitMs", 3000)))
+            try:
+                await page.wait_for_load_state("networkidle", timeout=60000)
+            except Exception:
+                logger.info("Networkidle após login não estabilizou; continuando.")
+            await page.wait_for_timeout(int(op.get("loginWaitMs", 5000)))
             logger.info("Login concluído, aguardando carregamento")
 
             await _run_optional_steps(page, op.get("steps") or [])
@@ -218,6 +317,8 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
                 except PlaywrightTimeoutError:
                     logger.warning(f"Timeout ao baixar boleto {idx+1}")
                     continue
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Erro no fluxo RPA: {e}")
             raise
