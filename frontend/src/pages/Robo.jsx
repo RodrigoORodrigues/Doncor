@@ -121,6 +121,8 @@ const Robo = () => {
       setExecucoes(execData);
     } catch (error) {
       console.error('Erro ao iniciar robô', error);
+      const message = error?.response?.data?.detail || error?.response?.data?.message || error?.message || 'Erro desconhecido ao iniciar o robô';
+      setLastTriggerMessage(`Falha ao iniciar robô: ${message}`);
     } finally {
       setUpdating(false);
     }
