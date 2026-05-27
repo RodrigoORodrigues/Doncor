@@ -6,15 +6,29 @@ import Robo from '../pages/Robo';
 jest.mock('../services/api', () => ({
   fetchRoboStatus: jest.fn(),
   fetchRoboExecucoes: jest.fn(),
+  fetchRoboConfig: jest.fn(),
+  fetchRoboHistorico: jest.fn(),
   startRobo: jest.fn(),
   pauseRobo: jest.fn(),
+  triggerRoboReal: jest.fn(),
 }));
 
-const { fetchRoboStatus, fetchRoboExecucoes, startRobo, pauseRobo } = require('../services/api');
+const { 
+  fetchRoboStatus, 
+  fetchRoboExecucoes, 
+  fetchRoboConfig,
+  fetchRoboHistorico,
+  startRobo, 
+  pauseRobo,
+  triggerRoboReal 
+} = require('../services/api');
 
 
 beforeEach(() => {
   jest.spyOn(window, 'confirm').mockReturnValue(true);
+  jest.spyOn(window, 'prompt').mockReturnValue(null);
+  fetchRoboHistorico.mockResolvedValue({ resumo: {}, boletos: [], arquivos: [], diagnosticos: [] });
+  fetchRoboConfig.mockResolvedValue({ operadoras: [] });
 });
 
 afterEach(() => {
