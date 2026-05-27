@@ -240,6 +240,18 @@ export const fetchRoboStatus = () =>
 
 export const fetchRoboExecucoes = () => getArray("/robo/execucoes", roboAuthConfig);
 
+export const fetchRoboHistorico = () =>
+  getObject("/robo/historico", {
+    resumo: {
+      boletosBaixados: 0,
+      arquivosGerados: 0,
+      diagnosticos: 0,
+    },
+    boletos: [],
+    arquivos: [],
+    diagnosticos: [],
+  }, roboAuthConfig);
+
 export const startRobo = () => api.post("/robo/iniciar", {}, roboAuthConfig).then((r) => r.data);
 
 export const pauseRobo = () => api.post("/robo/pausar", {}, roboAuthConfig).then((r) => r.data);
