@@ -13,19 +13,20 @@ import os
 # Precisa ser definido antes de importar o Playwright.
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/ms-playwright")
 
-import tempfile
-import time
 import datetime
 import logging
 import subprocess
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+import tempfile
+import time
+from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 try:
-    from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
+    from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+    from playwright.async_api import async_playwright
 except Exception:
     async_playwright = None
     PlaywrightTimeoutError = Exception
@@ -135,24 +136,71 @@ def _split_selectors(selector: str) -> List[str]:
     return [part.strip() for part in selector.split(",") if part.strip()]
 
 
+def _is_amil(op: Dict[str, Any]) -> bool:
+    nome = str(op.get("nome") or "").lower()
+    url = str(op.get("url") or "").lower()
+    return "amil" in nome or "amil.com.br" in url
+
+
+async def _debug_page_state(page) -> Dict[str, Any]:
+    """Coleta diagnóstico da tela que o robô está vendo, sem expor senha."""
+    data: Dict[str, Any] = {
+        "url": page.url,
+        "title": "",
+        "bodyText": "",
+        "frames": [],
+        "htmlStart": "",
+    }
+    try:
+        data["title"] = await page.title()
+    except Exception as exc:
+        data["titleError"] = str(exc)
+
+    try:
+        data["bodyText"] = (await page.locator("body").inner_text(timeout=5000))[:1500]
+    except Exception as exc:
+        data["bodyTextError"] = str(exc)
+
+    try:
+        html = await page.content()
+        data["htmlStart"] = html[:1500]
+    except Exception as exc:
+        data["htmlError"] = str(exc)
+
+    for idx, frame in enumerate(page.frames):
+        frame_info: Dict[str, Any] = {"index": idx, "url": frame.url, "inputs": [], "buttons": []}
+        try:
+            frame_info["inputs"] = await frame.locator("input, textarea, [contenteditable='true']").evaluate_all(
+                "els => els.slice(0, 40).map((e, i) => ({i, tag:e.tagName, type:e.getAttribute('type'), id:e.id, name:e.getAttribute('name'), placeholder:e.getAttribute('placeholder'), aria:e.getAttribute('aria-label'), cls:e.className}))"
+            )
+        except Exception as exc:
+            frame_info["inputsError"] = str(exc)
+        try:
+            frame_info["buttons"] = await frame.locator("button, input[type='submit'], a, [role='button']").evaluate_all(
+                "els => els.slice(0, 40).map((e, i) => ({i, tag:e.tagName, text:(e.innerText || e.value || '').trim(), id:e.id, href:e.href, type:e.getAttribute('type'), cls:e.className}))"
+            )
+        except Exception as exc:
+            frame_info["buttonsError"] = str(exc)
+        data["frames"].append(frame_info)
+
+    return data
+
+
 async def _first_visible_locator(page, selector: str, timeout_ms: int = 45000):
     """Procura um seletor visível na página principal e em iframes."""
     deadline = time.time() + (timeout_ms / 1000)
     selectors = _split_selectors(selector)
 
     while time.time() < deadline:
-        frames = [page] + list(page.frames)
-        for frame in frames:
+        for target in [page] + list(page.frames):
             for item in selectors:
                 try:
-                    locator = frame.locator(item).first
-                    count = await locator.count()
-                    if count > 0:
+                    locator = target.locator(item).first
+                    if await locator.count() > 0:
                         try:
                             if await locator.is_visible(timeout=1000):
                                 return locator
                         except Exception:
-                            # Alguns campos existem, mas ainda não estão visíveis.
                             pass
                 except Exception:
                     pass
@@ -164,13 +212,15 @@ async def _first_visible_locator(page, selector: str, timeout_ms: int = 45000):
 async def _fill_first(page, selector: str, value: str, label: str, timeout_ms: int = 45000):
     locator = await _first_visible_locator(page, selector, timeout_ms=timeout_ms)
     if locator is None:
-        visible_inputs = await page.locator("input, textarea, [contenteditable='true']").evaluate_all(
-            "els => els.slice(0, 25).map((e, i) => ({i, tag:e.tagName, type:e.getAttribute('type'), id:e.id, name:e.getAttribute('name'), placeholder:e.getAttribute('placeholder'), aria:e.getAttribute('aria-label'), cls:e.className}))"
-        )
-        logger.error("Campo %s não encontrado. Inputs detectados: %s", label, visible_inputs)
+        debug = await _debug_page_state(page)
+        logger.error("Campo %s não encontrado. Diagnóstico: %s", label, debug)
         raise HTTPException(
             status_code=422,
-            detail=f"Campo {label} não encontrado no portal. Ajuste o seletor da operadora. Inputs detectados: {visible_inputs}",
+            detail={
+                "message": f"Campo {label} não encontrado no portal. Ajuste o seletor da operadora ou verifique se o site bloqueou o carregamento no servidor.",
+                "selector_usado": selector,
+                "diagnostico": debug,
+            },
         )
     await locator.fill(value, timeout=timeout_ms)
     return locator
@@ -179,13 +229,15 @@ async def _fill_first(page, selector: str, value: str, label: str, timeout_ms: i
 async def _click_first(page, selector: str, label: str, timeout_ms: int = 45000):
     locator = await _first_visible_locator(page, selector, timeout_ms=timeout_ms)
     if locator is None:
-        buttons = await page.locator("button, input[type='submit'], a").evaluate_all(
-            "els => els.slice(0, 30).map((e, i) => ({i, tag:e.tagName, text:(e.innerText || e.value || '').trim(), id:e.id, href:e.href, type:e.getAttribute('type'), cls:e.className}))"
-        )
-        logger.error("Botão/link %s não encontrado. Elementos detectados: %s", label, buttons)
+        debug = await _debug_page_state(page)
+        logger.error("Botão/link %s não encontrado. Diagnóstico: %s", label, debug)
         raise HTTPException(
             status_code=422,
-            detail=f"Botão/link {label} não encontrado no portal. Ajuste o seletor da operadora. Elementos detectados: {buttons}",
+            detail={
+                "message": f"Botão/link {label} não encontrado no portal. Ajuste o seletor da operadora.",
+                "selector_usado": selector,
+                "diagnostico": debug,
+            },
         )
     await locator.click(timeout=timeout_ms)
     return locator
@@ -206,10 +258,36 @@ async def _run_optional_steps(page, steps: List[Dict[str, Any]]):
             found = await _first_visible_locator(page, selector, timeout_ms=timeout)
             if found is None:
                 raise HTTPException(status_code=422, detail=f"Seletor personalizado não encontrado: {selector}")
-        elif action == "wait" or action == "wait_timeout":
+        elif action in {"wait", "wait_timeout"}:
             await page.wait_for_timeout(int(step.get("ms", 1000)))
         elif action == "goto" and value:
             await page.goto(value, wait_until="domcontentloaded", timeout=timeout)
+
+
+async def _wait_for_login_screen(page, op: Dict[str, Any], user_selector: str) -> None:
+    """Espera SPA/Angular renderizar e tenta recuperar tela vazia."""
+    initial_wait = int(op.get("initialWaitMs", 25000 if _is_amil(op) else 10000))
+    try:
+        await page.wait_for_load_state("networkidle", timeout=30000)
+    except Exception:
+        logger.info("Networkidle não estabilizou; continuando com espera visual.")
+
+    await page.wait_for_timeout(initial_wait)
+
+    found = await _first_visible_locator(page, user_selector, timeout_ms=5000)
+    if found is not None:
+        return
+
+    logger.warning("Tela de login sem campo de usuário após espera inicial; recarregando uma vez.")
+    try:
+        await page.reload(wait_until="domcontentloaded", timeout=60000)
+        try:
+            await page.wait_for_load_state("networkidle", timeout=30000)
+        except Exception:
+            pass
+        await page.wait_for_timeout(initial_wait)
+    except Exception as exc:
+        logger.warning("Falha ao recarregar página antes do login: %s", exc)
 
 
 async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
@@ -226,21 +304,21 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
     user_selector = _selector(
         op,
         "usuario",
-        "input[name='username'], input#username, input[name='login'], input#login, "
-        "input[name='usuario'], input#usuario, input[name='user'], input#user, "
-        "input[name*='cpf' i], input[id*='cpf' i], input[name*='cnpj' i], input[id*='cnpj' i], "
-        "input[name*='email' i], input[id*='email' i], input[type='email'], "
-        "input[placeholder*='CPF' i], input[placeholder*='CNPJ' i], input[placeholder*='E-mail' i], "
-        "input[placeholder*='email' i], input[placeholder*='Usuário' i], input[placeholder*='Usuario' i], "
-        "input[placeholder*='Login' i], input[placeholder*='Código' i], input[placeholder*='Codigo' i], "
-        "input[aria-label*='CPF' i], input[aria-label*='CNPJ' i], input[aria-label*='Usuário' i], "
-        "input[formcontrolname*='login' i], input[formcontrolname*='usuario' i], input[formcontrolname*='cpf' i], "
-        "input[type='text']",
+        "input[name='username'], input.test_input_username, input.login-form__uppercase, "
+        "input[name='login'], input#login, input[name='usuario'], input#usuario, "
+        "input[name='user'], input#user, input[name*='cpf' i], input[id*='cpf' i], "
+        "input[name*='cnpj' i], input[id*='cnpj' i], input[name*='email' i], input[id*='email' i], "
+        "input[type='email'], input[placeholder*='CPF' i], input[placeholder*='CNPJ' i], "
+        "input[placeholder*='E-mail' i], input[placeholder*='email' i], input[placeholder*='Usuário' i], "
+        "input[placeholder*='Usuario' i], input[placeholder*='Login' i], input[placeholder*='Código' i], "
+        "input[placeholder*='Codigo' i], input[aria-label*='CPF' i], input[aria-label*='CNPJ' i], "
+        "input[aria-label*='Usuário' i], input[formcontrolname*='login' i], "
+        "input[formcontrolname*='usuario' i], input[formcontrolname*='cpf' i], input[type='text']",
     )
     password_selector = _selector(
         op,
         "senha",
-        "input[name='password'], input#password, input[name='senha'], input#senha, "
+        "input[name='password'], input.test_input_password, input[name='senha'], input#senha, "
         "input[name*='senha' i], input[id*='senha' i], input[name*='password' i], input[id*='password' i], "
         "input[placeholder*='Senha' i], input[placeholder*='password' i], input[type='password']",
     )
@@ -249,7 +327,7 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
         "entrar",
         "button[type='submit'], input[type='submit'], button:has-text('Entrar'), button:has-text('Login'), "
         "button:has-text('Acessar'), a:has-text('Entrar'), a:has-text('Acessar'), "
-        "[role='button']:has-text('Entrar'), [role='button']:has-text('Acessar')",
+        ".test_button_login, [role='button']:has-text('Entrar'), [role='button']:has-text('Acessar')",
     )
     boleto_selector = _selector(
         op,
@@ -261,37 +339,53 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
     downloaded_files: List[str] = []
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"])
-        context = await browser.new_context(accept_downloads=True)
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-blink-features=AutomationControlled",
+                "--window-size=1366,768",
+            ],
+        )
+        context = await browser.new_context(
+            accept_downloads=True,
+            viewport={"width": 1366, "height": 768},
+            locale="pt-BR",
+            timezone_id="America/Sao_Paulo",
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            extra_http_headers={"Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"},
+        )
+        await context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         page = await context.new_page()
+
         try:
-            logger.info(f"Iniciando fluxo RPA para operadora: {op.get('nome')}")
+            logger.info("Iniciando fluxo RPA para operadora: %s", op.get("nome"))
             await page.goto(portal_url, wait_until="domcontentloaded", timeout=60000)
-            logger.info(f"Portal carregado: {portal_url}")
+            logger.info("Portal carregado: %s", portal_url)
 
-            # Portais SPA/Angular podem renderizar depois do domcontentloaded.
-            try:
-                await page.wait_for_load_state("networkidle", timeout=30000)
-            except Exception:
-                logger.info("Networkidle não estabilizou; continuando com espera visual.")
-            await page.wait_for_timeout(int(op.get("initialWaitMs", 7000)))
-
+            await _wait_for_login_screen(page, op, user_selector)
             await _run_optional_steps(page, op.get("preLoginSteps") or [])
 
-            await _fill_first(page, user_selector, username, "usuário", timeout_ms=int(op.get("fieldTimeoutMs", 60000)))
+            await _fill_first(page, user_selector, username, "usuário", timeout_ms=int(op.get("fieldTimeoutMs", 90000)))
             logger.info("Usuário preenchido")
 
-            await _fill_first(page, password_selector, password, "senha", timeout_ms=int(op.get("fieldTimeoutMs", 60000)))
+            await _fill_first(page, password_selector, password, "senha", timeout_ms=int(op.get("fieldTimeoutMs", 90000)))
             logger.info("Senha preenchida")
 
-            await _click_first(page, submit_selector, "entrar", timeout_ms=int(op.get("fieldTimeoutMs", 60000)))
+            await _click_first(page, submit_selector, "entrar", timeout_ms=int(op.get("fieldTimeoutMs", 90000)))
             logger.info("Botão de login clicado")
 
             try:
                 await page.wait_for_load_state("networkidle", timeout=60000)
             except Exception:
                 logger.info("Networkidle após login não estabilizou; continuando.")
-            await page.wait_for_timeout(int(op.get("loginWaitMs", 5000)))
+            await page.wait_for_timeout(int(op.get("loginWaitMs", 10000)))
             logger.info("Login concluído, aguardando carregamento")
 
             await _run_optional_steps(page, op.get("steps") or [])
@@ -300,7 +394,7 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
             if not links:
                 raise HTTPException(status_code=404, detail="Nenhum botão/link de boleto encontrado. Ajuste o seletor 'boleto'.")
 
-            logger.info(f"Encontrados {len(links)} boleto(s)")
+            logger.info("Encontrados %s boleto(s)", len(links))
             max_downloads = int(op.get("maxDownloads", 3))
             download_timeout = int(op.get("downloadTimeoutMs", 30000))
 
@@ -313,14 +407,15 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
                     os.close(fd)
                     await download.save_as(path)
                     downloaded_files.append(path)
-                    logger.info(f"Boleto {idx+1} baixado: {path}")
+                    logger.info("Boleto %s baixado: %s", idx + 1, path)
                 except PlaywrightTimeoutError:
-                    logger.warning(f"Timeout ao baixar boleto {idx+1}")
+                    logger.warning("Timeout ao baixar boleto %s", idx + 1)
                     continue
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Erro no fluxo RPA: {e}")
+            debug = await _debug_page_state(page)
+            logger.error("Erro no fluxo RPA: %s | Diagnóstico: %s", e, debug)
             raise
         finally:
             await context.close()
@@ -329,7 +424,7 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
     if not downloaded_files:
         raise HTTPException(status_code=404, detail="Boleto localizado, mas nenhum download foi concluído. Ajuste o fluxo ou seletores.")
 
-    logger.info(f"RPA concluído: {len(downloaded_files)} arquivo(s) baixado(s)")
+    logger.info("RPA concluído: %s arquivo(s) baixado(s)", len(downloaded_files))
     return downloaded_files
 
 
@@ -346,7 +441,7 @@ async def run_rpa(payload: RunRpaPayload):
         logger.error("Playwright não disponível. Retornando erro 503.")
         raise HTTPException(
             status_code=503,
-            detail="Serviço RPA não disponível: Playwright não instalado. Configure adequadamente o serviço RPA."
+            detail="Serviço RPA não disponível: Playwright não instalado. Configure adequadamente o serviço RPA.",
         )
 
     start = time.time()
@@ -364,14 +459,17 @@ async def run_rpa(payload: RunRpaPayload):
         "files": files,
     }
 
-    RPA_EXECUTIONS.insert(0, {
-        "id": str(time.time()),
-        "processo": "Extração de boletos RPA",
-        "inicio": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
-        "duracao": f"{elapsed}s",
-        "status": "Concluído",
-        "resultado": result,
-    })
+    RPA_EXECUTIONS.insert(
+        0,
+        {
+            "id": str(time.time()),
+            "processo": "Extração de boletos RPA",
+            "inicio": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
+            "duracao": f"{elapsed}s",
+            "status": "Concluído",
+            "resultado": result,
+        },
+    )
     return result
 
 
