@@ -6,8 +6,11 @@ This wrapper also exposes / so opening the Railway URL directly does not return 
 
 import os
 from datetime import datetime, timezone
+from typing import Optional
 
-from server import app, db
+from fastapi import Depends, Query
+
+from server import app, db, _require_robo_role
 
 
 @app.get("/")
@@ -49,6 +52,18 @@ async def _count_table(table_name: str):
         return {"ok": False, "error": str(exc)}
 
 
+def _proj():
+    return {"_id": 0}
+
+
+async def _list_collection(table_name: str, limit: int = 50):
+    try:
+        collection = getattr(db, table_name)
+        return await collection.find({}, _proj()).sort("createdAt", -1).to_list(limit)
+    except Exception as exc:
+        return [{"id": f"erro-{table_name}", "status": "erro", "mensagem": str(exc)}]
+
+
 async def diagnostics_response():
     supabase_url = os.getenv("SUPABASE_URL", "")
     supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_KEY") or ""
@@ -67,6 +82,9 @@ async def diagnostics_response():
         "robo_config",
         "robo_estado",
         "robo_execucoes_log",
+        "boletos_baixados",
+        "robo_arquivos",
+        "robo_diagnosticos",
     ]:
         tables[table] = await _count_table(table)
 
@@ -102,3 +120,31 @@ async def diagnostics_root():
 @app.get("/api/diagnostics")
 async def diagnostics_api():
     return await diagnostics_response()
+
+
+@app.get("/api/robo/historico")
+async def robo_historico(
+    limit: int = Query(default=50, ge=1, le=200),
+    _: None = Depends(_require_robo_role),
+):
+    """Retorna a visão consolidada do histórico do RPA.
+
+    Esta rota alimenta a seção de automação com dados específicos de:
+    - boletos baixados;
+    - arquivos gerados;
+    - diagnósticos/erros.
+    """
+    boletos = await _list_collection("boletos_baixados", limit)
+    arquivos = await _list_collection("robo_arquivos", limit)
+    diagnosticos = await _list_collection("robo_diagnosticos", limit)
+
+    return {
+        "resumo": {
+            "boletosBaixados": len([item for item in boletos if not str(item.get("id", "")).startswith("erro-")]),
+            "arquivosGerados": len([item for item in arquivos if not str(item.get("id", "")).startswith("erro-")]),
+            "diagnosticos": len([item for item in diagnosticos if not str(item.get("id", "")).startswith("erro-")]),
+        },
+        "boletos": boletos,
+        "arquivos": arquivos,
+        "diagnosticos": diagnosticos,
+    }
