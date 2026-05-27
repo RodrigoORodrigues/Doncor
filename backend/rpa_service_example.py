@@ -8,10 +8,17 @@ personalizados para login e download.
 from __future__ import annotations
 
 import os
+
+# Caminho previsível para os navegadores no container Railway/Docker.
+# Precisa ser definido antes de importar o Playwright.
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/ms-playwright")
+
 import tempfile
 import time
 import datetime
 import logging
+import subprocess
+import sys
 from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException
@@ -25,6 +32,35 @@ except Exception:
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+_BROWSER_READY = False
+
+
+def ensure_playwright_chromium() -> None:
+    """Garante que o Chromium esperado pelo Playwright exista no container.
+
+    O Railway pode reaproveitar cache ou iniciar o app por comando customizado.
+    Por isso esta validação fica também dentro do serviço RPA, não apenas no
+    Dockerfile/start script.
+    """
+    global _BROWSER_READY
+    if _BROWSER_READY:
+        return
+
+    if async_playwright is None:
+        return
+
+    logger.info("Verificando navegador Chromium do Playwright...")
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            check=True,
+        )
+        _BROWSER_READY = True
+        logger.info("Chromium do Playwright pronto.")
+    except Exception as exc:
+        logger.exception("Falha ao instalar/verificar Chromium do Playwright: %s", exc)
+        raise
 
 
 class RunRpaPayload(BaseModel):
@@ -60,6 +96,12 @@ RPA_CONFIG_STORE: Dict[str, Any] = {
 RPA_EXECUTIONS: List[Dict[str, Any]] = []
 
 
+@app.on_event("startup")
+async def startup_check_browser():
+    if async_playwright is not None:
+        ensure_playwright_chromium()
+
+
 @app.get("/")
 async def root():
     return {"message": "Doncor RPA Service", "status": "online", "health": "/api/rpa/health"}
@@ -71,7 +113,9 @@ async def health():
     return {
         "status": "ok" if playwright_available else "degraded",
         "service": "rpa",
-        "playwright": "available" if playwright_available else "not_installed"
+        "playwright": "available" if playwright_available else "not_installed",
+        "browserReady": _BROWSER_READY,
+        "browserPath": os.getenv("PLAYWRIGHT_BROWSERS_PATH"),
     }
 
 
@@ -81,7 +125,9 @@ async def rpa_health():
     return {
         "status": "ok" if playwright_available else "degraded",
         "service": "rpa",
-        "playwright": "available" if playwright_available else "not_installed"
+        "playwright": "available" if playwright_available else "not_installed",
+        "browserReady": _BROWSER_READY,
+        "browserPath": os.getenv("PLAYWRIGHT_BROWSERS_PATH"),
     }
 
 
@@ -112,6 +158,8 @@ async def _run_optional_steps(page, steps: List[Dict[str, Any]]):
 async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
     if async_playwright is None:
         raise HTTPException(status_code=500, detail="Playwright não instalado no serviço RPA")
+
+    ensure_playwright_chromium()
 
     op = payload.operadora
     portal_url = op.get("url")
