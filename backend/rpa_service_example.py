@@ -126,16 +126,26 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
     downloaded_files: List[str] = []
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+        browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"])
         context = await browser.new_context(accept_downloads=True)
         page = await context.new_page()
         try:
+            logger.info(f"Iniciando fluxo RPA para operadora: {op.get('nome')}")
             await page.goto(portal_url, wait_until="domcontentloaded", timeout=60000)
+            logger.info(f"Portal carregado: {portal_url}")
+
             await page.locator(user_selector).first.fill(username, timeout=30000)
+            logger.info("Usuário preenchido")
+
             await page.locator(password_selector).first.fill(password, timeout=30000)
+            logger.info("Senha preenchida")
+
             await page.locator(submit_selector).first.click(timeout=30000)
+            logger.info("Botão de login clicado")
+
             await page.wait_for_load_state("networkidle", timeout=60000)
             await page.wait_for_timeout(int(op.get("loginWaitMs", 3000)))
+            logger.info("Login concluído, aguardando carregamento")
 
             await _run_optional_steps(page, op.get("steps") or [])
 
@@ -143,6 +153,7 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
             if not links:
                 raise HTTPException(status_code=404, detail="Nenhum botão/link de boleto encontrado. Ajuste o seletor 'boleto'.")
 
+            logger.info(f"Encontrados {len(links)} boleto(s)")
             max_downloads = int(op.get("maxDownloads", 3))
             download_timeout = int(op.get("downloadTimeoutMs", 30000))
 
@@ -155,8 +166,13 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
                     os.close(fd)
                     await download.save_as(path)
                     downloaded_files.append(path)
+                    logger.info(f"Boleto {idx+1} baixado: {path}")
                 except PlaywrightTimeoutError:
+                    logger.warning(f"Timeout ao baixar boleto {idx+1}")
                     continue
+        except Exception as e:
+            logger.error(f"Erro no fluxo RPA: {e}")
+            raise
         finally:
             await context.close()
             await browser.close()
@@ -164,6 +180,7 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
     if not downloaded_files:
         raise HTTPException(status_code=404, detail="Boleto localizado, mas nenhum download foi concluído. Ajuste o fluxo ou seletores.")
 
+    logger.info(f"RPA concluído: {len(downloaded_files)} arquivo(s) baixado(s)")
     return downloaded_files
 
 
