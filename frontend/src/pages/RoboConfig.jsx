@@ -114,6 +114,7 @@ const RoboConfig = () => {
     const next = [...config.operadoras];
     next[index] = {
       ...normalizeOperadora(next[index]),
+      nome: next[index].nome || 'AMIL',
       url: next[index].url || 'https://www.amil.com.br/empresa/#/login',
       selectors: {
         usuario: 'input[name="username"], input.test_input_username',
@@ -124,6 +125,29 @@ const RoboConfig = () => {
       initialWaitMs: next[index].initialWaitMs || 20000,
       fieldTimeoutMs: next[index].fieldTimeoutMs || 90000,
       loginWaitMs: next[index].loginWaitMs || 10000,
+    };
+    setConfig({ ...config, operadoras: next });
+  };
+
+  const preencherSelectorsAssim = (index) => {
+    const next = [...config.operadoras];
+    next[index] = {
+      ...normalizeOperadora(next[index]),
+      nome: next[index].nome || 'ASSIM',
+      url: next[index].url || 'https://assim.com.br/site/?area=empresas&redir=2via_boleto',
+      selectors: {
+        usuario: '#login, input#login, input[name="login"], input[placeholder*="Digite apenas números"]',
+        senha: '#input-senha, input#input-senha, input[name="senha"], input[placeholder*="Informe sua senha"]',
+        entrar: 'button:has-text("Entrar"), input[type="submit"], a:has-text("Entrar"), .btn:has-text("Entrar")',
+        boleto: 'a[href*="2via_boleto"], a[href*="acesso-boleto"], a:has-text("2ª via de boleto"), a:has-text("2 via de boleto"), a:has-text("Boleto")',
+      },
+      preLoginSteps: [
+        { action: 'click', selector: '#tipoLogin1, input#tipoLogin1', timeout: 5000 },
+      ],
+      initialWaitMs: next[index].initialWaitMs || 12000,
+      fieldTimeoutMs: next[index].fieldTimeoutMs || 60000,
+      loginWaitMs: next[index].loginWaitMs || 10000,
+      downloadTimeoutMs: next[index].downloadTimeoutMs || 30000,
     };
     setConfig({ ...config, operadoras: next });
   };
@@ -198,23 +222,28 @@ const RoboConfig = () => {
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '6px 0 8px' }}>
                   <strong style={{ fontSize: '0.8rem', color: '#344050' }}>Selectors da operadora</strong>
-                  <button type="button" onClick={() => preencherSelectorsAmil(idx)} style={{ border: '1px solid #00AEEF', color: '#0077A3', background: '#fff', borderRadius: '6px', padding: '5px 8px', fontSize: '0.75rem' }}>
-                    Preencher padrão AMIL
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button type="button" onClick={() => preencherSelectorsAmil(idx)} style={{ border: '1px solid #00AEEF', color: '#0077A3', background: '#fff', borderRadius: '6px', padding: '5px 8px', fontSize: '0.75rem' }}>
+                      Preencher padrão AMIL
+                    </button>
+                    <button type="button" onClick={() => preencherSelectorsAssim(idx)} style={{ border: '1px solid #16a34a', color: '#15803d', background: '#fff', borderRadius: '6px', padding: '5px 8px', fontSize: '0.75rem' }}>
+                      Preencher padrão ASSIM
+                    </button>
+                  </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <label style={labelStyle}>Selector usuário
-                    <input value={safeOp.selectors.usuario || ''} onChange={(e) => updateOperadoraSelector(idx, 'usuario', e.target.value)} placeholder={'input[name="username"], input.test_input_username'} style={inputStyle} />
+                    <input value={safeOp.selectors.usuario || ''} onChange={(e) => updateOperadoraSelector(idx, 'usuario', e.target.value)} placeholder={'#login, input[name="login"]'} style={inputStyle} />
                   </label>
                   <label style={labelStyle}>Selector senha
-                    <input value={safeOp.selectors.senha || ''} onChange={(e) => updateOperadoraSelector(idx, 'senha', e.target.value)} placeholder={'input[name="password"], input.test_input_password'} style={inputStyle} />
+                    <input value={safeOp.selectors.senha || ''} onChange={(e) => updateOperadoraSelector(idx, 'senha', e.target.value)} placeholder={'#input-senha, input[name="senha"]'} style={inputStyle} />
                   </label>
                   <label style={labelStyle}>Selector botão entrar
-                    <input value={safeOp.selectors.entrar || ''} onChange={(e) => updateOperadoraSelector(idx, 'entrar', e.target.value)} placeholder={'button:has-text("Entrar"), button[type="submit"]'} style={inputStyle} />
+                    <input value={safeOp.selectors.entrar || ''} onChange={(e) => updateOperadoraSelector(idx, 'entrar', e.target.value)} placeholder={'button:has-text("Entrar"), input[type="submit"]'} style={inputStyle} />
                   </label>
                   <label style={labelStyle}>Selector boleto
-                    <input value={safeOp.selectors.boleto || ''} onChange={(e) => updateOperadoraSelector(idx, 'boleto', e.target.value)} placeholder={'a[href*="boleto"], button:has-text("Boleto")'} style={inputStyle} />
+                    <input value={safeOp.selectors.boleto || ''} onChange={(e) => updateOperadoraSelector(idx, 'boleto', e.target.value)} placeholder={'a[href*="2via_boleto"], a:has-text("Boleto")'} style={inputStyle} />
                   </label>
                 </div>
 
