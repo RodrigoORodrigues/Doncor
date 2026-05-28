@@ -138,12 +138,9 @@ const RoboConfig = () => {
       selectors: {
         usuario: '#login, input#login, input[name="login"], input[placeholder*="Digite apenas números"]',
         senha: '#input-senha, input#input-senha, input[name="senha"], input[placeholder*="Informe sua senha"]',
-        entrar: 'button:has-text("Entrar"), input[type="submit"], a:has-text("Entrar"), .btn:has-text("Entrar")',
+        entrar: 'input[type="submit"], button:has-text("Entrar"), a:has-text("Entrar"), .btn:has-text("Entrar")',
         boleto: 'a[href*="2via_boleto"], a[href*="acesso-boleto"], a:has-text("2ª via de boleto"), a:has-text("2 via de boleto"), a:has-text("Boleto")',
       },
-      preLoginSteps: [
-        { action: 'click', selector: '#tipoLogin1, input#tipoLogin1', timeout: 5000 },
-      ],
       initialWaitMs: next[index].initialWaitMs || 12000,
       fieldTimeoutMs: next[index].fieldTimeoutMs || 60000,
       loginWaitMs: next[index].loginWaitMs || 10000,
