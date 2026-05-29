@@ -19,6 +19,7 @@ import Colaboradores from "./pages/Colaboradores";
 import Relatorios from "./pages/Relatorios";
 import Robo from "./pages/Robo";
 import RoboConfig from "./pages/RoboConfig";
+import Chat from "./pages/Chat";
 import { Loader2 } from "lucide-react";
 
 const DEFAULT_ACCESS = "dashboard";
@@ -27,6 +28,7 @@ const ALL_PAGES = [
   "dashboard",
   "adesao",
   "empresarial",
+  "chat",
   "inclusao",
   "exclusao",
   "transferencia",
@@ -51,6 +53,7 @@ const DEFAULT_ACCESS_BY_ROLE = {
     "dashboard",
     "adesao",
     "empresarial",
+    "chat",
     "inclusao",
     "exclusao",
     "transferencia",
@@ -176,6 +179,7 @@ const pageComponents = {
   dashboard: Dashboard,
   adesao: Adesao,
   empresarial: Empresarial,
+  chat: Chat,
   inclusao: Inclusao,
   exclusao: Exclusao,
   transferencia: Transferencia,
