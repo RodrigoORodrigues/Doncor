@@ -13,7 +13,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 from urllib.parse import urljoin
 
 # Caminho previsível para os navegadores no container Railway/Docker.
@@ -76,6 +76,8 @@ NON_BOLETO_TERMS = (
     "hospitalidades",
     "integridade",
 )
+
+BRADESCO_SEGUNDA_VIA = "banco.bradesco/html/classic/produtos-servicos/mais-produtos-servicos/segunda-via-boleto"
 
 
 def ensure_playwright_chromium() -> None:
@@ -169,6 +171,36 @@ def _is_boleto_candidate(text: str = "", href: str = "", extra: str = "") -> boo
     if any(term in haystack for term in NON_BOLETO_TERMS):
         return False
     return any(term in haystack for term in BOLETO_TERMS)
+
+
+def _is_bradesco_second_copy(text: str = "", href: str = "") -> bool:
+    haystack = f"{text or ''} {href or ''}".lower()
+    return "bradesco" in haystack and ("segunda-via-boleto" in haystack or "segunda via" in haystack or "2ª via" in haystack or "boleto" in haystack)
+
+
+async def _get_body_text(page, limit: int = 2500) -> str:
+    try:
+        return (await page.locator("body").inner_text(timeout=3000))[:limit]
+    except Exception:
+        return ""
+
+
+async def _raise_if_external_bank_flow(page) -> None:
+    """Para fluxos onde a operadora só orienta emitir no banco, sem PDF direto."""
+    body_text = await _get_body_text(page)
+    haystack = f"{page.url} {body_text}".lower()
+    if "bradesco" in haystack and ("segunda-via-boleto" in haystack or "segunda via" in haystack or "2ª via" in haystack):
+        logger.warning("Fluxo externo Bradesco detectado. A operadora não entregou PDF direto.")
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "O portal ASSIM não disponibilizou um PDF direto do boleto. Ele direciona/orienta a emissão pela segunda via do Bradesco. É necessário configurar uma etapa específica do Bradesco com os dados exigidos pelo banco, ou registrar este caso como 'emissão externa'.",
+                "tipo": "fluxo_externo_banco",
+                "banco": "Bradesco",
+                "url_atual": page.url,
+                "trecho_pagina": body_text[:1200],
+            },
+        )
 
 
 async def _debug_page_state(page) -> Dict[str, Any]:
@@ -408,8 +440,14 @@ async def _save_response_if_file(response, payload: RunRpaPayload, idx: int, sou
     return None
 
 
-async def _try_download_url(context, url: str, payload: RunRpaPayload, idx: int) -> Optional[str]:
+async def _try_download_url(context, url: str, payload: RunRpaPayload, idx: int, visited: Set[str]) -> Optional[str]:
     if not url or url.startswith("javascript:") or url.endswith("#"):
+        return None
+    if url in visited:
+        return None
+    visited.add(url)
+    if _is_bradesco_second_copy(href=url):
+        logger.warning("Fluxo Bradesco detectado por URL: %s", url)
         return None
     if not _is_boleto_candidate(href=url):
         logger.info("URL ignorada por não parecer boleto/fatura: %s", url)
@@ -422,7 +460,8 @@ async def _try_download_url(context, url: str, payload: RunRpaPayload, idx: int)
         return None
 
 
-async def _scan_page_for_file_links(page, context, payload: RunRpaPayload, base_idx: int) -> List[str]:
+async def _scan_page_for_file_links(page, context, payload: RunRpaPayload, base_idx: int, visited: Set[str]) -> List[str]:
+    await _raise_if_external_bank_flow(page)
     found_files: List[str] = []
     selectors = [
         "a[href*='boleto']",
@@ -448,7 +487,7 @@ async def _scan_page_for_file_links(page, context, payload: RunRpaPayload, base_
             locators = await page.locator(selector).all()
         except Exception:
             continue
-        for locator in locators[:5]:
+        for locator in locators[:3]:
             idx = base_idx + len(found_files)
             try:
                 text = (await locator.inner_text(timeout=1000)).strip()
@@ -458,12 +497,24 @@ async def _scan_page_for_file_links(page, context, payload: RunRpaPayload, base_
                 href = await locator.get_attribute("href")
             except Exception:
                 href = None
-            if not _is_boleto_candidate(text=text, href=href or ""):
+            full_href = urljoin(page.url, href) if href else ""
+            if _is_bradesco_second_copy(text=text, href=full_href):
+                logger.warning("Link de emissão externa Bradesco detectado: text=%s href=%s", text[:80], full_href)
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "message": "O ASSIM direciona para emissão externa de segunda via no Bradesco. O robô não recebeu PDF direto. Cadastre um fluxo específico do Bradesco com os dados exigidos pelo banco.",
+                        "tipo": "fluxo_externo_banco",
+                        "banco": "Bradesco",
+                        "url_externa": full_href,
+                    },
+                )
+            if not _is_boleto_candidate(text=text, href=full_href):
                 logger.info("Link interno ignorado por não parecer boleto: selector=%s text=%s href=%s", selector, text[:80], href)
                 continue
             logger.info("Link interno candidato boleto: selector=%s text=%s href=%s", selector, text[:80], href)
-            if href:
-                file_path = await _try_download_url(context, urljoin(page.url, href), payload, idx)
+            if full_href:
+                file_path = await _try_download_url(context, full_href, payload, idx, visited)
                 if file_path:
                     found_files.append(file_path)
                     continue
@@ -481,8 +532,9 @@ async def _scan_page_for_file_links(page, context, payload: RunRpaPayload, base_
     return found_files
 
 
-async def _download_boleto_candidate(page, context, locator, payload: RunRpaPayload, idx: int, download_timeout: int) -> Optional[str]:
+async def _download_boleto_candidate(page, context, locator, payload: RunRpaPayload, idx: int, download_timeout: int, visited: Set[str]) -> Optional[str]:
     await _close_known_modals(page)
+    await _raise_if_external_bank_flow(page)
     try:
         text = (await locator.inner_text(timeout=1000)).strip()
     except Exception:
@@ -491,14 +543,26 @@ async def _download_boleto_candidate(page, context, locator, payload: RunRpaPayl
         href = await locator.get_attribute("href")
     except Exception:
         href = None
+    full_href = urljoin(page.url, href) if href else ""
     logger.info("Candidato boleto %s: text=%s href=%s", idx + 1, text[:120], href)
 
-    if not _is_boleto_candidate(text=text, href=href or ""):
+    if _is_bradesco_second_copy(text=text, href=full_href):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "O ASSIM direciona para emissão externa de segunda via no Bradesco. O robô não recebeu PDF direto.",
+                "tipo": "fluxo_externo_banco",
+                "banco": "Bradesco",
+                "url_externa": full_href,
+            },
+        )
+
+    if not _is_boleto_candidate(text=text, href=full_href):
         logger.info("Candidato %s ignorado por não parecer boleto/fatura.", idx + 1)
         return None
 
-    if href:
-        file_path = await _try_download_url(context, urljoin(page.url, href), payload, idx)
+    if full_href:
+        file_path = await _try_download_url(context, full_href, payload, idx, visited)
         if file_path:
             return file_path
 
@@ -524,30 +588,36 @@ async def _download_boleto_candidate(page, context, locator, payload: RunRpaPayl
         except Exception:
             pass
         logger.info("Popup aberto para candidato %s: %s", idx + 1, popup.url)
+        await _raise_if_external_bank_flow(popup)
         if popup.url:
-            file_path = await _try_download_url(context, popup.url, payload, idx)
+            file_path = await _try_download_url(context, popup.url, payload, idx, visited)
             if file_path:
                 await popup.close()
                 return file_path
-        files = await _scan_page_for_file_links(popup, context, payload, idx)
+        files = await _scan_page_for_file_links(popup, context, payload, idx, visited)
         await popup.close()
         if files:
             return files[0]
+    except HTTPException:
+        raise
     except Exception:
         pass
 
     try:
         current_url = page.url
         await locator.click(timeout=5000, force=True)
-        await page.wait_for_timeout(4000)
+        await page.wait_for_timeout(2500)
         try:
-            await page.wait_for_load_state("networkidle", timeout=10000)
+            await page.wait_for_load_state("networkidle", timeout=8000)
         except Exception:
             pass
         logger.info("Após clique candidato %s: url antes=%s url depois=%s", idx + 1, current_url, page.url)
-        files = await _scan_page_for_file_links(page, context, payload, idx)
+        await _raise_if_external_bank_flow(page)
+        files = await _scan_page_for_file_links(page, context, payload, idx, visited)
         if files:
             return files[0]
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.info("Clique/navegação final candidato %s não baixou arquivo: %s", idx + 1, exc)
     return None
@@ -569,6 +639,7 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
     boleto_selector = _selector(op, "boleto", "a[href*='boleto'], a[href*='segunda-via'], button:has-text('Boleto'), a:has-text('Boleto'), a:has-text('2ª via')")
 
     downloaded_files: List[str] = []
+    visited_urls: Set[str] = set()
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--window-size=1366,768"])
@@ -605,6 +676,7 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
 
             await _run_optional_steps(page, op.get("steps") or [])
             await _close_known_modals(page)
+            await _raise_if_external_bank_flow(page)
 
             links = await page.locator(boleto_selector).all()
             logger.info("Encontrados %s candidato(s) de boleto pelo seletor: %s", len(links), boleto_selector)
@@ -615,7 +687,7 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
             max_downloads = int(op.get("maxDownloads", 3))
             download_timeout = int(op.get("downloadTimeoutMs", 30000))
             for idx, link in enumerate(links[:max_downloads]):
-                file_path = await _download_boleto_candidate(page, context, link, payload, idx, download_timeout)
+                file_path = await _download_boleto_candidate(page, context, link, payload, idx, download_timeout, visited_urls)
                 if file_path:
                     downloaded_files.append(file_path)
         except HTTPException:
