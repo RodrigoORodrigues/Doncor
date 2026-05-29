@@ -23,7 +23,7 @@ const buildStrictMenuItems = () => {
       normalized.push({
         ...section,
         items: [
-          ...section.items.filter((item) => item.id !== 'empresarial'),
+          ...section.items.filter((item) => !['adesao', 'empresarial'].includes(item.id)),
           { id: 'empresarial', label: 'Empresarial', icon: 'Handshake', page: 'empresarial' },
           { id: 'pme', label: 'PME', icon: 'Handshake', page: 'empresarial' },
         ],
