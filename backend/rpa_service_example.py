@@ -186,6 +186,65 @@ async def _debug_page_state(page) -> Dict[str, Any]:
     return data
 
 
+async def _close_known_modals(page) -> bool:
+    """Fecha modais comuns que bloqueiam cliques, como o aviso do ASSIM."""
+    closed = False
+    close_selectors = [
+        "#modalAviso button:has-text('Fechar')",
+        "#modalAviso a:has-text('Fechar')",
+        "#modalAviso [data-dismiss='modal']",
+        "#modalAviso [data-bs-dismiss='modal']",
+        "#modalAviso .close",
+        ".modal.show button:has-text('Fechar')",
+        ".modal.show a:has-text('Fechar')",
+        ".modal.show [data-dismiss='modal']",
+        ".modal.show [data-bs-dismiss='modal']",
+        ".modal.show .close",
+        "button:has-text('Fechar')",
+        "a:has-text('Fechar')",
+    ]
+
+    for selector in close_selectors:
+        try:
+            locator = page.locator(selector).first
+            if await locator.count() > 0 and await locator.is_visible(timeout=1000):
+                await locator.click(timeout=3000, force=True)
+                await page.wait_for_timeout(800)
+                logger.info("Modal fechado com seletor: %s", selector)
+                closed = True
+                break
+        except Exception:
+            pass
+
+    # Fallback para modais Bootstrap que continuam interceptando ponteiro.
+    try:
+        removed = await page.evaluate(
+            """
+            () => {
+              let changed = false;
+              document.querySelectorAll('#modalAviso, .modal.show, .modal-backdrop').forEach((el) => {
+                el.classList.remove('show');
+                el.style.display = 'none';
+                el.setAttribute('aria-hidden', 'true');
+                changed = true;
+              });
+              document.body.classList.remove('modal-open');
+              document.body.style.overflow = '';
+              document.body.style.paddingRight = '';
+              return changed;
+            }
+            """
+        )
+        if removed:
+            await page.wait_for_timeout(500)
+            logger.info("Modal removido por fallback JavaScript.")
+            closed = True
+    except Exception:
+        pass
+
+    return closed
+
+
 async def _first_visible_locator(page, selector: str, timeout_ms: int = 45000):
     """Procura um seletor visível na página principal e em iframes."""
     deadline = time.time() + (timeout_ms / 1000)
@@ -210,6 +269,7 @@ async def _first_visible_locator(page, selector: str, timeout_ms: int = 45000):
 
 
 async def _fill_first(page, selector: str, value: str, label: str, timeout_ms: int = 45000):
+    await _close_known_modals(page)
     locator = await _first_visible_locator(page, selector, timeout_ms=timeout_ms)
     if locator is None:
         debug = await _debug_page_state(page)
@@ -227,6 +287,7 @@ async def _fill_first(page, selector: str, value: str, label: str, timeout_ms: i
 
 
 async def _click_first(page, selector: str, label: str, timeout_ms: int = 45000):
+    await _close_known_modals(page)
     locator = await _first_visible_locator(page, selector, timeout_ms=timeout_ms)
     if locator is None:
         debug = await _debug_page_state(page)
@@ -239,8 +300,45 @@ async def _click_first(page, selector: str, label: str, timeout_ms: int = 45000)
                 "diagnostico": debug,
             },
         )
-    await locator.click(timeout=timeout_ms)
-    return locator
+
+    try:
+        await locator.click(timeout=timeout_ms)
+        return locator
+    except Exception as exc:
+        logger.warning("Clique normal falhou em %s: %s. Tentando fechar modal e forçar clique.", label, exc)
+        await _close_known_modals(page)
+        try:
+            await locator.click(timeout=5000, force=True)
+            return locator
+        except Exception:
+            # Fallback específico para radio/label estilizado do ASSIM.
+            if "tipoLogin1" in selector:
+                await page.evaluate(
+                    """
+                    () => {
+                      const radio = document.querySelector('#tipoLogin1');
+                      if (radio) {
+                        radio.checked = true;
+                        radio.dispatchEvent(new Event('input', { bubbles: true }));
+                        radio.dispatchEvent(new Event('change', { bubbles: true }));
+                        radio.click();
+                      }
+                    }
+                    """
+                )
+                logger.info("Radio #tipoLogin1 marcado por fallback JavaScript.")
+                return locator
+
+            debug = await _debug_page_state(page)
+            logger.error("Botão/link %s não clicável. Diagnóstico: %s", label, debug)
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "message": f"Botão/link {label} encontrado, mas não clicável. Pode haver modal bloqueando a tela.",
+                    "selector_usado": selector,
+                    "diagnostico": debug,
+                },
+            )
 
 
 async def _run_optional_steps(page, steps: List[Dict[str, Any]]):
@@ -249,6 +347,8 @@ async def _run_optional_steps(page, steps: List[Dict[str, Any]]):
         selector = step.get("selector")
         value = step.get("value", "")
         timeout = int(step.get("timeout", 30000))
+
+        await _close_known_modals(page)
 
         if action == "click" and selector:
             await _click_first(page, selector, "etapa personalizada", timeout_ms=timeout)
@@ -273,6 +373,7 @@ async def _wait_for_login_screen(page, op: Dict[str, Any], user_selector: str) -
         logger.info("Networkidle não estabilizou; continuando com espera visual.")
 
     await page.wait_for_timeout(initial_wait)
+    await _close_known_modals(page)
 
     found = await _first_visible_locator(page, user_selector, timeout_ms=5000)
     if found is not None:
@@ -286,6 +387,7 @@ async def _wait_for_login_screen(page, op: Dict[str, Any], user_selector: str) -
         except Exception:
             pass
         await page.wait_for_timeout(initial_wait)
+        await _close_known_modals(page)
     except Exception as exc:
         logger.warning("Falha ao recarregar página antes do login: %s", exc)
 
@@ -371,6 +473,7 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
 
             await _wait_for_login_screen(page, op, user_selector)
             await _run_optional_steps(page, op.get("preLoginSteps") or [])
+            await _close_known_modals(page)
 
             await _fill_first(page, user_selector, username, "usuário", timeout_ms=int(op.get("fieldTimeoutMs", 90000)))
             logger.info("Usuário preenchido")
@@ -389,6 +492,7 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
             logger.info("Login concluído, aguardando carregamento")
 
             await _run_optional_steps(page, op.get("steps") or [])
+            await _close_known_modals(page)
 
             links = await page.locator(boleto_selector).all()
             if not links:
@@ -400,6 +504,7 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
 
             for idx, link in enumerate(links[:max_downloads]):
                 try:
+                    await _close_known_modals(page)
                     async with page.expect_download(timeout=download_timeout) as download_info:
                         await link.click()
                     download = await download_info.value
@@ -416,7 +521,7 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
         except Exception as e:
             debug = await _debug_page_state(page)
             logger.error("Erro no fluxo RPA: %s | Diagnóstico: %s", e, debug)
-            raise
+            raise HTTPException(status_code=500, detail={"message": str(e), "diagnostico": debug})
         finally:
             await context.close()
             await browser.close()
