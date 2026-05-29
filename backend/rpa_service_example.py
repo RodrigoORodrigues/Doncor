@@ -1,7 +1,7 @@
 """Serviço RPA do Doncor com Playwright.
 
-Serviço separado para login autorizado em portais de operadoras e tentativa de
-baixa de boletos. Cada operadora pode informar seletores personalizados.
+Serviço separado para login autorizado em portais de operadoras e baixa de boletos.
+Cada operadora pode informar seletores personalizados.
 """
 
 from __future__ import annotations
@@ -17,7 +17,6 @@ from typing import Any, Dict, List, Optional, Set
 from urllib.parse import urljoin
 
 # Caminho previsível para os navegadores no container Railway/Docker.
-# Precisa ser definido antes de importar o Playwright.
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/ms-playwright")
 
 from fastapi import FastAPI, HTTPException
@@ -35,8 +34,12 @@ logger = logging.getLogger(__name__)
 
 _BROWSER_READY = False
 
+# Botões/links que indicam boleto real.
 BOLETO_TERMS = (
     "boleto",
+    "downloadboleto",
+    "baixar pdf",
+    "baixar boleto",
     "2via",
     "2-via",
     "2ª via",
@@ -48,9 +51,9 @@ BOLETO_TERMS = (
     "cobrança",
     "linha-digitavel",
     "linha digitavel",
-    "bradesco",
 )
 
+# PDFs institucionais que não podem ser salvos como boleto.
 NON_BOLETO_TERMS = (
     "programa_de_integridade",
     "programa-de-integridade",
@@ -77,7 +80,13 @@ NON_BOLETO_TERMS = (
     "integridade",
 )
 
-BRADESCO_SEGUNDA_VIA = "banco.bradesco/html/classic/produtos-servicos/mais-produtos-servicos/segunda-via-boleto"
+DOWNLOAD_BUTTON_SELECTOR = (
+    "a[title*='Baixar PDF'], "
+    "a[onclick*='downloadBoleto'], "
+    "button[onclick*='downloadBoleto'], "
+    "[title*='Baixar PDF'], "
+    "[onclick*='downloadBoleto']"
+)
 
 
 def ensure_playwright_chromium() -> None:
@@ -173,34 +182,11 @@ def _is_boleto_candidate(text: str = "", href: str = "", extra: str = "") -> boo
     return any(term in haystack for term in BOLETO_TERMS)
 
 
-def _is_bradesco_second_copy(text: str = "", href: str = "") -> bool:
-    haystack = f"{text or ''} {href or ''}".lower()
-    return "bradesco" in haystack and ("segunda-via-boleto" in haystack or "segunda via" in haystack or "2ª via" in haystack or "boleto" in haystack)
-
-
-async def _get_body_text(page, limit: int = 2500) -> str:
+async def _body_text(page, limit: int = 2500) -> str:
     try:
-        return (await page.locator("body").inner_text(timeout=3000))[:limit]
+        return (await page.locator("body").inner_text(timeout=4000))[:limit]
     except Exception:
         return ""
-
-
-async def _raise_if_external_bank_flow(page) -> None:
-    """Para fluxos onde a operadora só orienta emitir no banco, sem PDF direto."""
-    body_text = await _get_body_text(page)
-    haystack = f"{page.url} {body_text}".lower()
-    if "bradesco" in haystack and ("segunda-via-boleto" in haystack or "segunda via" in haystack or "2ª via" in haystack):
-        logger.warning("Fluxo externo Bradesco detectado. A operadora não entregou PDF direto.")
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "message": "O portal ASSIM não disponibilizou um PDF direto do boleto. Ele direciona/orienta a emissão pela segunda via do Bradesco. É necessário configurar uma etapa específica do Bradesco com os dados exigidos pelo banco, ou registrar este caso como 'emissão externa'.",
-                "tipo": "fluxo_externo_banco",
-                "banco": "Bradesco",
-                "url_atual": page.url,
-                "trecho_pagina": body_text[:1200],
-            },
-        )
 
 
 async def _debug_page_state(page) -> Dict[str, Any]:
@@ -210,7 +196,7 @@ async def _debug_page_state(page) -> Dict[str, Any]:
     except Exception as exc:
         data["titleError"] = str(exc)
     try:
-        data["bodyText"] = (await page.locator("body").inner_text(timeout=5000))[:2000]
+        data["bodyText"] = await _body_text(page, 2000)
     except Exception as exc:
         data["bodyTextError"] = str(exc)
     try:
@@ -222,19 +208,19 @@ async def _debug_page_state(page) -> Dict[str, Any]:
         frame_info: Dict[str, Any] = {"index": idx, "url": frame.url, "inputs": [], "buttons": [], "links": []}
         try:
             frame_info["inputs"] = await frame.locator("input, textarea, [contenteditable='true']").evaluate_all(
-                "els => els.slice(0, 60).map((e, i) => ({i, tag:e.tagName, type:e.getAttribute('type'), id:e.id, name:e.getAttribute('name'), placeholder:e.getAttribute('placeholder'), aria:e.getAttribute('aria-label'), cls:e.className}))"
+                "els => els.slice(0, 80).map((e, i) => ({i, tag:e.tagName, type:e.getAttribute('type'), id:e.id, name:e.getAttribute('name'), placeholder:e.getAttribute('placeholder'), aria:e.getAttribute('aria-label'), cls:e.className}))"
             )
         except Exception as exc:
             frame_info["inputsError"] = str(exc)
         try:
             frame_info["buttons"] = await frame.locator("button, input[type='submit'], [role='button']").evaluate_all(
-                "els => els.slice(0, 60).map((e, i) => ({i, tag:e.tagName, text:(e.innerText || e.value || '').trim(), id:e.id, type:e.getAttribute('type'), cls:e.className}))"
+                "els => els.slice(0, 80).map((e, i) => ({i, tag:e.tagName, text:(e.innerText || e.value || '').trim(), id:e.id, title:e.getAttribute('title'), onclick:e.getAttribute('onclick'), type:e.getAttribute('type'), cls:e.className}))"
             )
         except Exception as exc:
             frame_info["buttonsError"] = str(exc)
         try:
             frame_info["links"] = await frame.locator("a").evaluate_all(
-                "els => els.slice(0, 80).map((e, i) => ({i, text:(e.innerText || '').trim(), href:e.href, id:e.id, cls:e.className}))"
+                "els => els.slice(0, 100).map((e, i) => ({i, text:(e.innerText || '').trim(), href:e.href, id:e.id, title:e.getAttribute('title'), onclick:e.getAttribute('onclick'), cls:e.className}))"
             )
         except Exception as exc:
             frame_info["linksError"] = str(exc)
@@ -309,6 +295,23 @@ async def _first_visible_locator(page, selector: str, timeout_ms: int = 45000):
                     pass
         await page.wait_for_timeout(500)
     return None
+
+
+async def _locator_meta(locator) -> Dict[str, str]:
+    def clean(value: Optional[str]) -> str:
+        return str(value or "").strip()
+
+    meta: Dict[str, str] = {"text": "", "href": "", "title": "", "onclick": "", "aria": "", "cls": ""}
+    try:
+        meta["text"] = clean(await locator.inner_text(timeout=1000))
+    except Exception:
+        pass
+    for attr, key in [("href", "href"), ("title", "title"), ("onclick", "onclick"), ("aria-label", "aria"), ("class", "cls")]:
+        try:
+            meta[key] = clean(await locator.get_attribute(attr))
+        except Exception:
+            pass
+    return meta
 
 
 async def _fill_first(page, selector: str, value: str, label: str, timeout_ms: int = 45000):
@@ -406,7 +409,7 @@ def _new_file_path(payload: RunRpaPayload, idx: int, suffix: str = ".pdf") -> st
     return path
 
 
-async def _save_response_if_file(response, payload: RunRpaPayload, idx: int, source: str) -> Optional[str]:
+async def _save_response_if_file(response, payload: RunRpaPayload, idx: int, source: str, meta_extra: str = "") -> Optional[str]:
     try:
         headers = response.headers or {}
         content_type = (headers.get("content-type") or "").lower()
@@ -414,7 +417,7 @@ async def _save_response_if_file(response, payload: RunRpaPayload, idx: int, sou
         body = await response.body()
         is_pdf = body.startswith(b"%PDF") or "application/pdf" in content_type
         is_attachment = "attachment" in disposition or "filename=" in disposition
-        is_boleto = _is_boleto_candidate(href=source, extra=f"{content_type} {disposition}")
+        is_boleto = _is_boleto_candidate(href=source, extra=f"{content_type} {disposition} {meta_extra}")
 
         logger.info(
             "Resposta candidato %s: status=%s content-type=%s bytes=%s boleto=%s origem=%s",
@@ -440,144 +443,81 @@ async def _save_response_if_file(response, payload: RunRpaPayload, idx: int, sou
     return None
 
 
-async def _try_download_url(context, url: str, payload: RunRpaPayload, idx: int, visited: Set[str]) -> Optional[str]:
+async def _try_download_url(context, url: str, payload: RunRpaPayload, idx: int, visited: Set[str], meta_extra: str = "") -> Optional[str]:
     if not url or url.startswith("javascript:") or url.endswith("#"):
         return None
     if url in visited:
         return None
     visited.add(url)
-    if _is_bradesco_second_copy(href=url):
-        logger.warning("Fluxo Bradesco detectado por URL: %s", url)
-        return None
-    if not _is_boleto_candidate(href=url):
+    if not _is_boleto_candidate(href=url, extra=meta_extra):
         logger.info("URL ignorada por não parecer boleto/fatura: %s", url)
         return None
     try:
         response = await context.request.get(url, timeout=30000)
-        return await _save_response_if_file(response, payload, idx, url)
+        return await _save_response_if_file(response, payload, idx, url, meta_extra=meta_extra)
     except Exception as exc:
         logger.info("URL não baixou arquivo diretamente (%s): %s", url, exc)
         return None
 
 
-async def _scan_page_for_file_links(page, context, payload: RunRpaPayload, base_idx: int, visited: Set[str]) -> List[str]:
-    await _raise_if_external_bank_flow(page)
-    found_files: List[str] = []
-    selectors = [
-        "a[href*='boleto']",
-        "a[href*='segunda-via']",
-        "a[href*='2via']",
-        "a[href*='fatura']",
-        "a[href*='cobranca']",
-        "a[href*='bradesco']",
-        "a:has-text('2ª via')",
-        "a:has-text('Segunda via')",
-        "a:has-text('Boleto')",
-        "a:has-text('Fatura')",
-        "a:has-text('Cobrança')",
-        "button:has-text('2ª via')",
-        "button:has-text('Segunda via')",
-        "button:has-text('Boleto')",
-        "button:has-text('Fatura')",
-        "button:has-text('Baixar')",
-        "button:has-text('Imprimir')",
-    ]
-    for selector in selectors:
+async def _try_javascript_download(page, payload: RunRpaPayload, idx: int, download_timeout: int) -> Optional[str]:
+    """Executa funções conhecidas de download quando o botão usa href=javascript:;."""
+    for expression in ["downloadBoleto()"]:
         try:
-            locators = await page.locator(selector).all()
-        except Exception:
-            continue
-        for locator in locators[:3]:
-            idx = base_idx + len(found_files)
-            try:
-                text = (await locator.inner_text(timeout=1000)).strip()
-            except Exception:
-                text = ""
-            try:
-                href = await locator.get_attribute("href")
-            except Exception:
-                href = None
-            full_href = urljoin(page.url, href) if href else ""
-            if _is_bradesco_second_copy(text=text, href=full_href):
-                logger.warning("Link de emissão externa Bradesco detectado: text=%s href=%s", text[:80], full_href)
-                raise HTTPException(
-                    status_code=422,
-                    detail={
-                        "message": "O ASSIM direciona para emissão externa de segunda via no Bradesco. O robô não recebeu PDF direto. Cadastre um fluxo específico do Bradesco com os dados exigidos pelo banco.",
-                        "tipo": "fluxo_externo_banco",
-                        "banco": "Bradesco",
-                        "url_externa": full_href,
-                    },
-                )
-            if not _is_boleto_candidate(text=text, href=full_href):
-                logger.info("Link interno ignorado por não parecer boleto: selector=%s text=%s href=%s", selector, text[:80], href)
-                continue
-            logger.info("Link interno candidato boleto: selector=%s text=%s href=%s", selector, text[:80], href)
-            if full_href:
-                file_path = await _try_download_url(context, full_href, payload, idx, visited)
-                if file_path:
-                    found_files.append(file_path)
-                    continue
-            try:
-                await _close_known_modals(page)
-                async with page.expect_download(timeout=8000) as download_info:
-                    await locator.click(timeout=5000, force=True)
-                download = await download_info.value
-                path = _new_file_path(payload, idx)
-                await download.save_as(path)
-                logger.info("Arquivo salvo por link interno: %s", path)
-                found_files.append(path)
-            except Exception:
-                continue
-    return found_files
+            async with page.expect_download(timeout=download_timeout) as download_info:
+                await page.evaluate(expression)
+            download = await download_info.value
+            path = _new_file_path(payload, idx)
+            await download.save_as(path)
+            logger.info("Boleto %s baixado por função JavaScript %s: %s", idx + 1, expression, path)
+            return path
+        except Exception as exc:
+            logger.info("Função JavaScript %s não gerou download: %s", expression, exc)
+    return None
 
 
 async def _download_boleto_candidate(page, context, locator, payload: RunRpaPayload, idx: int, download_timeout: int, visited: Set[str]) -> Optional[str]:
     await _close_known_modals(page)
-    await _raise_if_external_bank_flow(page)
-    try:
-        text = (await locator.inner_text(timeout=1000)).strip()
-    except Exception:
-        text = ""
-    try:
-        href = await locator.get_attribute("href")
-    except Exception:
-        href = None
-    full_href = urljoin(page.url, href) if href else ""
-    logger.info("Candidato boleto %s: text=%s href=%s", idx + 1, text[:120], href)
+    meta = await _locator_meta(locator)
+    full_href = urljoin(page.url, meta["href"]) if meta["href"] else ""
+    meta_extra = f"{meta['title']} {meta['onclick']} {meta['aria']} {meta['cls']}"
+    logger.info(
+        "Candidato boleto %s: text=%s href=%s title=%s onclick=%s",
+        idx + 1,
+        meta["text"][:120],
+        meta["href"],
+        meta["title"],
+        meta["onclick"],
+    )
 
-    if _is_bradesco_second_copy(text=text, href=full_href):
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "message": "O ASSIM direciona para emissão externa de segunda via no Bradesco. O robô não recebeu PDF direto.",
-                "tipo": "fluxo_externo_banco",
-                "banco": "Bradesco",
-                "url_externa": full_href,
-            },
-        )
-
-    if not _is_boleto_candidate(text=text, href=full_href):
+    if not _is_boleto_candidate(text=meta["text"], href=full_href, extra=meta_extra):
         logger.info("Candidato %s ignorado por não parecer boleto/fatura.", idx + 1)
         return None
 
-    if full_href:
-        file_path = await _try_download_url(context, full_href, payload, idx, visited)
+    if full_href and not full_href.startswith("javascript:"):
+        file_path = await _try_download_url(context, full_href, payload, idx, visited, meta_extra=meta_extra)
         if file_path:
             return file_path
 
+    # Primeiro tenta o clique normal/forçado. Esse é o caminho correto para o ASSIM:
+    # <a href="javascript:;" onclick="downloadBoleto();" title="Baixar PDF"></a>
     try:
         async with page.expect_download(timeout=download_timeout) as download_info:
             await locator.click(timeout=10000, force=True)
         download = await download_info.value
         path = _new_file_path(payload, idx)
         await download.save_as(path)
-        logger.info("Boleto %s baixado por download do navegador: %s", idx + 1, path)
+        logger.info("Boleto %s baixado pelo clique no botão Baixar PDF: %s", idx + 1, path)
         return path
     except PlaywrightTimeoutError:
-        logger.warning("Clique no candidato %s não gerou download direto. Tentando popup/navegação.", idx + 1)
+        logger.warning("Clique no candidato %s não gerou download direto. Tentando função JavaScript/popup.", idx + 1)
     except Exception as exc:
         logger.warning("Falha no clique-download do candidato %s: %s", idx + 1, exc)
+
+    if "downloadboleto" in meta["onclick"].lower() or "downloadboleto" in full_href.lower() or "baixar pdf" in meta["title"].lower():
+        file_path = await _try_javascript_download(page, payload, idx, download_timeout)
+        if file_path:
+            return file_path
 
     try:
         async with page.expect_popup(timeout=8000) as popup_info:
@@ -588,39 +528,24 @@ async def _download_boleto_candidate(page, context, locator, payload: RunRpaPayl
         except Exception:
             pass
         logger.info("Popup aberto para candidato %s: %s", idx + 1, popup.url)
-        await _raise_if_external_bank_flow(popup)
         if popup.url:
-            file_path = await _try_download_url(context, popup.url, payload, idx, visited)
+            file_path = await _try_download_url(context, popup.url, payload, idx, visited, meta_extra=meta_extra)
             if file_path:
                 await popup.close()
                 return file_path
-        files = await _scan_page_for_file_links(popup, context, payload, idx, visited)
         await popup.close()
-        if files:
-            return files[0]
-    except HTTPException:
-        raise
     except Exception:
         pass
 
-    try:
-        current_url = page.url
-        await locator.click(timeout=5000, force=True)
-        await page.wait_for_timeout(2500)
-        try:
-            await page.wait_for_load_state("networkidle", timeout=8000)
-        except Exception:
-            pass
-        logger.info("Após clique candidato %s: url antes=%s url depois=%s", idx + 1, current_url, page.url)
-        await _raise_if_external_bank_flow(page)
-        files = await _scan_page_for_file_links(page, context, payload, idx, visited)
-        if files:
-            return files[0]
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.info("Clique/navegação final candidato %s não baixou arquivo: %s", idx + 1, exc)
     return None
+
+
+async def _find_boleto_candidates(page, configured_selector: str):
+    # Sempre prioriza o botão real de download do ASSIM, mesmo que a configuração salva no Supabase esteja antiga.
+    selector = f"{DOWNLOAD_BUTTON_SELECTOR}, {configured_selector}"
+    candidates = await page.locator(selector).all()
+    logger.info("Encontrados %s candidato(s) de boleto pelo seletor combinado: %s", len(candidates), selector)
+    return candidates, selector
 
 
 async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
@@ -636,7 +561,7 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
     user_selector = _selector(op, "usuario", "input[name='login'], input#login, input[name='usuario'], input#usuario, input[type='text']")
     password_selector = _selector(op, "senha", "input[name='password'], input[name='senha'], input#senha, input[type='password']")
     submit_selector = _selector(op, "entrar", "button[type='submit'], input[type='submit'], button:has-text('Entrar'), a:has-text('Entrar')")
-    boleto_selector = _selector(op, "boleto", "a[href*='boleto'], a[href*='segunda-via'], button:has-text('Boleto'), a:has-text('Boleto'), a:has-text('2ª via')")
+    configured_boleto_selector = _selector(op, "boleto", "a[href*='boleto'], a[href*='segunda-via'], button:has-text('Boleto'), a:has-text('Boleto'), a:has-text('2ª via')")
 
     downloaded_files: List[str] = []
     visited_urls: Set[str] = set()
@@ -676,18 +601,16 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
 
             await _run_optional_steps(page, op.get("steps") or [])
             await _close_known_modals(page)
-            await _raise_if_external_bank_flow(page)
 
-            links = await page.locator(boleto_selector).all()
-            logger.info("Encontrados %s candidato(s) de boleto pelo seletor: %s", len(links), boleto_selector)
-            if not links:
+            candidates, used_selector = await _find_boleto_candidates(page, configured_boleto_selector)
+            if not candidates:
                 debug = await _debug_page_state(page)
-                raise HTTPException(status_code=404, detail={"message": "Nenhum botão/link de boleto encontrado.", "diagnostico": debug})
+                raise HTTPException(status_code=404, detail={"message": "Nenhum botão/link de boleto encontrado.", "selector_usado": used_selector, "diagnostico": debug})
 
-            max_downloads = int(op.get("maxDownloads", 3))
-            download_timeout = int(op.get("downloadTimeoutMs", 30000))
-            for idx, link in enumerate(links[:max_downloads]):
-                file_path = await _download_boleto_candidate(page, context, link, payload, idx, download_timeout, visited_urls)
+            max_downloads = int(op.get("maxDownloads", 1))
+            download_timeout = int(op.get("downloadTimeoutMs", 45000))
+            for idx, candidate in enumerate(candidates[:max_downloads]):
+                file_path = await _download_boleto_candidate(page, context, candidate, payload, idx, download_timeout, visited_urls)
                 if file_path:
                     downloaded_files.append(file_path)
         except HTTPException:
@@ -701,7 +624,10 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
             await browser.close()
 
     if not downloaded_files:
-        raise HTTPException(status_code=404, detail="Candidatos de boleto encontrados, mas nenhum boleto/PDF válido foi baixado. O portal pode estar exibindo apenas instrução para emissão no Bradesco ou exigir etapa adicional após o login.")
+        raise HTTPException(
+            status_code=404,
+            detail="Botão de boleto encontrado, mas nenhum PDF foi baixado. Verifique se o portal abriu nova etapa ou se o downloadBoleto() exige parâmetro adicional.",
+        )
     logger.info("RPA concluído: %s arquivo(s) baixado(s)", len(downloaded_files))
     return downloaded_files
 
@@ -730,7 +656,17 @@ async def run_rpa(payload: RunRpaPayload):
         "operadora": payload.operadora.get("nome", "Operadora"),
         "files": files,
     }
-    RPA_EXECUTIONS.insert(0, {"id": str(time.time()), "processo": "Extração de boletos RPA", "inicio": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"), "duracao": f"{elapsed}s", "status": "Concluído", "resultado": result})
+    RPA_EXECUTIONS.insert(
+        0,
+        {
+            "id": str(time.time()),
+            "processo": "Extração de boletos RPA",
+            "inicio": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
+            "duracao": f"{elapsed}s",
+            "status": "Concluído",
+            "resultado": result,
+        },
+    )
     return result
 
 
@@ -756,10 +692,23 @@ async def trigger_real_api(payload: Dict[str, Any]):
         unique_login_code=payload.get("unique_login_code", ""),
         apolice_id=payload.get("apolice_id", ""),
         operadora=operadora,
-        supabase={"url": RPA_CONFIG_STORE.get("supabaseUrl", ""), "serviceRoleKey": RPA_CONFIG_STORE.get("supabaseServiceRoleKey", ""), "bucket": RPA_CONFIG_STORE.get("supabaseBucketBoletos", "boletos")},
+        supabase={
+            "url": RPA_CONFIG_STORE.get("supabaseUrl", ""),
+            "serviceRoleKey": RPA_CONFIG_STORE.get("supabaseServiceRoleKey", ""),
+            "bucket": RPA_CONFIG_STORE.get("supabaseBucketBoletos", "boletos"),
+        },
     )
     if async_playwright is None:
-        return {"status": "success", "message": "RPA executado em modo simulado.", "processed": 0, "duration_seconds": 0.1, "user_id": run_payload.user_id, "apolice_id": run_payload.apolice_id, "operadora": operadora.get("nome", "Operadora"), "files": []}
+        return {
+            "status": "success",
+            "message": "RPA executado em modo simulado.",
+            "processed": 0,
+            "duration_seconds": 0.1,
+            "user_id": run_payload.user_id,
+            "apolice_id": run_payload.apolice_id,
+            "operadora": operadora.get("nome", "Operadora"),
+            "files": [],
+        }
     return await run_rpa(run_payload)
 
 
