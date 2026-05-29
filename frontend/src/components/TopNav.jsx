@@ -14,6 +14,7 @@ import {
 
 const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, session }) => {
   const [saldoVidas, setSaldoVidas] = useState({ percentual_total: 0 });
+  const [chatUnread, setChatUnread] = useState(() => Number(localStorage.getItem('doncor_chat_unread') || 0));
   const userName = session?.username || 'Usuário';
   const userData = {
     name: userName,
@@ -25,6 +26,23 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
   useEffect(() => {
     fetchSaldoVidas().then(setSaldoVidas).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    const updateUnread = (event) => {
+      const count = event?.detail?.count;
+      setChatUnread(Number.isFinite(Number(count)) ? Number(count) : Number(localStorage.getItem('doncor_chat_unread') || 0));
+    };
+    window.addEventListener('doncor-chat-unread', updateUnread);
+    window.addEventListener('storage', updateUnread);
+    return () => {
+      window.removeEventListener('doncor-chat-unread', updateUnread);
+      window.removeEventListener('storage', updateUnread);
+    };
+  }, []);
+
+  const openChat = () => {
+    onMenuClick?.({ id: 'chat', label: 'Chat', icon: 'MessageCircle', page: 'chat' });
+  };
 
   return (
     <div className="top-nav">
@@ -101,6 +119,7 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
         <div style={{ width: '1px', height: '24px', background: 'rgba(44,123,229,0.2)', margin: '0 4px' }} />
 
         <button
+          onClick={openChat}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -111,30 +130,33 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
             border: '1px solid #d8e2ef',
             borderRadius: '6px',
             cursor: 'pointer',
-            color: '#5E6E82',
+            color: chatUnread > 0 ? '#2C7BE5' : '#5E6E82',
             position: 'relative',
             transition: 'all 0.2s'
           }}
-          title="Notificações"
+          title={chatUnread > 0 ? `${chatUnread} nova(s) mensagem(ns) no Chat` : 'Notificações do Chat'}
         >
           <Bell size={16} />
-          <span style={{
-            position: 'absolute',
-            top: '-2px',
-            right: '-2px',
-            background: '#e63757',
-            color: '#fff',
-            borderRadius: '50%',
-            width: '16px',
-            height: '16px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '0.6rem',
-            fontWeight: 700
-          }}>
-            3
-          </span>
+          {chatUnread > 0 && (
+            <span style={{
+              position: 'absolute',
+              top: '-2px',
+              right: '-2px',
+              background: '#e63757',
+              color: '#fff',
+              borderRadius: '50%',
+              minWidth: '16px',
+              height: '16px',
+              padding: '0 4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '0.6rem',
+              fontWeight: 700
+            }}>
+              {chatUnread > 99 ? '99+' : chatUnread}
+            </span>
+          )}
         </button>
 
         <div style={{
