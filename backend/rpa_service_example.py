@@ -211,12 +211,24 @@ async def _debug_page_state(page) -> Dict[str, Any]:
 async def _close_known_modals(page) -> bool:
     closed = False
     close_selectors = [
-        "#modalAviso button:has-text('Fechar')", "#modalAviso a:has-text('Fechar')",
-        "#modalAviso [data-dismiss='modal']", "#modalAviso [data-bs-dismiss='modal']",
-        "#modalAviso .close", ".modal.show button:has-text('Fechar')",
-        ".modal.show a:has-text('Fechar')", ".modal.show [data-dismiss='modal']",
-        ".modal.show [data-bs-dismiss='modal']", ".modal.show .close",
-        "button:has-text('Aceitar')", "button:has-text('Rejeitar')", "a:has-text('Aceitar')",
+        "#modalSemBoleto a:has-text('Fechar')",
+        "#modalSemBoleto button:has-text('Fechar')",
+        "#modalSemBoleto [data-dismiss='modal']",
+        "#modalSemBoleto [data-bs-dismiss='modal']",
+        "#modalSemBoleto .close",
+        "#modalAviso button:has-text('Fechar')",
+        "#modalAviso a:has-text('Fechar')",
+        "#modalAviso [data-dismiss='modal']",
+        "#modalAviso [data-bs-dismiss='modal']",
+        "#modalAviso .close",
+        ".modal.show button:has-text('Fechar')",
+        ".modal.show a:has-text('Fechar')",
+        ".modal.show [data-dismiss='modal']",
+        ".modal.show [data-bs-dismiss='modal']",
+        ".modal.show .close",
+        "button:has-text('Aceitar')",
+        "button:has-text('Rejeitar')",
+        "a:has-text('Aceitar')",
     ]
     for selector in close_selectors:
         try:
@@ -235,7 +247,7 @@ async def _close_known_modals(page) -> bool:
             """
             () => {
               let changed = false;
-              document.querySelectorAll('#modalAviso, .modal.show, .modal-backdrop').forEach((el) => {
+              document.querySelectorAll('#modalSemBoleto, #modalAviso, .modal.show, .modal-backdrop').forEach((el) => {
                 el.classList.remove('show');
                 el.style.display = 'none';
                 el.setAttribute('aria-hidden', 'true');
@@ -330,17 +342,6 @@ async def _wait_for_login_screen(page, op: Dict[str, Any], user_selector: str) -
     await _close_known_modals(page)
 
 
-async def _wait_assim_resultado_boleto(page, timeout_ms: int = 45000) -> bool:
-    deadline = time.time() + timeout_ms / 1000
-    while time.time() < deadline:
-        await _close_known_modals(page)
-        if await page.locator(ASSIM_RESULT_SELECTOR).count() > 0:
-            logger.info("ASSIM: resultado/tabela de boleto encontrado.")
-            return True
-        await page.wait_for_timeout(1500)
-    return False
-
-
 def _infer_assim_period(op: Dict[str, Any]) -> Dict[str, str]:
     raw = str(op.get("competencia") or op.get("mesAno") or op.get("mes_ano") or op.get("periodo") or "").strip()
     mes = str(op.get("mes") or op.get("mesBoleto") or op.get("boletoMes") or "").strip()
@@ -368,11 +369,22 @@ async def _assim_has_period_form(page) -> bool:
     return await page.locator("input[name='ano']").count() > 0 and await page.locator("input[name='mes']").count() > 0
 
 
+async def _wait_assim_resultado_boleto(page, timeout_ms: int = 45000) -> bool:
+    deadline = time.time() + timeout_ms / 1000
+    while time.time() < deadline:
+        await _close_known_modals(page)
+        if await page.locator(ASSIM_RESULT_SELECTOR).count() > 0:
+            logger.info("ASSIM: resultado/tabela de boleto encontrado.")
+            return True
+        await page.wait_for_timeout(1200)
+    return False
+
+
 async def _submit_assim_period_with_script(page, op: Dict[str, Any]) -> Dict[str, Any]:
     periodo = _infer_assim_period(op)
     mes = periodo["mes"]
     ano = periodo["ano"]
-    logger.info("ASSIM: preenchendo Mês/Ano de forma direta: mes=%s ano=%s", mes, ano)
+    logger.info("ASSIM: preenchendo Mês/Ano de forma direta apenas porque a tabela não apareceu: mes=%s ano=%s", mes, ano)
 
     result = await page.evaluate(
         """
@@ -398,19 +410,12 @@ async def _submit_assim_period_with_script(page, op: Dict[str, Any]) -> Dict[str
           const candidates = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"], input[type="image"], a, [onclick]'));
           const enviar = candidates.find((el) => {
             const text = `${el.innerText || ''} ${el.value || ''} ${el.title || ''} ${el.getAttribute('onclick') || ''}`.toUpperCase();
-            return visible(el) && (text.includes('ENVIAR') || text.includes('BOLETO'));
+            return visible(el) && text.includes('ENVIAR');
           });
 
           if (enviar) {
             enviar.click();
             return {setAno, setMes, action: 'clicked', tag: enviar.tagName, text: (enviar.innerText || enviar.value || enviar.title || '').trim(), onclick: enviar.getAttribute('onclick'), html: (enviar.outerHTML || '').slice(0, 300)};
-          }
-
-          const mesEl = document.querySelector('input[name="mes"]');
-          if (mesEl) {
-            mesEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-            mesEl.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-            await sleep(300);
           }
 
           const form = document.querySelector('input[name="ano"]')?.closest('form') || document.querySelector('input[name="mes"]')?.closest('form') || document.querySelector('form');
@@ -430,23 +435,43 @@ async def _submit_assim_period_with_script(page, op: Dict[str, Any]) -> Dict[str
         await page.wait_for_load_state("networkidle", timeout=30000)
     except Exception:
         logger.info("ASSIM: networkidle após consulta não estabilizou; continuando.")
-    await page.wait_for_timeout(3500)
+    await page.wait_for_timeout(3000)
     return result
 
 
-async def _select_assim_first_boleto(page) -> bool:
-    radio_selector = "#resultado-boleto input[name='opcaoBoleto'], #opcaoBoleto, input[name='opcaoBoleto'], table input[type='radio'], input[type='radio']"
-    radio = page.locator(radio_selector).first
-    if await radio.count() == 0:
-        logger.warning("ASSIM: nenhum radio de parcela/boleto encontrado para selecionar.")
-        return False
-    try:
-        await radio.check(timeout=5000, force=True)
-    except Exception:
-        await radio.click(timeout=5000, force=True)
-    await page.wait_for_timeout(800)
-    logger.info("ASSIM: boleto selecionado com #opcaoBoleto.")
-    return True
+async def _select_assim_first_boleto(page) -> Dict[str, Any]:
+    result = await page.evaluate(
+        """
+        () => {
+          const radio = document.querySelector('#opcaoBoleto') ||
+                        document.querySelector('#resultado-boleto input[name="opcaoBoleto"]') ||
+                        document.querySelector('input[name="opcaoBoleto"]') ||
+                        document.querySelector('table input[type="radio"]') ||
+                        document.querySelector('input[type="radio"]');
+          if (!radio) return {selected: false, reason: 'radio_not_found'};
+
+          radio.checked = true;
+          radio.setAttribute('checked', 'checked');
+
+          const row = radio.closest('tr');
+          const cells = row ? Array.from(row.querySelectorAll('td')).map((td) => (td.innerText || '').trim()) : [];
+          const value = radio.value || cells.join(' | ');
+
+          window.opcaoBoleto = value;
+          window.$opcaoBoleto = value;
+          window.desc = value;
+          window.$desc = value;
+
+          return {selected: true, id: radio.id, name: radio.name, value, cells};
+        }
+        """
+    )
+    if not result.get("selected"):
+        logger.warning("ASSIM: nenhum radio de parcela/boleto encontrado para selecionar: %s", result)
+        return result
+    await page.wait_for_timeout(500)
+    logger.info("ASSIM: boleto selecionado diretamente sem acionar handler quebrado: %s", result)
+    return result
 
 
 async def _log_assim_action_buttons(page, label: str = "") -> int:
@@ -466,6 +491,45 @@ async def _save_download(download, payload: RunRpaPayload, idx: int, label: str)
     await download.save_as(path)
     logger.info("Boleto %s baixado por %s: %s", idx + 1, label, path)
     return path
+
+
+async def _click_assim_download_js(page) -> Dict[str, Any]:
+    return await page.evaluate(
+        """
+        async () => {
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          const radio = document.querySelector('#opcaoBoleto') ||
+                        document.querySelector('#resultado-boleto input[name="opcaoBoleto"]') ||
+                        document.querySelector('input[name="opcaoBoleto"]');
+          if (radio) {
+            radio.checked = true;
+            radio.setAttribute('checked', 'checked');
+            window.opcaoBoleto = radio.value || '';
+            window.$opcaoBoleto = radio.value || '';
+            window.desc = radio.value || '';
+            window.$desc = radio.value || '';
+          }
+
+          const btn = document.querySelector("ul.botoes-acoes a[onclick*='downloadBoleto']") ||
+                      document.querySelector(".botoes-acoes a[onclick*='downloadBoleto']") ||
+                      document.querySelector("a[onclick*='downloadBoleto']") ||
+                      document.querySelector("a[title*='Baixar PDF']");
+          if (btn) {
+            btn.scrollIntoView({block: 'center', inline: 'center'});
+            await sleep(250);
+            btn.click();
+            return {action: 'button_click', radio: radio ? radio.value : null, title: btn.getAttribute('title'), onclick: btn.getAttribute('onclick'), html: (btn.outerHTML || '').slice(0, 240)};
+          }
+
+          if (typeof window.downloadBoleto === 'function') {
+            window.downloadBoleto();
+            return {action: 'function_call', radio: radio ? radio.value : null};
+          }
+
+          return {action: 'not_found', radio: radio ? radio.value : null};
+        }
+        """
+    )
 
 
 async def _try_assim_download(page, payload: RunRpaPayload, idx: int, download_timeout: int) -> str:
@@ -496,42 +560,59 @@ async def _try_assim_download(page, payload: RunRpaPayload, idx: int, download_t
     if not resultado_ok:
         debug = await _debug_page_state(page)
         logger.error("ASSIM: resultado-boleto não apareceu. Diagnóstico: %s", debug)
-        raise HTTPException(status_code=422, detail={"message": "ASSIM: a consulta de Mês/Ano não retornou a tabela #resultado-boleto.", "orientacao": "Verifique se existe boleto para o mês/ano configurado ou se o portal alterou o botão ENVIAR.", "diagnostico": debug})
+        raise HTTPException(status_code=422, detail={"message": "ASSIM: a tabela #resultado-boleto/#opcaoBoleto não apareceu.", "orientacao": "Após login, o robô precisa chegar na tela de 2ª via, fechar a janela de atenção, selecionar o boleto e clicar em Baixar PDF.", "diagnostico": debug})
 
-    await _select_assim_first_boleto(page)
-    await _log_assim_action_buttons(page, "após consulta")
-
-    button = await _first_visible_locator(page, ASSIM_DOWNLOAD_SELECTOR, timeout_ms=30000)
-    if button is None:
+    await _close_known_modals(page)
+    select_result = await _select_assim_first_boleto(page)
+    if not select_result.get("selected"):
         debug = await _debug_page_state(page)
-        logger.error("ASSIM: botão Baixar PDF não encontrado. Diagnóstico: %s", debug)
-        raise HTTPException(status_code=422, detail={"message": "ASSIM: botão Baixar PDF/downloadBoleto não encontrado após selecionar o boleto.", "selector_usado": ASSIM_DOWNLOAD_SELECTOR, "diagnostico": debug})
+        raise HTTPException(status_code=422, detail={"message": "ASSIM: tabela encontrada, mas nenhum #opcaoBoleto foi encontrado para selecionar.", "diagnostico": debug})
 
-    try:
-        meta = await button.evaluate("e => ({title:e.getAttribute('title'), onclick:e.getAttribute('onclick'), href:e.getAttribute('href'), html:(e.outerHTML || '').slice(0, 220)})")
-        logger.info("ASSIM: botão Baixar PDF encontrado: %s", meta)
-    except Exception:
-        pass
+    await _log_assim_action_buttons(page, "antes do download")
 
     try:
         async with page.expect_download(timeout=download_timeout) as download_info:
-            await button.click(timeout=10000, force=True)
-        return await _save_download(await download_info.value, payload, idx, "botão Baixar PDF do ASSIM")
+            action = await _click_assim_download_js(page)
+            logger.info("ASSIM: ação de download executada via JS: %s", action)
+        return await _save_download(await download_info.value, payload, idx, "Baixar PDF ASSIM via JS")
     except Exception as exc:
-        logger.warning("ASSIM: clique no botão Baixar PDF não gerou download: %s", exc)
+        logger.warning("ASSIM: clique JS não gerou download direto: %s", exc)
+
+    button = await _first_visible_locator(page, ASSIM_DOWNLOAD_SELECTOR, timeout_ms=8000)
+    if button is not None:
+        try:
+            async with page.expect_download(timeout=download_timeout) as download_info:
+                await button.click(timeout=10000, force=True)
+            return await _save_download(await download_info.value, payload, idx, "botão Baixar PDF do ASSIM")
+        except Exception as exc:
+            logger.warning("ASSIM: clique Playwright no botão Baixar PDF não gerou download: %s", exc)
 
     try:
         has_function = await page.evaluate("() => typeof window.downloadBoleto === 'function'")
         if has_function:
             async with page.expect_download(timeout=download_timeout) as download_info:
-                await page.evaluate("() => window.downloadBoleto()")
+                await page.evaluate(
+                    """
+                    () => {
+                      const radio = document.querySelector('#opcaoBoleto') || document.querySelector('input[name="opcaoBoleto"]');
+                      if (radio) {
+                        radio.checked = true;
+                        window.opcaoBoleto = radio.value || '';
+                        window.$opcaoBoleto = radio.value || '';
+                        window.desc = radio.value || '';
+                        window.$desc = radio.value || '';
+                      }
+                      window.downloadBoleto();
+                    }
+                    """
+                )
             return await _save_download(await download_info.value, payload, idx, "função JavaScript downloadBoleto")
     except Exception as exc:
         logger.warning("ASSIM: função downloadBoleto não gerou download: %s", exc)
 
     debug = await _debug_page_state(page)
     logger.error("ASSIM: não conseguiu baixar o boleto. Diagnóstico: %s", debug)
-    raise HTTPException(status_code=404, detail={"message": "ASSIM: tabela encontrada, mas o downloadBoleto não gerou arquivo.", "diagnostico": debug})
+    raise HTTPException(status_code=404, detail={"message": "ASSIM: tabela encontrada e boleto selecionado, mas o botão Baixar PDF/downloadBoleto não gerou arquivo.", "diagnostico": debug})
 
 
 async def _save_response_if_file(response, payload: RunRpaPayload, idx: int, source: str, extra: str = "") -> Optional[str]:
