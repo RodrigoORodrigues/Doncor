@@ -35,6 +35,48 @@ logger = logging.getLogger(__name__)
 
 _BROWSER_READY = False
 
+BOLETO_TERMS = (
+    "boleto",
+    "2via",
+    "2-via",
+    "2ª via",
+    "segunda-via",
+    "segunda via",
+    "fatura",
+    "financeiro",
+    "cobranca",
+    "cobrança",
+    "linha-digitavel",
+    "linha digitavel",
+    "bradesco",
+)
+
+NON_BOLETO_TERMS = (
+    "programa_de_integridade",
+    "programa-de-integridade",
+    "msg-presidente",
+    "codigo-de-conduta",
+    "código de conduta",
+    "codigo de conduta",
+    "politica",
+    "política",
+    "compliance",
+    "diversidade",
+    "inclusao",
+    "inclusão",
+    "conduta",
+    "denuncia",
+    "denúncia",
+    "organograma",
+    "igualdade-salarial",
+    "assédio",
+    "assedio",
+    "discriminacao",
+    "discriminação",
+    "hospitalidades",
+    "integridade",
+)
+
 
 def ensure_playwright_chromium() -> None:
     global _BROWSER_READY
@@ -120,6 +162,13 @@ def _is_amil(op: Dict[str, Any]) -> bool:
     nome = str(op.get("nome") or "").lower()
     url = str(op.get("url") or "").lower()
     return "amil" in nome or "amil.com.br" in url
+
+
+def _is_boleto_candidate(text: str = "", href: str = "", extra: str = "") -> bool:
+    haystack = f"{text or ''} {href or ''} {extra or ''}".lower()
+    if any(term in haystack for term in NON_BOLETO_TERMS):
+        return False
+    return any(term in haystack for term in BOLETO_TERMS)
 
 
 async def _debug_page_state(page) -> Dict[str, Any]:
@@ -333,13 +382,27 @@ async def _save_response_if_file(response, payload: RunRpaPayload, idx: int, sou
         body = await response.body()
         is_pdf = body.startswith(b"%PDF") or "application/pdf" in content_type
         is_attachment = "attachment" in disposition or "filename=" in disposition
-        logger.info("Resposta candidato %s: status=%s content-type=%s bytes=%s origem=%s", idx + 1, response.status, content_type, len(body), source)
-        if response.status < 400 and (is_pdf or is_attachment):
+        is_boleto = _is_boleto_candidate(href=source, extra=f"{content_type} {disposition}")
+
+        logger.info(
+            "Resposta candidato %s: status=%s content-type=%s bytes=%s boleto=%s origem=%s",
+            idx + 1,
+            response.status,
+            content_type,
+            len(body),
+            is_boleto,
+            source,
+        )
+
+        if response.status < 400 and (is_pdf or is_attachment) and is_boleto:
             path = _new_file_path(payload, idx, ".pdf" if is_pdf else ".bin")
             with open(path, "wb") as file:
                 file.write(body)
-            logger.info("Arquivo salvo por resposta direta: %s", path)
+            logger.info("Arquivo de boleto salvo por resposta direta: %s", path)
             return path
+
+        if response.status < 400 and (is_pdf or is_attachment) and not is_boleto:
+            logger.warning("PDF ignorado por não parecer boleto/fatura: %s", source)
     except Exception as exc:
         logger.warning("Falha ao salvar resposta direta do boleto %s: %s", idx + 1, exc)
     return None
@@ -347,6 +410,9 @@ async def _save_response_if_file(response, payload: RunRpaPayload, idx: int, sou
 
 async def _try_download_url(context, url: str, payload: RunRpaPayload, idx: int) -> Optional[str]:
     if not url or url.startswith("javascript:") or url.endswith("#"):
+        return None
+    if not _is_boleto_candidate(href=url):
+        logger.info("URL ignorada por não parecer boleto/fatura: %s", url)
         return None
     try:
         response = await context.request.get(url, timeout=30000)
@@ -359,18 +425,23 @@ async def _try_download_url(context, url: str, payload: RunRpaPayload, idx: int)
 async def _scan_page_for_file_links(page, context, payload: RunRpaPayload, base_idx: int) -> List[str]:
     found_files: List[str] = []
     selectors = [
-        "a[href$='.pdf']",
-        "a[href*='.pdf']",
         "a[href*='boleto']",
-        "a[href*='download']",
-        "a[href*='arquivo']",
-        "a:has-text('PDF')",
-        "a:has-text('Imprimir')",
-        "a:has-text('Baixar')",
+        "a[href*='segunda-via']",
+        "a[href*='2via']",
+        "a[href*='fatura']",
+        "a[href*='cobranca']",
+        "a[href*='bradesco']",
+        "a:has-text('2ª via')",
+        "a:has-text('Segunda via')",
         "a:has-text('Boleto')",
-        "button:has-text('Imprimir')",
-        "button:has-text('Baixar')",
+        "a:has-text('Fatura')",
+        "a:has-text('Cobrança')",
+        "button:has-text('2ª via')",
+        "button:has-text('Segunda via')",
         "button:has-text('Boleto')",
+        "button:has-text('Fatura')",
+        "button:has-text('Baixar')",
+        "button:has-text('Imprimir')",
     ]
     for selector in selectors:
         try:
@@ -387,7 +458,10 @@ async def _scan_page_for_file_links(page, context, payload: RunRpaPayload, base_
                 href = await locator.get_attribute("href")
             except Exception:
                 href = None
-            logger.info("Link interno candidato: selector=%s text=%s href=%s", selector, text[:80], href)
+            if not _is_boleto_candidate(text=text, href=href or ""):
+                logger.info("Link interno ignorado por não parecer boleto: selector=%s text=%s href=%s", selector, text[:80], href)
+                continue
+            logger.info("Link interno candidato boleto: selector=%s text=%s href=%s", selector, text[:80], href)
             if href:
                 file_path = await _try_download_url(context, urljoin(page.url, href), payload, idx)
                 if file_path:
@@ -418,6 +492,10 @@ async def _download_boleto_candidate(page, context, locator, payload: RunRpaPayl
     except Exception:
         href = None
     logger.info("Candidato boleto %s: text=%s href=%s", idx + 1, text[:120], href)
+
+    if not _is_boleto_candidate(text=text, href=href or ""):
+        logger.info("Candidato %s ignorado por não parecer boleto/fatura.", idx + 1)
+        return None
 
     if href:
         file_path = await _try_download_url(context, urljoin(page.url, href), payload, idx)
@@ -551,7 +629,7 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
             await browser.close()
 
     if not downloaded_files:
-        raise HTTPException(status_code=404, detail="Candidatos de boleto encontrados, mas nenhum arquivo/PDF foi baixado. Verifique se o portal exige etapa adicional ou ajuste o selector 'boleto' para o link final do PDF.")
+        raise HTTPException(status_code=404, detail="Candidatos de boleto encontrados, mas nenhum boleto/PDF válido foi baixado. O portal pode estar exibindo apenas instrução para emissão no Bradesco ou exigir etapa adicional após o login.")
     logger.info("RPA concluído: %s arquivo(s) baixado(s)", len(downloaded_files))
     return downloaded_files
 
