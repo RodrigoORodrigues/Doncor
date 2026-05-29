@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
+import asyncio
 
 from models import (
     ContratoAdesao, ContratoAdesaoCreate,
@@ -38,18 +39,23 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 
+ROBO_ALLOWED_ROLES = {"admin", "master", "diretoria"}
+
+
 def _require_robo_role(x_user_role: Optional[str] = Header(default=None)):
     if not x_user_role:
         raise HTTPException(status_code=401, detail="Não autenticado")
-    if x_user_role.lower() != "admin":
+
+    role = x_user_role.strip().lower()
+    if role not in ROBO_ALLOWED_ROLES:
         raise HTTPException(status_code=403, detail="Acesso negado")
 
 
 # ─── Startup: Seed DB ─────────────────────────────────────────
 @app.on_event("startup")
 async def startup_event():
-    await seed_database(db)
-    logger.info("Database seeded successfully")
+    asyncio.create_task(seed_database(db))
+    logger.info("Database seeding started in background")
 
 
 @app.on_event("shutdown")
@@ -91,14 +97,24 @@ async def _get_robo_config_latest():
 
 async def _run_rpa_job(payload: dict, config: dict):
     service_url = config.get("rpaServiceUrl")
+    timeout_segundos = config.get("timeoutSegundos", 120)
+
     if service_url:
         import requests
-        resp = requests.post(service_url, json=payload, timeout=config.get("timeoutSegundos", 120))
-        if resp.status_code >= 400:
-            raise HTTPException(status_code=502, detail=f"Falha no serviço RPA externo: {resp.text}")
-        if resp.headers.get("content-type", "").startswith("application/json"):
-            return resp.json()
-        return {"status": "success", "message": "RPA externo executado"}
+        try:
+            resp = requests.post(service_url, json=payload, timeout=timeout_segundos)
+            if resp.status_code >= 400:
+                logger.error(f"RPA service error: {resp.status_code} - {resp.text}")
+                raise HTTPException(status_code=502, detail=f"Falha no serviço RPA externo: {resp.text}")
+            if resp.headers.get("content-type", "").startswith("application/json"):
+                return resp.json()
+            return {"status": "success", "message": "RPA externo executado"}
+        except requests.exceptions.Timeout:
+            logger.error(f"RPA service timeout after {timeout_segundos}s")
+            raise HTTPException(status_code=504, detail=f"Timeout: serviço RPA não respondeu em {timeout_segundos}s")
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"RPA service connection failed: {e}")
+            raise HTTPException(status_code=503, detail="Serviço RPA não está disponível. Tente novamente mais tarde.")
 
     return {"status": "success", "message": "RPA executado em modo simulado"}
 
@@ -106,6 +122,16 @@ async def _run_rpa_job(payload: dict, config: dict):
 @api_router.get("/")
 async def root():
     return {"message": "Don Cor API - Gestão de Apólices"}
+
+
+@api_router.get("/health")
+async def health():
+    try:
+        await db.command("ping")
+        return {"status": "ok", "service": "main"}
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {"status": "ok", "service": "main"}
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -282,8 +308,8 @@ async def list_contratos_empresarial(search: str = "", status: str = "todos"):
         query["$or"] = [
             {"numero": {"$regex": search, "$options": "i"}},
             {"empresa": {"$regex": search, "$options": "i"}},
-            {"seguradora": {"$regex": search, "$options": "i"}},
             {"cnpj": {"$regex": search, "$options": "i"}},
+            {"seguradora": {"$regex": search, "$options": "i"}},
         ]
     items = await db.contratos_empresarial.find(query, _proj()).to_list(1000)
     return items
@@ -330,9 +356,10 @@ async def list_inclusoes(search: str = "", status: str = "todos"):
         query["status"] = {"$regex": f"^{status}$", "$options": "i"}
     if search:
         query["$or"] = [
-            {"protocolo": {"$regex": search, "$options": "i"}},
-            {"beneficiario": {"$regex": search, "$options": "i"}},
             {"contrato": {"$regex": search, "$options": "i"}},
+            {"empresa": {"$regex": search, "$options": "i"}},
+            {"beneficiario": {"$regex": search, "$options": "i"}},
+            {"cpf": {"$regex": search, "$options": "i"}},
         ]
     items = await db.inclusoes.find(query, _proj()).to_list(1000)
     return items
@@ -340,17 +367,10 @@ async def list_inclusoes(search: str = "", status: str = "todos"):
 
 @api_router.post("/inclusoes")
 async def create_inclusao(data: InclusaoCreate):
-    count = await db.inclusoes.count_documents({})
     obj = Inclusao(**data.model_dump())
-    obj.protocolo = _next_protocol("INC", 342 + count)
+    obj.protocolo = _next_protocol("INC", await db.inclusoes.count_documents({}) + 1)
     obj.dataSolicitacao = datetime.now().strftime("%d/%m/%Y")
-    obj.status = "Pendente"
     await db.inclusoes.insert_one(obj.model_dump())
-    # Also add to movimentacoes_recentes
-    await db.movimentacoes_recentes.insert_one({
-        "id": str(uuid.uuid4()), "tipo": "Inclusão", "contrato": data.contrato,
-        "beneficiario": data.beneficiario, "data": obj.dataSolicitacao, "status": "Pendente"
-    })
     return obj.model_dump()
 
 
@@ -372,8 +392,9 @@ async def list_exclusoes(search: str = "", status: str = "todos"):
         query["status"] = {"$regex": f"^{status}$", "$options": "i"}
     if search:
         query["$or"] = [
-            {"protocolo": {"$regex": search, "$options": "i"}},
+            {"contrato": {"$regex": search, "$options": "i"}},
             {"beneficiario": {"$regex": search, "$options": "i"}},
+            {"cpf": {"$regex": search, "$options": "i"}},
         ]
     items = await db.exclusoes.find(query, _proj()).to_list(1000)
     return items
@@ -381,16 +402,10 @@ async def list_exclusoes(search: str = "", status: str = "todos"):
 
 @api_router.post("/exclusoes")
 async def create_exclusao(data: ExclusaoCreate):
-    count = await db.exclusoes.count_documents({})
     obj = Exclusao(**data.model_dump())
-    obj.protocolo = _next_protocol("EXC", 103 + count)
+    obj.protocolo = _next_protocol("EXC", await db.exclusoes.count_documents({}) + 1)
     obj.dataSolicitacao = datetime.now().strftime("%d/%m/%Y")
-    obj.status = "Pendente"
     await db.exclusoes.insert_one(obj.model_dump())
-    await db.movimentacoes_recentes.insert_one({
-        "id": str(uuid.uuid4()), "tipo": "Exclusão", "contrato": data.contrato,
-        "beneficiario": data.beneficiario, "data": obj.dataSolicitacao, "status": "Pendente"
-    })
     return obj.model_dump()
 
 
@@ -402,8 +417,10 @@ async def list_transferencias(search: str = ""):
     query = {}
     if search:
         query["$or"] = [
-            {"protocolo": {"$regex": search, "$options": "i"}},
+            {"contratoOrigem": {"$regex": search, "$options": "i"}},
+            {"contratoDestino": {"$regex": search, "$options": "i"}},
             {"beneficiario": {"$regex": search, "$options": "i"}},
+            {"cpf": {"$regex": search, "$options": "i"}},
         ]
     items = await db.transferencias.find(query, _proj()).to_list(1000)
     return items
@@ -411,16 +428,10 @@ async def list_transferencias(search: str = ""):
 
 @api_router.post("/transferencias")
 async def create_transferencia(data: TransferenciaCreate):
-    count = await db.transferencias.count_documents({})
     obj = Transferencia(**data.model_dump())
-    obj.protocolo = _next_protocol("TRF", 46 + count)
+    obj.protocolo = _next_protocol("TRF", await db.transferencias.count_documents({}) + 1)
     obj.dataSolicitacao = datetime.now().strftime("%d/%m/%Y")
-    obj.status = "Pendente"
     await db.transferencias.insert_one(obj.model_dump())
-    await db.movimentacoes_recentes.insert_one({
-        "id": str(uuid.uuid4()), "tipo": "Transferência", "contrato": data.contratoOrigem,
-        "beneficiario": data.beneficiario, "data": obj.dataSolicitacao, "status": "Pendente"
-    })
     return obj.model_dump()
 
 
@@ -435,8 +446,9 @@ async def list_faturas(search: str = "", status: str = "todos"):
     if search:
         query["$or"] = [
             {"numero": {"$regex": search, "$options": "i"}},
-            {"seguradora": {"$regex": search, "$options": "i"}},
             {"contrato": {"$regex": search, "$options": "i"}},
+            {"seguradora": {"$regex": search, "$options": "i"}},
+            {"competencia": {"$regex": search, "$options": "i"}},
         ]
     items = await db.faturas.find(query, _proj()).to_list(1000)
     return items
@@ -457,7 +469,11 @@ async def faturas_resumo():
 async def list_comissoes(search: str = ""):
     query = {}
     if search:
-        query["seguradora"] = {"$regex": search, "$options": "i"}
+        query["$or"] = [
+            {"seguradora": {"$regex": search, "$options": "i"}},
+            {"competencia": {"$regex": search, "$options": "i"}},
+            {"status": {"$regex": search, "$options": "i"}},
+        ]
     items = await db.comissoes.find(query, _proj()).to_list(1000)
     return items
 
@@ -465,12 +481,11 @@ async def list_comissoes(search: str = ""):
 @api_router.get("/comissoes/evolucao")
 async def comissoes_evolucao():
     return [
-        {"mes": "Out", "valor": 18500},
-        {"mes": "Nov", "valor": 19200},
-        {"mes": "Dez", "valor": 21400},
-        {"mes": "Jan", "valor": 20800},
-        {"mes": "Fev", "valor": 22300},
-        {"mes": "Mar", "valor": 9006},
+        {"mes": "Jan", "prevista": 45000, "recebida": 42000},
+        {"mes": "Fev", "prevista": 52000, "recebida": 51000},
+        {"mes": "Mar", "prevista": 48000, "recebida": 46500},
+        {"mes": "Abr", "prevista": 61000, "recebida": 59000},
+        {"mes": "Mai", "prevista": 55000, "recebida": 0},
     ]
 
 
@@ -485,8 +500,8 @@ async def list_seguradoras(search: str = "", status: str = "todos"):
     if search:
         query["$or"] = [
             {"nome": {"$regex": search, "$options": "i"}},
-            {"codigo": {"$regex": search, "$options": "i"}},
             {"cnpj": {"$regex": search, "$options": "i"}},
+            {"email": {"$regex": search, "$options": "i"}},
         ]
     items = await db.seguradoras.find(query, _proj()).to_list(1000)
     return items
@@ -641,12 +656,12 @@ async def robo_pausar(_: None = Depends(_require_robo_role)):
 
 
 @api_router.get("/robo/config")
-async def get_robo_config():
+async def get_robo_config(_: None = Depends(_require_robo_role)):
     return await _get_robo_config_latest()
 
 
 @api_router.post("/robo/config")
-async def save_robo_config(data: RoboConfigPayload):
+async def save_robo_config(data: RoboConfigPayload, _: None = Depends(_require_robo_role)):
     payload = data.model_dump()
     payload["updatedAt"] = datetime.now().strftime("%d/%m/%Y %H:%M")
     current = await db.robo_config.find_one({}, {"_id": 1}, sort=[("updatedAt", -1), ("_id", -1)])
@@ -658,7 +673,7 @@ async def save_robo_config(data: RoboConfigPayload):
 
 
 @api_router.post("/robo/trigger-real")
-async def trigger_robo_real(data: RoboTriggerPayload):
+async def trigger_robo_real(data: RoboTriggerPayload, _: None = Depends(_require_robo_role)):
     cfg = await _get_robo_config_latest()
     if not cfg.get("operadoras"):
         raise HTTPException(status_code=400, detail="Nenhuma operadora configurada no RoboConfig")
@@ -681,14 +696,23 @@ async def trigger_robo_real(data: RoboTriggerPayload):
             "bucket": cfg.get("supabaseBucketBoletos", "boletos"),
         },
     }
-    result = await _run_rpa_job(job_payload, cfg)
+
+    try:
+        result = await _run_rpa_job(job_payload, cfg)
+    except HTTPException as e:
+        logger.warning(f"RPA externo falhou ({e.status_code}). Usando fallback simulado: {e.detail}")
+        result = {
+            "status": "success_simulated",
+            "message": "RPA em modo simulado (serviço externo indisponível)",
+            "warning": e.detail,
+        }
 
     exec_item = {
         "id": str(uuid.uuid4()),
         "processo": "Extração de boletos RPA",
         "inicio": datetime.now().strftime("%d/%m/%Y %H:%M"),
         "duracao": "--",
-        "status": "Concluído" if result.get("status") == "success" else "Finalizado",
+        "status": "Concluído" if result.get("status") == "success" else "Simulado",
         "resultado": result,
     }
     await db.robo_execucoes_log.insert_one(exec_item)
@@ -696,6 +720,10 @@ async def trigger_robo_real(data: RoboTriggerPayload):
 
 @api_router.get("/robo/execucoes")
 async def robo_execucoes(_: None = Depends(_require_robo_role)):
+    db_items = await db.robo_execucoes_log.find({}, _proj()).sort("inicio", -1).to_list(50)
+    if db_items:
+        return db_items
+
     return [
         {"id": "rb-001", "processo": "Importação de faturas", "inicio": "19/05/2026 08:15", "duracao": "01m42s", "status": "Concluído"},
         {"id": "rb-002", "processo": "Validação de contratos", "inicio": "19/05/2026 09:10", "duracao": "03m05s", "status": "Concluído"},

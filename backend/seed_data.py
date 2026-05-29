@@ -144,9 +144,10 @@ async def seed_database(db):
     }
 
     for collection_name, data in collections_data.items():
-        count = await db[collection_name].count_documents({})
+        collection = getattr(db, collection_name)
+        count = await collection.count_documents({})
         if count == 0:
-            await db[collection_name].insert_many(data)
+            await collection.insert_many(data)
             logger.info(f"Seeded {collection_name} with {len(data)} documents")
         else:
             logger.info(f"Collection {collection_name} already has {count} documents, skipping seed")

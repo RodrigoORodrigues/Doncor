@@ -1,0 +1,20 @@
+FROM mcr.microsoft.com/playwright/python:v1.55.0-jammy
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+WORKDIR /app
+
+COPY requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# A imagem oficial do Playwright já contém as dependências Linux do Chromium.
+# Este comando apenas garante que o navegador esperado pela versão Python esteja presente.
+RUN python -m playwright install chromium
+
+COPY . ./
+
+EXPOSE 8000
+
+CMD ["python", "start_rpa.py"]
