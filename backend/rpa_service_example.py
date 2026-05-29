@@ -376,6 +376,9 @@ async def _wait_assim_resultado_boleto(page, timeout_ms: int = 45000) -> bool:
         if await page.locator(ASSIM_RESULT_SELECTOR).count() > 0:
             logger.info("ASSIM: resultado/tabela de boleto encontrado.")
             return True
+        if await _is_assim_direct_boleto_page(page):
+            logger.info("ASSIM: página direta do boleto detectada no lugar da tabela.")
+            return False
         await page.wait_for_timeout(1200)
     return False
 
@@ -493,6 +496,43 @@ async def _save_download(download, payload: RunRpaPayload, idx: int, label: str)
     return path
 
 
+async def _is_assim_direct_boleto_page(page) -> bool:
+    try:
+        title = (await page.title()).lower()
+    except Exception:
+        title = ""
+    text = (await _body_text(page, 6000)).lower()
+    url = page.url.lower()
+    return (
+        "boleto2.php" in url
+        or "emissão 2ª via de lâmina" in title
+        or "emissao 2" in title
+        or (
+            "valor do documento" in text
+            and "nosso número" in text
+            and ("237-2" in text or "bradesco" in text or "ficha de compens" in text)
+        )
+    )
+
+
+async def _save_assim_boleto_page_as_pdf(page, payload: RunRpaPayload, idx: int, label: str) -> Optional[str]:
+    if not await _is_assim_direct_boleto_page(page):
+        return None
+    path = _new_file_path(payload, idx, ".pdf")
+    try:
+        await page.emulate_media(media="screen")
+    except Exception:
+        pass
+    await page.pdf(
+        path=path,
+        format="A4",
+        print_background=True,
+        margin={"top": "6mm", "right": "6mm", "bottom": "6mm", "left": "6mm"},
+    )
+    logger.info("ASSIM: boleto salvo como PDF a partir da página direta (%s): %s", label, path)
+    return path
+
+
 async def _click_assim_download_js(page) -> Dict[str, Any]:
     return await page.evaluate(
         """
@@ -536,7 +576,7 @@ async def _try_assim_download(page, payload: RunRpaPayload, idx: int, download_t
     logger.info("ASSIM: fluxo objetivo iniciado. url_atual=%s", page.url)
     await _close_known_modals(page)
 
-    if "area2=2via_boleto" not in page.url:
+    if "area2=2via_boleto" not in page.url and "boleto2.php" not in page.url:
         logger.info("ASSIM: navegando direto para página interna de 2ª via.")
         await page.goto(ASSIM_BOL_PAGE, wait_until="domcontentloaded", timeout=60000)
 
@@ -548,23 +588,43 @@ async def _try_assim_download(page, payload: RunRpaPayload, idx: int, download_t
     await page.wait_for_timeout(1500)
     await _close_known_modals(page)
 
+    direct_file = await _save_assim_boleto_page_as_pdf(page, payload, idx, "página já aberta")
+    if direct_file:
+        return direct_file
+
     if await page.locator(ASSIM_RESULT_SELECTOR).count() == 0 and await _assim_has_period_form(page):
         await _submit_assim_period_with_script(page, payload.operadora)
+        direct_file = await _save_assim_boleto_page_as_pdf(page, payload, idx, "após clicar em ENVIAR")
+        if direct_file:
+            return direct_file
 
-    resultado_ok = await _wait_assim_resultado_boleto(page, timeout_ms=45000)
+    resultado_ok = await _wait_assim_resultado_boleto(page, timeout_ms=12000)
+    direct_file = await _save_assim_boleto_page_as_pdf(page, payload, idx, "após espera curta")
+    if direct_file:
+        return direct_file
+
     if not resultado_ok and await _assim_has_period_form(page):
-        logger.warning("ASSIM: primeira tentativa não retornou tabela; repetindo consulta com script direto uma vez.")
+        logger.warning("ASSIM: tabela não apareceu; tentando consulta com script direto uma vez.")
         await _submit_assim_period_with_script(page, payload.operadora)
-        resultado_ok = await _wait_assim_resultado_boleto(page, timeout_ms=30000)
+        direct_file = await _save_assim_boleto_page_as_pdf(page, payload, idx, "após segunda tentativa de ENVIAR")
+        if direct_file:
+            return direct_file
+        resultado_ok = await _wait_assim_resultado_boleto(page, timeout_ms=12000)
 
     if not resultado_ok:
+        direct_file = await _save_assim_boleto_page_as_pdf(page, payload, idx, "sem tabela, mas página de boleto")
+        if direct_file:
+            return direct_file
         debug = await _debug_page_state(page)
-        logger.error("ASSIM: resultado-boleto não apareceu. Diagnóstico: %s", debug)
-        raise HTTPException(status_code=422, detail={"message": "ASSIM: a tabela #resultado-boleto/#opcaoBoleto não apareceu.", "orientacao": "Após login, o robô precisa chegar na tela de 2ª via, fechar a janela de atenção, selecionar o boleto e clicar em Baixar PDF.", "diagnostico": debug})
+        logger.error("ASSIM: nem tabela nem página direta de boleto apareceram. Diagnóstico: %s", debug)
+        raise HTTPException(status_code=422, detail={"message": "ASSIM: nem a tabela #resultado-boleto/#opcaoBoleto nem a página direta do boleto apareceram.", "orientacao": "O portal pode ter mudado a tela pós-login ou não há boleto para a competência consultada.", "diagnostico": debug})
 
     await _close_known_modals(page)
     select_result = await _select_assim_first_boleto(page)
     if not select_result.get("selected"):
+        direct_file = await _save_assim_boleto_page_as_pdf(page, payload, idx, "sem radio, mas página de boleto")
+        if direct_file:
+            return direct_file
         debug = await _debug_page_state(page)
         raise HTTPException(status_code=422, detail={"message": "ASSIM: tabela encontrada, mas nenhum #opcaoBoleto foi encontrado para selecionar.", "diagnostico": debug})
 
@@ -576,7 +636,10 @@ async def _try_assim_download(page, payload: RunRpaPayload, idx: int, download_t
             logger.info("ASSIM: ação de download executada via JS: %s", action)
         return await _save_download(await download_info.value, payload, idx, "Baixar PDF ASSIM via JS")
     except Exception as exc:
-        logger.warning("ASSIM: clique JS não gerou download direto: %s", exc)
+        logger.warning("ASSIM: clique JS não gerou evento de download; verificando se abriu boleto HTML: %s", exc)
+        direct_file = await _save_assim_boleto_page_as_pdf(page, payload, idx, "após clicar em Baixar PDF")
+        if direct_file:
+            return direct_file
 
     button = await _first_visible_locator(page, ASSIM_DOWNLOAD_SELECTOR, timeout_ms=8000)
     if button is not None:
@@ -585,7 +648,10 @@ async def _try_assim_download(page, payload: RunRpaPayload, idx: int, download_t
                 await button.click(timeout=10000, force=True)
             return await _save_download(await download_info.value, payload, idx, "botão Baixar PDF do ASSIM")
         except Exception as exc:
-            logger.warning("ASSIM: clique Playwright no botão Baixar PDF não gerou download: %s", exc)
+            logger.warning("ASSIM: clique Playwright no botão Baixar PDF não gerou evento de download; verificando boleto HTML: %s", exc)
+            direct_file = await _save_assim_boleto_page_as_pdf(page, payload, idx, "após clique Playwright em Baixar PDF")
+            if direct_file:
+                return direct_file
 
     try:
         has_function = await page.evaluate("() => typeof window.downloadBoleto === 'function'")
@@ -608,11 +674,14 @@ async def _try_assim_download(page, payload: RunRpaPayload, idx: int, download_t
                 )
             return await _save_download(await download_info.value, payload, idx, "função JavaScript downloadBoleto")
     except Exception as exc:
-        logger.warning("ASSIM: função downloadBoleto não gerou download: %s", exc)
+        logger.warning("ASSIM: função downloadBoleto não gerou evento de download; verificando boleto HTML: %s", exc)
+        direct_file = await _save_assim_boleto_page_as_pdf(page, payload, idx, "após função downloadBoleto")
+        if direct_file:
+            return direct_file
 
     debug = await _debug_page_state(page)
-    logger.error("ASSIM: não conseguiu baixar o boleto. Diagnóstico: %s", debug)
-    raise HTTPException(status_code=404, detail={"message": "ASSIM: tabela encontrada e boleto selecionado, mas o botão Baixar PDF/downloadBoleto não gerou arquivo.", "diagnostico": debug})
+    logger.error("ASSIM: não conseguiu baixar/salvar o boleto. Diagnóstico: %s", debug)
+    raise HTTPException(status_code=404, detail={"message": "ASSIM: o robô clicou/consultou, mas não houve download e não foi possível reconhecer uma página HTML de boleto para salvar em PDF.", "diagnostico": debug})
 
 
 async def _save_response_if_file(response, payload: RunRpaPayload, idx: int, source: str, extra: str = "") -> Optional[str]:
