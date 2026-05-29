@@ -88,6 +88,8 @@ DOWNLOAD_BUTTON_SELECTOR = (
     "[onclick*='downloadBoleto']"
 )
 
+ASSIM_BOL_PAGE = "https://assim.com.br/site/?area=acesso-empresa&area2=2via_boleto"
+
 
 def ensure_playwright_chromium() -> None:
     global _BROWSER_READY
@@ -175,6 +177,12 @@ def _is_amil(op: Dict[str, Any]) -> bool:
     return "amil" in nome or "amil.com.br" in url
 
 
+def _is_assim(op: Dict[str, Any]) -> bool:
+    nome = str(op.get("nome") or "").lower()
+    url = str(op.get("url") or "").lower()
+    return "assim" in nome or "assim.com.br" in url
+
+
 def _is_boleto_candidate(text: str = "", href: str = "", extra: str = "") -> bool:
     haystack = f"{text or ''} {href or ''} {extra or ''}".lower()
     if any(term in haystack for term in NON_BOLETO_TERMS):
@@ -185,6 +193,11 @@ def _is_boleto_candidate(text: str = "", href: str = "", extra: str = "") -> boo
 def _is_real_download_meta(meta: Dict[str, str]) -> bool:
     haystack = f"{meta.get('title', '')} {meta.get('onclick', '')} {meta.get('aria', '')} {meta.get('cls', '')} {meta.get('text', '')}".lower()
     return "downloadboleto" in haystack or "baixar pdf" in haystack or "baixar boleto" in haystack
+
+
+def _is_external_bank_meta(meta: Dict[str, str]) -> bool:
+    haystack = f"{meta.get('text', '')} {meta.get('href', '')} {meta.get('title', '')}".lower()
+    return "banco.bradesco" in haystack or "bradesco/html/classic" in haystack
 
 
 async def _body_text(page, limit: int = 2500) -> str:
@@ -412,6 +425,53 @@ async def _wait_for_login_screen(page, op: Dict[str, Any], user_selector: str) -
     await _close_known_modals(page)
 
 
+async def _prepare_assim_boleto_page(page, op: Dict[str, Any]) -> None:
+    if not _is_assim(op):
+        return
+
+    logger.info("ASSIM: preparando página interna de 2ª via de boleto.")
+    await _close_known_modals(page)
+
+    try:
+        found = await page.locator(DOWNLOAD_BUTTON_SELECTOR).count()
+        logger.info("ASSIM: botões Baixar PDF antes da navegação interna: %s", found)
+        if found:
+            return
+    except Exception:
+        pass
+
+    try:
+        logger.info("ASSIM: navegando para %s", ASSIM_BOL_PAGE)
+        await page.goto(ASSIM_BOL_PAGE, wait_until="domcontentloaded", timeout=60000)
+    except Exception as exc:
+        logger.warning("ASSIM: navegação direta para página interna falhou: %s", exc)
+
+    try:
+        await page.wait_for_load_state("networkidle", timeout=30000)
+    except Exception:
+        logger.info("ASSIM: networkidle na página interna não estabilizou; continuando.")
+
+    for attempt in range(1, 5):
+        await _close_known_modals(page)
+        await page.wait_for_timeout(2500)
+        try:
+            direct_count = await page.locator(DOWNLOAD_BUTTON_SELECTOR).count()
+            func_exists = await page.evaluate("() => typeof window.downloadBoleto === 'function'")
+            body = await _body_text(page, 800)
+            logger.info(
+                "ASSIM: tentativa %s na página interna. url=%s download_buttons=%s downloadBoleto_fn=%s body=%s",
+                attempt,
+                page.url,
+                direct_count,
+                func_exists,
+                body.replace("\n", " ")[:300],
+            )
+            if direct_count or func_exists:
+                return
+        except Exception as exc:
+            logger.info("ASSIM: diagnóstico da página interna falhou na tentativa %s: %s", attempt, exc)
+
+
 def _new_file_path(payload: RunRpaPayload, idx: int, suffix: str = ".pdf") -> str:
     fd, path = tempfile.mkstemp(prefix=f"boleto_{payload.apolice_id}_{idx}_", suffix=suffix)
     os.close(fd)
@@ -458,6 +518,9 @@ async def _try_download_url(context, url: str, payload: RunRpaPayload, idx: int,
     if url in visited:
         return None
     visited.add(url)
+    if "banco.bradesco" in url.lower():
+        logger.info("URL externa Bradesco ignorada como fallback, pois não é o PDF direto do ASSIM: %s", url)
+        return None
     if not _is_boleto_candidate(href=url, extra=meta_extra):
         logger.info("URL ignorada por não parecer boleto/fatura: %s", url)
         return None
@@ -470,7 +533,7 @@ async def _try_download_url(context, url: str, payload: RunRpaPayload, idx: int,
 
 
 async def _try_javascript_download(page, payload: RunRpaPayload, idx: int, download_timeout: int) -> Optional[str]:
-    for expression in ["downloadBoleto()"]:
+    for expression in ["downloadBoleto()", "window.downloadBoleto && window.downloadBoleto()"]:
         try:
             async with page.expect_download(timeout=download_timeout) as download_info:
                 await page.evaluate(expression)
@@ -498,6 +561,10 @@ async def _download_boleto_candidate(page, context, locator, payload: RunRpaPayl
         meta["title"],
         meta["onclick"],
     )
+
+    if _is_external_bank_meta(meta) and not _is_real_download_meta(meta):
+        logger.info("Candidato %s ignorado: link externo Bradesco/instrução, não é botão Baixar PDF do ASSIM.", idx + 1)
+        return None
 
     if not _is_boleto_candidate(text=meta["text"], href=full_href, extra=meta_extra):
         logger.info("Candidato %s ignorado por não parecer boleto/fatura.", idx + 1)
@@ -559,7 +626,11 @@ async def _collect_candidates(page, selector: str, label: str) -> List[Tuple[int
         meta = await _locator_meta(locator)
         visible = meta.get("visible") == "true"
         real_download = _is_real_download_meta(meta)
+        external_bank = _is_external_bank_meta(meta)
         boleto_like = _is_boleto_candidate(text=meta.get("text", ""), href=meta.get("href", ""), extra=f"{meta.get('title','')} {meta.get('onclick','')} {meta.get('aria','')} {meta.get('cls','')}")
+        if external_bank and not real_download:
+            logger.info("Candidato ignorado [%s]: link externo Bradesco/instrução href=%s text=%s", label, meta.get("href", ""), meta.get("text", "")[:80])
+            continue
         if not boleto_like:
             continue
         score = 0
@@ -569,7 +640,6 @@ async def _collect_candidates(page, selector: str, label: str) -> List[Tuple[int
             score += 100
         if label == "download_button":
             score += 50
-        # Mantém a ordem original como desempate invertido.
         score -= pos
         logger.info(
             "Candidato mapeado [%s]: score=%s visible=%s real_download=%s text=%s title=%s onclick=%s href=%s",
@@ -587,8 +657,6 @@ async def _collect_candidates(page, selector: str, label: str) -> List[Tuple[int
 
 
 async def _find_boleto_candidates(page, configured_selector: str):
-    # Não usar um seletor CSS combinado, porque o Playwright devolve em ordem do DOM.
-    # No ASSIM, o menu invisível "2ª via de boleto" aparece antes do botão real.
     all_candidates: List[Tuple[int, Any, Dict[str, str]]] = []
     all_candidates.extend(await _collect_candidates(page, DOWNLOAD_BUTTON_SELECTOR, "download_button"))
     all_candidates.extend(await _collect_candidates(page, configured_selector, "configured"))
@@ -660,11 +728,19 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
 
             await _run_optional_steps(page, op.get("steps") or [])
             await _close_known_modals(page)
+            await _prepare_assim_boleto_page(page, op)
+            await _close_known_modals(page)
 
             candidates, used_selector = await _find_boleto_candidates(page, configured_boleto_selector)
             if not candidates:
-                debug = await _debug_page_state(page)
-                raise HTTPException(status_code=404, detail={"message": "Nenhum botão/link de boleto encontrado.", "selector_usado": used_selector, "diagnostico": debug})
+                js_direct = None
+                if _is_assim(op):
+                    js_direct = await _try_javascript_download(page, payload, 0, int(op.get("downloadTimeoutMs", 45000)))
+                    if js_direct:
+                        downloaded_files.append(js_direct)
+                if not downloaded_files:
+                    debug = await _debug_page_state(page)
+                    raise HTTPException(status_code=404, detail={"message": "Nenhum botão/link de boleto encontrado.", "selector_usado": used_selector, "diagnostico": debug})
 
             max_downloads = int(op.get("maxDownloads", 1))
             download_timeout = int(op.get("downloadTimeoutMs", 45000))
