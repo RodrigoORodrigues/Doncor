@@ -1,7 +1,7 @@
 """Serviço RPA do Doncor com Playwright.
 
-Serviço separado para login autorizado em portais de operadoras e baixa de boletos.
-Cada operadora pode informar seletores personalizados.
+Fluxo objetivo para login autorizado em portais de operadoras e baixa de boletos.
+O padrão ASSIM usa um fluxo próprio para evitar varreduras genéricas e cliques desnecessários.
 """
 
 from __future__ import annotations
@@ -41,7 +41,6 @@ ASSIM_DOWNLOAD_SELECTOR = (
     "ul.botoes-acoes li:nth-child(3) a, "
     ".botoes-acoes li:nth-child(3) a"
 )
-ASSIM_ACTIONS_SELECTOR = "ul.botoes-acoes a, .botoes-acoes a"
 GENERIC_BOLETO_SELECTOR = (
     "a[href*='boleto'], a[href*='segunda-via'], a[href*='2via'], "
     "button:has-text('Boleto'), a:has-text('Boleto'), a:has-text('2ª via'), a:has-text('2 via')"
@@ -180,19 +179,31 @@ async def _debug_page_state(page) -> Dict[str, Any]:
         data["htmlError"] = str(exc)
 
     for idx, frame in enumerate(page.frames):
-        info: Dict[str, Any] = {"index": idx, "url": frame.url, "inputs": [], "links": []}
+        info: Dict[str, Any] = {"index": idx, "url": frame.url, "inputs": [], "buttons": [], "links": [], "forms": []}
         try:
             info["inputs"] = await frame.locator("input, textarea, [contenteditable='true']").evaluate_all(
-                "els => els.slice(0, 100).map((e, i) => ({i, tag:e.tagName, type:e.getAttribute('type'), id:e.id, name:e.getAttribute('name'), value:e.getAttribute('value'), placeholder:e.getAttribute('placeholder'), cls:e.className}))"
+                "els => els.slice(0, 120).map((e, i) => ({i, tag:e.tagName, type:e.getAttribute('type'), id:e.id, name:e.getAttribute('name'), value:e.getAttribute('value'), placeholder:e.getAttribute('placeholder'), cls:e.className, visible:!!(e.offsetWidth || e.offsetHeight || e.getClientRects().length)}))"
             )
         except Exception as exc:
             info["inputsError"] = str(exc)
+        try:
+            info["buttons"] = await frame.locator("button, input[type='submit'], input[type='button'], input[type='image']").evaluate_all(
+                "els => els.slice(0, 80).map((e, i) => ({i, tag:e.tagName, type:e.getAttribute('type'), text:(e.innerText || e.value || '').trim(), value:e.getAttribute('value'), title:e.getAttribute('title'), onclick:e.getAttribute('onclick'), cls:e.className, visible:!!(e.offsetWidth || e.offsetHeight || e.getClientRects().length), html:(e.outerHTML || '').slice(0, 260)}))"
+            )
+        except Exception as exc:
+            info["buttonsError"] = str(exc)
         try:
             info["links"] = await frame.locator("a").evaluate_all(
                 "els => els.slice(0, 160).map((e, i) => ({i, text:(e.innerText || '').trim(), href:e.getAttribute('href'), title:e.getAttribute('title'), onclick:e.getAttribute('onclick'), cls:e.className, visible:!!(e.offsetWidth || e.offsetHeight || e.getClientRects().length), html:(e.outerHTML || '').slice(0, 260)}))"
             )
         except Exception as exc:
             info["linksError"] = str(exc)
+        try:
+            info["forms"] = await frame.locator("form").evaluate_all(
+                "els => els.slice(0, 20).map((e, i) => ({i, id:e.id, name:e.getAttribute('name'), action:e.getAttribute('action'), method:e.getAttribute('method'), html:(e.outerHTML || '').slice(0, 600)}))"
+            )
+        except Exception as exc:
+            info["formsError"] = str(exc)
         data["frames"].append(info)
     return data
 
@@ -205,14 +216,15 @@ async def _close_known_modals(page) -> bool:
         "#modalAviso .close", ".modal.show button:has-text('Fechar')",
         ".modal.show a:has-text('Fechar')", ".modal.show [data-dismiss='modal']",
         ".modal.show [data-bs-dismiss='modal']", ".modal.show .close",
+        "button:has-text('Aceitar')", "button:has-text('Rejeitar')", "a:has-text('Aceitar')",
     ]
     for selector in close_selectors:
         try:
             locator = page.locator(selector).first
             if await locator.count() > 0 and await locator.is_visible(timeout=1000):
                 await locator.click(timeout=3000, force=True)
-                await page.wait_for_timeout(700)
-                logger.info("Modal fechado com seletor: %s", selector)
+                await page.wait_for_timeout(500)
+                logger.info("Modal/cookie fechado com seletor: %s", selector)
                 closed = True
                 break
         except Exception:
@@ -255,7 +267,7 @@ async def _first_visible_locator(page, selector: str, timeout_ms: int = 45000):
                         return locator
                 except Exception:
                     pass
-        await page.wait_for_timeout(400)
+        await page.wait_for_timeout(300)
     return None
 
 
@@ -266,7 +278,7 @@ async def _fill_first(page, selector: str, value: str, label: str, timeout_ms: i
         debug = await _debug_page_state(page)
         logger.error("Campo %s não encontrado. Diagnóstico: %s", label, debug)
         raise HTTPException(status_code=422, detail={"message": f"Campo {label} não encontrado.", "selector_usado": selector, "diagnostico": debug})
-    await locator.fill(value, timeout=timeout_ms)
+    await locator.fill(value or "", timeout=timeout_ms)
     return locator
 
 
@@ -299,9 +311,9 @@ async def _run_optional_steps(page, steps: List[Dict[str, Any]]):
 
 
 async def _wait_for_login_screen(page, op: Dict[str, Any], user_selector: str) -> None:
-    initial_wait = int(op.get("initialWaitMs", 25000 if _is_amil(op) else 10000))
+    initial_wait = int(op.get("initialWaitMs", 25000 if _is_amil(op) else 8000))
     try:
-        await page.wait_for_load_state("networkidle", timeout=30000)
+        await page.wait_for_load_state("networkidle", timeout=25000)
     except Exception:
         logger.info("Networkidle não estabilizou; continuando com espera visual.")
     await page.wait_for_timeout(initial_wait)
@@ -311,23 +323,21 @@ async def _wait_for_login_screen(page, op: Dict[str, Any], user_selector: str) -
     logger.warning("Tela de login sem campo de usuário após espera inicial; recarregando uma vez.")
     await page.reload(wait_until="domcontentloaded", timeout=60000)
     try:
-        await page.wait_for_load_state("networkidle", timeout=30000)
+        await page.wait_for_load_state("networkidle", timeout=25000)
     except Exception:
         pass
     await page.wait_for_timeout(initial_wait)
     await _close_known_modals(page)
 
 
-async def _wait_assim_resultado_boleto(page, timeout_ms: int = 60000) -> bool:
+async def _wait_assim_resultado_boleto(page, timeout_ms: int = 45000) -> bool:
     deadline = time.time() + timeout_ms / 1000
     while time.time() < deadline:
         await _close_known_modals(page)
         if await page.locator(ASSIM_RESULT_SELECTOR).count() > 0:
-            logger.info("ASSIM: resultado do boleto encontrado.")
+            logger.info("ASSIM: resultado/tabela de boleto encontrado.")
             return True
-        body = await _body_text(page, 700)
-        logger.info("ASSIM: aguardando resultado do boleto. url=%s body=%s", page.url, body.replace("\n", " ")[:700])
-        await page.wait_for_timeout(2500)
+        await page.wait_for_timeout(1500)
     return False
 
 
@@ -354,49 +364,74 @@ def _infer_assim_period(op: Dict[str, Any]) -> Dict[str, str]:
     return {"mes": mes, "ano": ano}
 
 
-async def _submit_assim_boleto_period_if_needed(page, op: Dict[str, Any]) -> bool:
-    if await page.locator(ASSIM_RESULT_SELECTOR).count() > 0:
-        return True
+async def _assim_has_period_form(page) -> bool:
+    return await page.locator("input[name='ano']").count() > 0 and await page.locator("input[name='mes']").count() > 0
 
-    ano_input = page.locator("input[name='ano']").first
-    mes_input = page.locator("input[name='mes']").first
-    if await ano_input.count() == 0 or await mes_input.count() == 0:
-        logger.info("ASSIM: formulário mês/ano não encontrado; não há o que submeter.")
-        return False
 
+async def _submit_assim_period_with_script(page, op: Dict[str, Any]) -> Dict[str, Any]:
     periodo = _infer_assim_period(op)
     mes = periodo["mes"]
     ano = periodo["ano"]
-    logger.info("ASSIM: resultado não apareceu; preenchendo fallback de período com mes=%s ano=%s", mes, ano)
+    logger.info("ASSIM: preenchendo Mês/Ano de forma direta: mes=%s ano=%s", mes, ano)
 
-    await ano_input.fill(ano, timeout=5000)
-    await mes_input.fill(mes, timeout=5000)
+    result = await page.evaluate(
+        """
+        async ({mes, ano}) => {
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          const visible = (el) => !!(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length));
+          const setValue = (selector, value) => {
+            const el = document.querySelector(selector);
+            if (!el) return false;
+            el.focus();
+            el.value = value;
+            el.setAttribute('value', value);
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            el.blur();
+            return true;
+          };
 
-    submit_selector = (
-        "input[type='submit'], button[type='submit'], button:has-text('ENVIAR'), "
-        "button:has-text('Enviar'), input[value*='ENVIAR'], input[value*='Enviar'], "
-        "a:has-text('ENVIAR'), a:has-text('Enviar')"
+          const setAno = setValue('input[name="ano"]', ano);
+          const setMes = setValue('input[name="mes"]', mes);
+          await sleep(250);
+
+          const candidates = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"], input[type="image"], a, [onclick]'));
+          const enviar = candidates.find((el) => {
+            const text = `${el.innerText || ''} ${el.value || ''} ${el.title || ''} ${el.getAttribute('onclick') || ''}`.toUpperCase();
+            return visible(el) && (text.includes('ENVIAR') || text.includes('BOLETO'));
+          });
+
+          if (enviar) {
+            enviar.click();
+            return {setAno, setMes, action: 'clicked', tag: enviar.tagName, text: (enviar.innerText || enviar.value || enviar.title || '').trim(), onclick: enviar.getAttribute('onclick'), html: (enviar.outerHTML || '').slice(0, 300)};
+          }
+
+          const mesEl = document.querySelector('input[name="mes"]');
+          if (mesEl) {
+            mesEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+            mesEl.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+            await sleep(300);
+          }
+
+          const form = document.querySelector('input[name="ano"]')?.closest('form') || document.querySelector('input[name="mes"]')?.closest('form') || document.querySelector('form');
+          if (form) {
+            if (typeof form.requestSubmit === 'function') form.requestSubmit();
+            else form.submit();
+            return {setAno, setMes, action: 'formSubmit', formName: form.getAttribute('name'), formAction: form.getAttribute('action'), formMethod: form.getAttribute('method')};
+          }
+
+          return {setAno, setMes, action: 'noSubmitTarget'};
+        }
+        """,
+        {"mes": mes, "ano": ano},
     )
-    btn = await _first_visible_locator(page, submit_selector, timeout_ms=8000)
-    if btn is not None:
-        await btn.click(timeout=5000, force=True)
-    else:
-        await page.evaluate(
-            """
-            () => {
-              const form = document.querySelector('form[name="formBoleto"], form[action*="boleto"], form');
-              if (form) form.submit();
-            }
-            """
-        )
-
+    logger.info("ASSIM: script de consulta executado: %s", result)
     try:
         await page.wait_for_load_state("networkidle", timeout=30000)
     except Exception:
-        logger.info("ASSIM: networkidle após enviar período não estabilizou; continuando.")
-    await page.wait_for_timeout(3000)
-    logger.info("ASSIM: período enviado; url=%s body=%s", page.url, (await _body_text(page, 700)).replace("\n", " ")[:700])
-    return await page.locator(ASSIM_RESULT_SELECTOR).count() > 0
+        logger.info("ASSIM: networkidle após consulta não estabilizou; continuando.")
+    await page.wait_for_timeout(3500)
+    return result
 
 
 async def _select_assim_first_boleto(page) -> bool:
@@ -409,14 +444,14 @@ async def _select_assim_first_boleto(page) -> bool:
         await radio.check(timeout=5000, force=True)
     except Exception:
         await radio.click(timeout=5000, force=True)
-    await page.wait_for_timeout(1000)
+    await page.wait_for_timeout(800)
     logger.info("ASSIM: boleto selecionado com #opcaoBoleto.")
     return True
 
 
 async def _log_assim_action_buttons(page, label: str = "") -> int:
     try:
-        details = await page.locator(ASSIM_ACTIONS_SELECTOR).evaluate_all(
+        details = await page.locator("ul.botoes-acoes a, .botoes-acoes a").evaluate_all(
             "els => els.slice(0, 12).map((e, i) => ({i, text:(e.innerText || '').trim(), title:e.getAttribute('title'), onclick:e.getAttribute('onclick'), href:e.getAttribute('href'), cls:e.className, visible:!!(e.offsetWidth || e.offsetHeight || e.getClientRects().length), html:(e.outerHTML || '').slice(0, 220)}))"
         )
         logger.info("ASSIM: botoes-acoes %s action_count=%s details=%s", label, len(details), details)
@@ -434,49 +469,43 @@ async def _save_download(download, payload: RunRpaPayload, idx: int, label: str)
 
 
 async def _try_assim_download(page, payload: RunRpaPayload, idx: int, download_timeout: int) -> str:
-    logger.info("ASSIM: usando página atual pós-login: %s", page.url)
+    logger.info("ASSIM: fluxo objetivo iniciado. url_atual=%s", page.url)
     await _close_known_modals(page)
 
     if "area2=2via_boleto" not in page.url:
-        logger.info("ASSIM: navegando para página interna de 2ª via.")
+        logger.info("ASSIM: navegando direto para página interna de 2ª via.")
         await page.goto(ASSIM_BOL_PAGE, wait_until="domcontentloaded", timeout=60000)
 
     try:
-        await page.wait_for_load_state("networkidle", timeout=30000)
+        await page.wait_for_load_state("networkidle", timeout=25000)
     except Exception:
-        logger.info("ASSIM: networkidle não estabilizou; continuando.")
+        logger.info("ASSIM: networkidle na página interna não estabilizou; continuando.")
 
-    await page.wait_for_timeout(3000)
+    await page.wait_for_timeout(1500)
     await _close_known_modals(page)
 
-    resultado_ok = await _wait_assim_resultado_boleto(page, timeout_ms=15000)
-    if not resultado_ok:
-        logger.warning("ASSIM: resultado-boleto não apareceu direto; verificando se a página exige mês/ano.")
-        resultado_ok = await _submit_assim_boleto_period_if_needed(page, payload.operadora)
-        if not resultado_ok:
-            resultado_ok = await _wait_assim_resultado_boleto(page, timeout_ms=45000)
+    if await page.locator(ASSIM_RESULT_SELECTOR).count() == 0 and await _assim_has_period_form(page):
+        await _submit_assim_period_with_script(page, payload.operadora)
+
+    resultado_ok = await _wait_assim_resultado_boleto(page, timeout_ms=45000)
+    if not resultado_ok and await _assim_has_period_form(page):
+        logger.warning("ASSIM: primeira tentativa não retornou tabela; repetindo consulta com script direto uma vez.")
+        await _submit_assim_period_with_script(page, payload.operadora)
+        resultado_ok = await _wait_assim_resultado_boleto(page, timeout_ms=30000)
 
     if not resultado_ok:
         debug = await _debug_page_state(page)
         logger.error("ASSIM: resultado-boleto não apareceu. Diagnóstico: %s", debug)
-        raise HTTPException(status_code=422, detail={
-            "message": "ASSIM: a tabela #resultado-boleto não apareceu após login/consulta.",
-            "orientacao": "A página exibiu a tela de Mês/Ano e não retornou a tabela de boleto.",
-            "diagnostico": debug,
-        })
+        raise HTTPException(status_code=422, detail={"message": "ASSIM: a consulta de Mês/Ano não retornou a tabela #resultado-boleto.", "orientacao": "Verifique se existe boleto para o mês/ano configurado ou se o portal alterou o botão ENVIAR.", "diagnostico": debug})
 
     await _select_assim_first_boleto(page)
-    await _log_assim_action_buttons(page, "na página interna/resultados")
+    await _log_assim_action_buttons(page, "após consulta")
 
     button = await _first_visible_locator(page, ASSIM_DOWNLOAD_SELECTOR, timeout_ms=30000)
     if button is None:
         debug = await _debug_page_state(page)
         logger.error("ASSIM: botão Baixar PDF não encontrado. Diagnóstico: %s", debug)
-        raise HTTPException(status_code=422, detail={
-            "message": "ASSIM: botão Baixar PDF/downloadBoleto não encontrado.",
-            "selector_usado": ASSIM_DOWNLOAD_SELECTOR,
-            "diagnostico": debug,
-        })
+        raise HTTPException(status_code=422, detail={"message": "ASSIM: botão Baixar PDF/downloadBoleto não encontrado após selecionar o boleto.", "selector_usado": ASSIM_DOWNLOAD_SELECTOR, "diagnostico": debug})
 
     try:
         meta = await button.evaluate("e => ({title:e.getAttribute('title'), onclick:e.getAttribute('onclick'), href:e.getAttribute('href'), html:(e.outerHTML || '').slice(0, 220)})")
@@ -612,7 +641,7 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
                 await page.wait_for_load_state("networkidle", timeout=60000)
             except Exception:
                 logger.info("Networkidle após login não estabilizou; continuando.")
-            await page.wait_for_timeout(int(op.get("loginWaitMs", 10000)))
+            await page.wait_for_timeout(int(op.get("loginWaitMs", 7000)))
             logger.info("Login concluído, aguardando carregamento")
 
             await _run_optional_steps(page, op.get("steps") or [])
