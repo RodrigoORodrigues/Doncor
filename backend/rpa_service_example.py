@@ -394,6 +394,35 @@ async def _log_assim_action_buttons(page, label: str = "") -> int:
         return 0
 
 
+async def _wait_assim_resultado_boleto(page, timeout_ms: int = 60000) -> bool:
+    deadline = time.time() + timeout_ms / 1000
+
+    while time.time() < deadline:
+        await _close_known_modals(page)
+
+        resultado_count = await page.locator(
+            "#resultado-boleto, "
+            "#opcaoBoleto, "
+            "input[name='opcaoBoleto'], "
+            "a[onclick*='downloadBoleto']"
+        ).count()
+
+        if resultado_count > 0:
+            logger.info("ASSIM: resultado do boleto encontrado.")
+            return True
+
+        body = await _body_text(page, 700)
+        logger.info(
+            "ASSIM: aguardando resultado do boleto. url=%s body=%s",
+            page.url,
+            body.replace("\n", " ")[:700],
+        )
+
+        await page.wait_for_timeout(2500)
+
+    return False
+
+
 async def _save_download(download, payload: RunRpaPayload, idx: int, label: str) -> str:
     path = _new_file_path(payload, idx)
     await download.save_as(path)
@@ -402,45 +431,129 @@ async def _save_download(download, payload: RunRpaPayload, idx: int, label: str)
 
 
 async def _try_assim_download(page, payload: RunRpaPayload, idx: int, download_timeout: int) -> Optional[str]:
-    logger.info("ASSIM: indo obrigatoriamente para a página interna correta: %s", ASSIM_BOL_PAGE)
-    await page.goto(ASSIM_BOL_PAGE, wait_until="domcontentloaded", timeout=60000)
+    logger.info("ASSIM: usando página atual pós-login: %s", page.url)
+
+    await _close_known_modals(page)
+
+    # Não preencher mês/ano e não clicar em ENVIAR.
+    # A página correta deve mostrar #resultado-boleto, #opcaoBoleto e downloadBoleto().
+    if "area2=2via_boleto" not in page.url:
+        logger.info("ASSIM: navegando para página interna de 2ª via.")
+        await page.goto(ASSIM_BOL_PAGE, wait_until="domcontentloaded", timeout=60000)
+
     try:
         await page.wait_for_load_state("networkidle", timeout=30000)
     except Exception:
-        logger.info("ASSIM: networkidle na página interna não estabilizou; continuando.")
+        logger.info("ASSIM: networkidle não estabilizou; continuando.")
+
+    await page.wait_for_timeout(3000)
     await _close_known_modals(page)
-    await page.wait_for_timeout(2500)
-    await _select_assim_first_boleto(page)
-    await _log_assim_action_buttons(page, "na página interna")
 
-    button = await _first_visible_locator(page, ASSIM_DOWNLOAD_SELECTOR, timeout_ms=15000)
-    if button is not None:
+    resultado_ok = await _wait_assim_resultado_boleto(page, timeout_ms=60000)
+
+    if not resultado_ok:
+        debug = await _debug_page_state(page)
+        logger.error("ASSIM: resultado-boleto não apareceu. Diagnóstico: %s", debug)
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "ASSIM: a tabela #resultado-boleto não apareceu após o login.",
+                "orientacao": "Não preencher mês/ano. Verificar se o login caiu na página correta de 2ª via.",
+                "diagnostico": debug,
+            },
+        )
+
+    radio_selector = (
+        "#resultado-boleto input[name='opcaoBoleto'], "
+        "#opcaoBoleto, "
+        "input[name='opcaoBoleto']"
+    )
+
+    radio = page.locator(radio_selector).first
+
+    if await radio.count() > 0:
         try:
-            meta = await button.evaluate(
-                "e => ({title:e.getAttribute('title'), onclick:e.getAttribute('onclick'), href:e.getAttribute('href'), html:(e.outerHTML || '').slice(0, 220)})"
-            )
-            logger.info("ASSIM: botão Baixar PDF encontrado: %s", meta)
+            await radio.check(timeout=5000, force=True)
         except Exception:
-            pass
-        try:
-            async with page.expect_download(timeout=download_timeout) as download_info:
-                await button.click(timeout=10000, force=True)
-            return await _save_download(await download_info.value, payload, idx, "botão Baixar PDF do ASSIM")
-        except Exception as exc:
-            logger.warning("ASSIM: clique no botão Baixar PDF não gerou download: %s", exc)
+            await radio.click(timeout=5000, force=True)
 
-    # Fallback direto pela função global vista no HTML: onclick="downloadBoleto();"
-    for expression in ["downloadBoleto()", "window.downloadBoleto && window.downloadBoleto()"]:
-        try:
+        logger.info("ASSIM: boleto selecionado com #opcaoBoleto.")
+    else:
+        logger.warning("ASSIM: rádio #opcaoBoleto não encontrado, tentando baixar mesmo assim.")
+
+    await page.wait_for_timeout(1000)
+    await _log_assim_action_buttons(page, "na página interna/resultados")
+
+    download_selector = (
+        "ul.botoes-acoes a[onclick*='downloadBoleto'], "
+        ".botoes-acoes a[onclick*='downloadBoleto'], "
+        "a[onclick*='downloadBoleto'][title*='Baixar PDF'], "
+        "a[title*='Baixar PDF']"
+    )
+
+    button = await _first_visible_locator(page, download_selector, timeout_ms=30000)
+
+    if button is None:
+        debug = await _debug_page_state(page)
+        logger.error("ASSIM: botão Baixar PDF não encontrado. Diagnóstico: %s", debug)
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "ASSIM: botão Baixar PDF/downloadBoleto não encontrado.",
+                "selector_usado": download_selector,
+                "diagnostico": debug,
+            },
+        )
+
+    try:
+        meta = await button.evaluate(
+            "e => ({title:e.getAttribute('title'), onclick:e.getAttribute('onclick'), href:e.getAttribute('href'), html:(e.outerHTML || '').slice(0, 220)})"
+        )
+        logger.info("ASSIM: botão Baixar PDF encontrado: %s", meta)
+    except Exception:
+        pass
+
+    try:
+        async with page.expect_download(timeout=download_timeout) as download_info:
+            await button.click(timeout=10000, force=True)
+
+        return await _save_download(
+            await download_info.value,
+            payload,
+            idx,
+            "botão Baixar PDF do ASSIM"
+        )
+
+    except Exception as exc:
+        logger.warning("ASSIM: clique no botão Baixar PDF não gerou download: %s", exc)
+
+    try:
+        has_function = await page.evaluate("() => typeof window.downloadBoleto === 'function'")
+
+        if has_function:
             async with page.expect_download(timeout=download_timeout) as download_info:
-                await page.evaluate(expression)
-            return await _save_download(await download_info.value, payload, idx, f"função JavaScript {expression}")
-        except Exception as exc:
-            logger.info("ASSIM: %s não gerou download: %s", expression, exc)
+                await page.evaluate("() => window.downloadBoleto()")
+
+            return await _save_download(
+                await download_info.value,
+                payload,
+                idx,
+                "função JavaScript downloadBoleto"
+            )
+
+    except Exception as exc:
+        logger.warning("ASSIM: função downloadBoleto não gerou download: %s", exc)
 
     debug = await _debug_page_state(page)
-    logger.error("ASSIM: não conseguiu acionar downloadBoleto. Diagnóstico: %s", debug)
-    return None
+    logger.error("ASSIM: não conseguiu baixar o boleto. Diagnóstico: %s", debug)
+
+    raise HTTPException(
+        status_code=404,
+        detail={
+            "message": "ASSIM: tabela encontrada, mas o downloadBoleto não gerou arquivo.",
+            "diagnostico": debug,
+        },
+    )
 
 
 async def _save_response_if_file(response, payload: RunRpaPayload, idx: int, source: str, extra: str = "") -> Optional[str]:
