@@ -594,13 +594,8 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
         page = await context.new_page()
         try:
             logger.info("Iniciando fluxo RPA para operadora: %s", op.get("nome"))
-<<<<<<< HEAD
-            await page.goto(portal_url, wait_until="domcontentloaded", timeout=60000)
-            logger.info("Portal carregado: %s", portal_url)
-=======
             await page.goto(op.get("url"), wait_until="domcontentloaded", timeout=60000)
             logger.info("Portal carregado: %s", op.get("url"))
->>>>>>> f3edadf974db49e2a7cd8e583d26210d6434f408
 
             await _wait_for_login_screen(page, op, user_selector)
             await _run_optional_steps(page, op.get("preLoginSteps") or [])
