@@ -706,51 +706,11 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
         try:
             logger.info("Iniciando fluxo RPA para operadora: %s", op.get("nome"))
             await page.goto(portal_url, wait_until="domcontentloaded", timeout=60000)
-<<<<<<< HEAD
-            await page.fill('input[name="username"], input#username, input[type="email"]', username)
-            await page.fill('input[name="password"], input#password, input[type="password"]', password)
-            await page.click('button[type="submit"], button:has-text("Entrar"), button:has-text("Login")')
-            await page.wait_for_timeout(1500)  # Reduzido: tempo mínimo de estabilização
-
-            # Prioridade otimizada: seletores mais específicos primeiro, filtra visíveis
-            selectors = [
-                ('a[onclick*="downloadBoleto"], button[onclick*="downloadBoleto"]', "onclick direto"),
-                ('a[title*="Baixar PDF"], a[title*="Download"]', "título PDF"),
-                ('a[href*="boleto"], a.download-boleto', "href genérico"),
-            ]
-
-            for selector, selector_type in selectors:
-                try:
-                    # Filtra apenas elementos visíveis
-                    links = await page.locator(f"{selector}:visible").all()
-                    if links:
-                        for idx, link in enumerate(links[:2]):  # Máximo 2 por seletor
-                            try:
-                                # Tenta via expect_download primeiro (mais rápido)
-                                async with page.expect_download(timeout=10000) as download_info:
-                                    await link.click()
-                                download = await download_info.value
-                                fd, path = tempfile.mkstemp(prefix=f"boleto_{payload.apolice_id}_{idx}_", suffix=".pdf")
-                                os.close(fd)
-                                await download.save_as(path)
-                                downloaded_files.append(path)
-                            except Exception:
-                                # Fallback: tenta chamar função JS se existir
-                                try:
-                                    onclick_attr = await link.get_attribute("onclick")
-                                    if onclick_attr and "downloadBoleto" in onclick_attr:
-                                        await page.evaluate("window.downloadBoleto()")
-                                except Exception:
-                                    pass
-                except Exception:
-                    pass
-=======
             logger.info("Portal carregado: %s", portal_url)
 
             await _wait_for_login_screen(page, op, user_selector)
             await _run_optional_steps(page, op.get("preLoginSteps") or [])
             await _close_known_modals(page)
->>>>>>> cb237224259387aa6ebd0b22a3a5f15d11be7efd
 
             await _fill_first(page, user_selector, username, "usuário", timeout_ms=int(op.get("fieldTimeoutMs", 90000)))
             logger.info("Usuário preenchido")
