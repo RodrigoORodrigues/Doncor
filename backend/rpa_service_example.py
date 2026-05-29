@@ -67,17 +67,40 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
             await page.fill('input[name="username"], input#username, input[type="email"]', username)
             await page.fill('input[name="password"], input#password, input[type="password"]', password)
             await page.click('button[type="submit"], button:has-text("Entrar"), button:has-text("Login")')
-            await page.wait_for_timeout(3000)
+            await page.wait_for_timeout(1500)  # Reduzido: tempo mínimo de estabilização
 
-            links = await page.locator('a[href*="boleto"], a.download-boleto').all()
-            for idx, link in enumerate(links[:3]):
-                async with page.expect_download(timeout=20000) as download_info:
-                    await link.click()
-                download = await download_info.value
-                fd, path = tempfile.mkstemp(prefix=f"boleto_{payload.apolice_id}_{idx}_", suffix=".pdf")
-                os.close(fd)
-                await download.save_as(path)
-                downloaded_files.append(path)
+            # Prioridade otimizada: seletores mais específicos primeiro, filtra visíveis
+            selectors = [
+                ('a[onclick*="downloadBoleto"], button[onclick*="downloadBoleto"]', "onclick direto"),
+                ('a[title*="Baixar PDF"], a[title*="Download"]', "título PDF"),
+                ('a[href*="boleto"], a.download-boleto', "href genérico"),
+            ]
+
+            for selector, selector_type in selectors:
+                try:
+                    # Filtra apenas elementos visíveis
+                    links = await page.locator(f"{selector}:visible").all()
+                    if links:
+                        for idx, link in enumerate(links[:2]):  # Máximo 2 por seletor
+                            try:
+                                # Tenta via expect_download primeiro (mais rápido)
+                                async with page.expect_download(timeout=10000) as download_info:
+                                    await link.click()
+                                download = await download_info.value
+                                fd, path = tempfile.mkstemp(prefix=f"boleto_{payload.apolice_id}_{idx}_", suffix=".pdf")
+                                os.close(fd)
+                                await download.save_as(path)
+                                downloaded_files.append(path)
+                            except Exception:
+                                # Fallback: tenta chamar função JS se existir
+                                try:
+                                    onclick_attr = await link.get_attribute("onclick")
+                                    if onclick_attr and "downloadBoleto" in onclick_attr:
+                                        await page.evaluate("window.downloadBoleto()")
+                                except Exception:
+                                    pass
+                except Exception:
+                    pass
 
             if not downloaded_files:
                 fd, path = tempfile.mkstemp(prefix=f"boleto_{payload.apolice_id}_", suffix=".pdf")
