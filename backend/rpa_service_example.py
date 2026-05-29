@@ -79,15 +79,22 @@ NON_BOLETO_TERMS = (
 )
 
 # Botão real mostrado no portal ASSIM:
-# <a href="javascript:;" onclick="downloadBoleto();" title="Baixar PDF"></a>
+# <ul class="botoes-acoes"><li>print</li><li>email</li><li><a onclick="downloadBoleto()" title="Baixar PDF"></a></li>...</ul>
 DOWNLOAD_BUTTON_SELECTOR = (
+    "ul.botoes-acoes li:nth-child(3) a, "
+    ".botoes-acoes li:nth-child(3) a, "
     "a[title*='Baixar PDF'], "
+    "a[title*='Baixar'], "
+    "a[title*='Download'], "
     "a[onclick*='downloadBoleto'], "
+    "a[onclick*='download'], "
     "button[onclick*='downloadBoleto'], "
     "[title*='Baixar PDF'], "
     "[onclick*='downloadBoleto']"
 )
 
+ASSIM_ACTION_DOWNLOAD_SELECTOR = "ul.botoes-acoes li:nth-child(3) a, .botoes-acoes li:nth-child(3) a"
+ASSIM_ACTIONS_SELECTOR = "ul.botoes-acoes a, .botoes-acoes a"
 ASSIM_BOL_PAGE = "https://assim.com.br/site/?area=acesso-empresa&area2=2via_boleto"
 
 
@@ -183,6 +190,10 @@ def _is_assim(op: Dict[str, Any]) -> bool:
     return "assim" in nome or "assim.com.br" in url
 
 
+def _is_assim_internal_page(page) -> bool:
+    return "assim.com.br" in (page.url or "").lower() and "area2=2via_boleto" in (page.url or "").lower()
+
+
 def _is_boleto_candidate(text: str = "", href: str = "", extra: str = "") -> bool:
     haystack = f"{text or ''} {href or ''} {extra or ''}".lower()
     if any(term in haystack for term in NON_BOLETO_TERMS):
@@ -192,7 +203,7 @@ def _is_boleto_candidate(text: str = "", href: str = "", extra: str = "") -> boo
 
 def _is_real_download_meta(meta: Dict[str, str]) -> bool:
     haystack = f"{meta.get('title', '')} {meta.get('onclick', '')} {meta.get('aria', '')} {meta.get('cls', '')} {meta.get('text', '')}".lower()
-    return "downloadboleto" in haystack or "baixar pdf" in haystack or "baixar boleto" in haystack
+    return "downloadboleto" in haystack or "baixar pdf" in haystack or "baixar boleto" in haystack or "download" in haystack
 
 
 def _is_external_bank_meta(meta: Dict[str, str]) -> bool:
@@ -238,7 +249,7 @@ async def _debug_page_state(page) -> Dict[str, Any]:
             frame_info["buttonsError"] = str(exc)
         try:
             frame_info["links"] = await frame.locator("a").evaluate_all(
-                "els => els.slice(0, 150).map((e, i) => ({i, text:(e.innerText || '').trim(), href:e.href, id:e.id, title:e.getAttribute('title'), onclick:e.getAttribute('onclick'), cls:e.className}))"
+                "els => els.slice(0, 150).map((e, i) => ({i, text:(e.innerText || '').trim(), href:e.href, id:e.id, title:e.getAttribute('title'), onclick:e.getAttribute('onclick'), cls:e.className, html:(e.outerHTML || '').slice(0, 250)}))"
             )
         except Exception as exc:
             frame_info["linksError"] = str(exc)
@@ -319,7 +330,7 @@ async def _locator_meta(locator) -> Dict[str, str]:
     def clean(value: Optional[str]) -> str:
         return str(value or "").strip()
 
-    meta: Dict[str, str] = {"text": "", "href": "", "title": "", "onclick": "", "aria": "", "cls": "", "visible": "false"}
+    meta: Dict[str, str] = {"text": "", "href": "", "title": "", "onclick": "", "aria": "", "cls": "", "html": "", "visible": "false"}
     try:
         meta["visible"] = "true" if await locator.is_visible(timeout=500) else "false"
     except Exception:
@@ -333,6 +344,10 @@ async def _locator_meta(locator) -> Dict[str, str]:
             meta[key] = clean(await locator.get_attribute(attr))
         except Exception:
             pass
+    try:
+        meta["html"] = clean(await locator.evaluate("el => (el.outerHTML || '').slice(0, 350)"))
+    except Exception:
+        pass
     return meta
 
 
@@ -425,6 +440,47 @@ async def _wait_for_login_screen(page, op: Dict[str, Any], user_selector: str) -
     await _close_known_modals(page)
 
 
+async def _select_assim_first_boleto(page) -> bool:
+    if not _is_assim_internal_page(page):
+        return False
+
+    radio_selectors = [
+        "table input[type='radio']:visible",
+        ".table input[type='radio']:visible",
+        "input[type='radio'][name*='boleto']:visible",
+        "input[type='radio'][name*='titulo']:visible",
+        "input[type='radio']:visible",
+    ]
+    for selector in radio_selectors:
+        try:
+            locator = page.locator(selector).first
+            if await locator.count() > 0 and await locator.is_visible(timeout=1000):
+                try:
+                    await locator.check(timeout=3000, force=True)
+                except Exception:
+                    await locator.click(timeout=3000, force=True)
+                logger.info("ASSIM: primeira parcela/boleto selecionada com seletor: %s", selector)
+                await page.wait_for_timeout(1200)
+                return True
+        except Exception:
+            pass
+    return False
+
+
+async def _log_assim_action_buttons(page, label: str = "") -> int:
+    try:
+        action_count = await page.locator(ASSIM_ACTIONS_SELECTOR).count()
+        download_count = await page.locator(ASSIM_ACTION_DOWNLOAD_SELECTOR).count()
+        details = await page.locator(ASSIM_ACTIONS_SELECTOR).evaluate_all(
+            "els => els.slice(0, 12).map((e, i) => ({i, text:(e.innerText || '').trim(), title:e.getAttribute('title'), onclick:e.getAttribute('onclick'), href:e.getAttribute('href'), cls:e.className, visible:!!(e.offsetWidth || e.offsetHeight || e.getClientRects().length), html:(e.outerHTML || '').slice(0, 180)}))"
+        )
+        logger.info("ASSIM: botoes-acoes %s action_count=%s download_nth_count=%s details=%s", label, action_count, download_count, details)
+        return action_count
+    except Exception as exc:
+        logger.info("ASSIM: falha ao mapear botoes-acoes %s: %s", label, exc)
+        return 0
+
+
 async def _prepare_assim_boleto_page(page, op: Dict[str, Any]) -> None:
     if not _is_assim(op):
         return
@@ -434,8 +490,9 @@ async def _prepare_assim_boleto_page(page, op: Dict[str, Any]) -> None:
 
     try:
         found = await page.locator(DOWNLOAD_BUTTON_SELECTOR).count()
+        actions = await _log_assim_action_buttons(page, "antes da navegação interna")
         logger.info("ASSIM: botões Baixar PDF antes da navegação interna: %s", found)
-        if found:
+        if found or actions:
             return
     except Exception:
         pass
@@ -453,20 +510,23 @@ async def _prepare_assim_boleto_page(page, op: Dict[str, Any]) -> None:
 
     for attempt in range(1, 5):
         await _close_known_modals(page)
+        await _select_assim_first_boleto(page)
         await page.wait_for_timeout(2500)
         try:
             direct_count = await page.locator(DOWNLOAD_BUTTON_SELECTOR).count()
+            action_count = await _log_assim_action_buttons(page, f"tentativa {attempt}")
             func_exists = await page.evaluate("() => typeof window.downloadBoleto === 'function'")
-            body = await _body_text(page, 800)
+            body = await _body_text(page, 1000)
             logger.info(
-                "ASSIM: tentativa %s na página interna. url=%s download_buttons=%s downloadBoleto_fn=%s body=%s",
+                "ASSIM: tentativa %s na página interna. url=%s download_buttons=%s action_buttons=%s downloadBoleto_fn=%s body=%s",
                 attempt,
                 page.url,
                 direct_count,
+                action_count,
                 func_exists,
-                body.replace("\n", " ")[:300],
+                body.replace("\n", " ")[:450],
             )
-            if direct_count or func_exists:
+            if direct_count or action_count or func_exists:
                 return
         except Exception as exc:
             logger.info("ASSIM: diagnóstico da página interna falhou na tentativa %s: %s", attempt, exc)
@@ -547,26 +607,51 @@ async def _try_javascript_download(page, payload: RunRpaPayload, idx: int, downl
     return None
 
 
+async def _try_assim_nth_download_button(page, payload: RunRpaPayload, idx: int, download_timeout: int) -> Optional[str]:
+    if not _is_assim_internal_page(page):
+        return None
+    await _select_assim_first_boleto(page)
+    selector = ASSIM_ACTION_DOWNLOAD_SELECTOR
+    try:
+        locator = page.locator(selector).first
+        if await locator.count() == 0:
+            return None
+        meta = await _locator_meta(locator)
+        logger.info("ASSIM: tentando botão de ação 3 como download. meta=%s", meta)
+        async with page.expect_download(timeout=download_timeout) as download_info:
+            await locator.click(timeout=10000, force=True)
+        download = await download_info.value
+        path = _new_file_path(payload, idx)
+        await download.save_as(path)
+        logger.info("Boleto %s baixado pelo 3º botão .botoes-acoes: %s", idx + 1, path)
+        return path
+    except Exception as exc:
+        logger.info("ASSIM: 3º botão .botoes-acoes não gerou download: %s", exc)
+    return None
+
+
 async def _download_boleto_candidate(page, context, locator, payload: RunRpaPayload, idx: int, download_timeout: int, visited: Set[str]) -> Optional[str]:
     await _close_known_modals(page)
     meta = await _locator_meta(locator)
     full_href = urljoin(page.url, meta["href"]) if meta["href"] else ""
-    meta_extra = f"{meta['title']} {meta['onclick']} {meta['aria']} {meta['cls']} visible={meta['visible']}"
+    meta_extra = f"{meta['title']} {meta['onclick']} {meta['aria']} {meta['cls']} visible={meta['visible']} html={meta.get('html', '')}"
+    assim_action = _is_assim_internal_page(page) and meta.get("href", "").startswith("javascript") and meta.get("visible") == "true"
     logger.info(
-        "Candidato boleto %s: visible=%s text=%s href=%s title=%s onclick=%s",
+        "Candidato boleto %s: visible=%s text=%s href=%s title=%s onclick=%s html=%s",
         idx + 1,
         meta["visible"],
         meta["text"][:120],
         meta["href"],
         meta["title"],
         meta["onclick"],
+        meta.get("html", "")[:180],
     )
 
     if _is_external_bank_meta(meta) and not _is_real_download_meta(meta):
         logger.info("Candidato %s ignorado: link externo Bradesco/instrução, não é botão Baixar PDF do ASSIM.", idx + 1)
         return None
 
-    if not _is_boleto_candidate(text=meta["text"], href=full_href, extra=meta_extra):
+    if not assim_action and not _is_boleto_candidate(text=meta["text"], href=full_href, extra=meta_extra):
         logger.info("Candidato %s ignorado por não parecer boleto/fatura.", idx + 1)
         return None
 
@@ -616,61 +701,70 @@ async def _download_boleto_candidate(page, context, locator, payload: RunRpaPayl
 
 async def _collect_candidates(page, selector: str, label: str) -> List[Tuple[int, Any, Dict[str, str]]]:
     collected: List[Tuple[int, Any, Dict[str, str]]] = []
-    try:
-        locators = await page.locator(selector).all()
-    except Exception as exc:
-        logger.info("Seletor %s não retornou candidatos: %s", label, exc)
-        return collected
+    targets = [("page", page)] + [(f"frame:{i}", frame) for i, frame in enumerate(page.frames)]
 
-    for pos, locator in enumerate(locators):
-        meta = await _locator_meta(locator)
-        visible = meta.get("visible") == "true"
-        real_download = _is_real_download_meta(meta)
-        external_bank = _is_external_bank_meta(meta)
-        boleto_like = _is_boleto_candidate(text=meta.get("text", ""), href=meta.get("href", ""), extra=f"{meta.get('title','')} {meta.get('onclick','')} {meta.get('aria','')} {meta.get('cls','')}")
-        if external_bank and not real_download:
-            logger.info("Candidato ignorado [%s]: link externo Bradesco/instrução href=%s text=%s", label, meta.get("href", ""), meta.get("text", "")[:80])
+    for target_name, target in targets:
+        try:
+            locators = await target.locator(selector).all()
+        except Exception as exc:
+            logger.info("Seletor %s não retornou candidatos em %s: %s", label, target_name, exc)
             continue
-        if not boleto_like:
-            continue
-        score = 0
-        if real_download:
-            score += 1000
-        if visible:
-            score += 100
-        if label == "download_button":
-            score += 50
-        score -= pos
-        logger.info(
-            "Candidato mapeado [%s]: score=%s visible=%s real_download=%s text=%s title=%s onclick=%s href=%s",
-            label,
-            score,
-            visible,
-            real_download,
-            meta.get("text", "")[:80],
-            meta.get("title", ""),
-            meta.get("onclick", ""),
-            meta.get("href", ""),
-        )
-        collected.append((score, locator, meta))
+
+        for pos, locator in enumerate(locators):
+            meta = await _locator_meta(locator)
+            visible = meta.get("visible") == "true"
+            real_download = _is_real_download_meta(meta)
+            external_bank = _is_external_bank_meta(meta)
+            assim_action_download = label == "assim_action_download"
+            boleto_like = _is_boleto_candidate(text=meta.get("text", ""), href=meta.get("href", ""), extra=f"{meta.get('title','')} {meta.get('onclick','')} {meta.get('aria','')} {meta.get('cls','')} {meta.get('html','')}")
+            if external_bank and not real_download:
+                logger.info("Candidato ignorado [%s/%s]: link externo Bradesco/instrução href=%s text=%s", label, target_name, meta.get("href", ""), meta.get("text", "")[:80])
+                continue
+            if not boleto_like and not assim_action_download:
+                continue
+            score = 0
+            if assim_action_download:
+                score += 1500
+            if real_download:
+                score += 1000
+            if visible:
+                score += 100
+            if label == "download_button":
+                score += 50
+            score -= pos
+            logger.info(
+                "Candidato mapeado [%s/%s]: score=%s visible=%s real_download=%s text=%s title=%s onclick=%s href=%s html=%s",
+                label,
+                target_name,
+                score,
+                visible,
+                real_download,
+                meta.get("text", "")[:80],
+                meta.get("title", ""),
+                meta.get("onclick", ""),
+                meta.get("href", ""),
+                meta.get("html", "")[:120],
+            )
+            collected.append((score, locator, meta))
     return collected
 
 
 async def _find_boleto_candidates(page, configured_selector: str):
     all_candidates: List[Tuple[int, Any, Dict[str, str]]] = []
+    all_candidates.extend(await _collect_candidates(page, ASSIM_ACTION_DOWNLOAD_SELECTOR, "assim_action_download"))
     all_candidates.extend(await _collect_candidates(page, DOWNLOAD_BUTTON_SELECTOR, "download_button"))
     all_candidates.extend(await _collect_candidates(page, configured_selector, "configured"))
 
     seen_keys: Set[str] = set()
     unique_candidates: List[Tuple[int, Any, Dict[str, str]]] = []
     for score, locator, meta in sorted(all_candidates, key=lambda item: item[0], reverse=True):
-        key = f"{meta.get('href','')}|{meta.get('title','')}|{meta.get('onclick','')}|{meta.get('text','')}|{meta.get('visible','')}"
+        key = f"{meta.get('href','')}|{meta.get('title','')}|{meta.get('onclick','')}|{meta.get('text','')}|{meta.get('visible','')}|{meta.get('html','')}"
         if key in seen_keys:
             continue
         seen_keys.add(key)
         unique_candidates.append((score, locator, meta))
 
-    used_selector = f"PRIORIDADE: {DOWNLOAD_BUTTON_SELECTOR} | FALLBACK: {configured_selector}"
+    used_selector = f"PRIORIDADE: {ASSIM_ACTION_DOWNLOAD_SELECTOR} | {DOWNLOAD_BUTTON_SELECTOR} | FALLBACK: {configured_selector}"
     logger.info("Encontrados %s candidato(s) ordenados de boleto. %s", len(unique_candidates), used_selector)
     return [locator for _score, locator, _meta in unique_candidates], used_selector
 
@@ -733,14 +827,19 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
 
             candidates, used_selector = await _find_boleto_candidates(page, configured_boleto_selector)
             if not candidates:
-                js_direct = None
                 if _is_assim(op):
-                    js_direct = await _try_javascript_download(page, payload, 0, int(op.get("downloadTimeoutMs", 45000)))
-                    if js_direct:
-                        downloaded_files.append(js_direct)
+                    nth_direct = await _try_assim_nth_download_button(page, payload, 0, int(op.get("downloadTimeoutMs", 45000)))
+                    if nth_direct:
+                        downloaded_files.append(nth_direct)
                 if not downloaded_files:
-                    debug = await _debug_page_state(page)
-                    raise HTTPException(status_code=404, detail={"message": "Nenhum botão/link de boleto encontrado.", "selector_usado": used_selector, "diagnostico": debug})
+                    js_direct = None
+                    if _is_assim(op):
+                        js_direct = await _try_javascript_download(page, payload, 0, int(op.get("downloadTimeoutMs", 45000)))
+                        if js_direct:
+                            downloaded_files.append(js_direct)
+                    if not downloaded_files:
+                        debug = await _debug_page_state(page)
+                        raise HTTPException(status_code=404, detail={"message": "Nenhum botão/link de boleto encontrado.", "selector_usado": used_selector, "diagnostico": debug})
 
             max_downloads = int(op.get("maxDownloads", 1))
             download_timeout = int(op.get("downloadTimeoutMs", 45000))
@@ -750,6 +849,11 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
                 file_path = await _download_boleto_candidate(page, context, candidate, payload, idx, download_timeout, visited_urls)
                 if file_path:
                     downloaded_files.append(file_path)
+
+            if not downloaded_files and _is_assim(op):
+                nth_direct = await _try_assim_nth_download_button(page, payload, 0, download_timeout)
+                if nth_direct:
+                    downloaded_files.append(nth_direct)
         except HTTPException:
             raise
         except Exception as e:
