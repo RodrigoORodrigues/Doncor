@@ -13,7 +13,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import urljoin
 
 # Caminho previsível para os navegadores no container Railway/Docker.
@@ -34,7 +34,6 @@ logger = logging.getLogger(__name__)
 
 _BROWSER_READY = False
 
-# Botões/links que indicam boleto real.
 BOLETO_TERMS = (
     "boleto",
     "downloadboleto",
@@ -53,7 +52,6 @@ BOLETO_TERMS = (
     "linha digitavel",
 )
 
-# PDFs institucionais que não podem ser salvos como boleto.
 NON_BOLETO_TERMS = (
     "programa_de_integridade",
     "programa-de-integridade",
@@ -80,6 +78,8 @@ NON_BOLETO_TERMS = (
     "integridade",
 )
 
+# Botão real mostrado no portal ASSIM:
+# <a href="javascript:;" onclick="downloadBoleto();" title="Baixar PDF"></a>
 DOWNLOAD_BUTTON_SELECTOR = (
     "a[title*='Baixar PDF'], "
     "a[onclick*='downloadBoleto'], "
@@ -182,6 +182,11 @@ def _is_boleto_candidate(text: str = "", href: str = "", extra: str = "") -> boo
     return any(term in haystack for term in BOLETO_TERMS)
 
 
+def _is_real_download_meta(meta: Dict[str, str]) -> bool:
+    haystack = f"{meta.get('title', '')} {meta.get('onclick', '')} {meta.get('aria', '')} {meta.get('cls', '')} {meta.get('text', '')}".lower()
+    return "downloadboleto" in haystack or "baixar pdf" in haystack or "baixar boleto" in haystack
+
+
 async def _body_text(page, limit: int = 2500) -> str:
     try:
         return (await page.locator("body").inner_text(timeout=4000))[:limit]
@@ -196,11 +201,11 @@ async def _debug_page_state(page) -> Dict[str, Any]:
     except Exception as exc:
         data["titleError"] = str(exc)
     try:
-        data["bodyText"] = await _body_text(page, 2000)
+        data["bodyText"] = await _body_text(page, 2500)
     except Exception as exc:
         data["bodyTextError"] = str(exc)
     try:
-        data["htmlStart"] = (await page.content())[:2000]
+        data["htmlStart"] = (await page.content())[:3000]
     except Exception as exc:
         data["htmlError"] = str(exc)
 
@@ -208,19 +213,19 @@ async def _debug_page_state(page) -> Dict[str, Any]:
         frame_info: Dict[str, Any] = {"index": idx, "url": frame.url, "inputs": [], "buttons": [], "links": []}
         try:
             frame_info["inputs"] = await frame.locator("input, textarea, [contenteditable='true']").evaluate_all(
-                "els => els.slice(0, 80).map((e, i) => ({i, tag:e.tagName, type:e.getAttribute('type'), id:e.id, name:e.getAttribute('name'), placeholder:e.getAttribute('placeholder'), aria:e.getAttribute('aria-label'), cls:e.className}))"
+                "els => els.slice(0, 100).map((e, i) => ({i, tag:e.tagName, type:e.getAttribute('type'), id:e.id, name:e.getAttribute('name'), placeholder:e.getAttribute('placeholder'), aria:e.getAttribute('aria-label'), cls:e.className}))"
             )
         except Exception as exc:
             frame_info["inputsError"] = str(exc)
         try:
             frame_info["buttons"] = await frame.locator("button, input[type='submit'], [role='button']").evaluate_all(
-                "els => els.slice(0, 80).map((e, i) => ({i, tag:e.tagName, text:(e.innerText || e.value || '').trim(), id:e.id, title:e.getAttribute('title'), onclick:e.getAttribute('onclick'), type:e.getAttribute('type'), cls:e.className}))"
+                "els => els.slice(0, 100).map((e, i) => ({i, tag:e.tagName, text:(e.innerText || e.value || '').trim(), id:e.id, title:e.getAttribute('title'), onclick:e.getAttribute('onclick'), type:e.getAttribute('type'), cls:e.className}))"
             )
         except Exception as exc:
             frame_info["buttonsError"] = str(exc)
         try:
             frame_info["links"] = await frame.locator("a").evaluate_all(
-                "els => els.slice(0, 100).map((e, i) => ({i, text:(e.innerText || '').trim(), href:e.href, id:e.id, title:e.getAttribute('title'), onclick:e.getAttribute('onclick'), cls:e.className}))"
+                "els => els.slice(0, 150).map((e, i) => ({i, text:(e.innerText || '').trim(), href:e.href, id:e.id, title:e.getAttribute('title'), onclick:e.getAttribute('onclick'), cls:e.className}))"
             )
         except Exception as exc:
             frame_info["linksError"] = str(exc)
@@ -301,7 +306,11 @@ async def _locator_meta(locator) -> Dict[str, str]:
     def clean(value: Optional[str]) -> str:
         return str(value or "").strip()
 
-    meta: Dict[str, str] = {"text": "", "href": "", "title": "", "onclick": "", "aria": "", "cls": ""}
+    meta: Dict[str, str] = {"text": "", "href": "", "title": "", "onclick": "", "aria": "", "cls": "", "visible": "false"}
+    try:
+        meta["visible"] = "true" if await locator.is_visible(timeout=500) else "false"
+    except Exception:
+        pass
     try:
         meta["text"] = clean(await locator.inner_text(timeout=1000))
     except Exception:
@@ -461,7 +470,6 @@ async def _try_download_url(context, url: str, payload: RunRpaPayload, idx: int,
 
 
 async def _try_javascript_download(page, payload: RunRpaPayload, idx: int, download_timeout: int) -> Optional[str]:
-    """Executa funções conhecidas de download quando o botão usa href=javascript:;."""
     for expression in ["downloadBoleto()"]:
         try:
             async with page.expect_download(timeout=download_timeout) as download_info:
@@ -480,10 +488,11 @@ async def _download_boleto_candidate(page, context, locator, payload: RunRpaPayl
     await _close_known_modals(page)
     meta = await _locator_meta(locator)
     full_href = urljoin(page.url, meta["href"]) if meta["href"] else ""
-    meta_extra = f"{meta['title']} {meta['onclick']} {meta['aria']} {meta['cls']}"
+    meta_extra = f"{meta['title']} {meta['onclick']} {meta['aria']} {meta['cls']} visible={meta['visible']}"
     logger.info(
-        "Candidato boleto %s: text=%s href=%s title=%s onclick=%s",
+        "Candidato boleto %s: visible=%s text=%s href=%s title=%s onclick=%s",
         idx + 1,
+        meta["visible"],
         meta["text"][:120],
         meta["href"],
         meta["title"],
@@ -499,8 +508,6 @@ async def _download_boleto_candidate(page, context, locator, payload: RunRpaPayl
         if file_path:
             return file_path
 
-    # Primeiro tenta o clique normal/forçado. Esse é o caminho correto para o ASSIM:
-    # <a href="javascript:;" onclick="downloadBoleto();" title="Baixar PDF"></a>
     try:
         async with page.expect_download(timeout=download_timeout) as download_info:
             await locator.click(timeout=10000, force=True)
@@ -514,7 +521,7 @@ async def _download_boleto_candidate(page, context, locator, payload: RunRpaPayl
     except Exception as exc:
         logger.warning("Falha no clique-download do candidato %s: %s", idx + 1, exc)
 
-    if "downloadboleto" in meta["onclick"].lower() or "downloadboleto" in full_href.lower() or "baixar pdf" in meta["title"].lower():
+    if _is_real_download_meta(meta):
         file_path = await _try_javascript_download(page, payload, idx, download_timeout)
         if file_path:
             return file_path
@@ -540,12 +547,64 @@ async def _download_boleto_candidate(page, context, locator, payload: RunRpaPayl
     return None
 
 
+async def _collect_candidates(page, selector: str, label: str) -> List[Tuple[int, Any, Dict[str, str]]]:
+    collected: List[Tuple[int, Any, Dict[str, str]]] = []
+    try:
+        locators = await page.locator(selector).all()
+    except Exception as exc:
+        logger.info("Seletor %s não retornou candidatos: %s", label, exc)
+        return collected
+
+    for pos, locator in enumerate(locators):
+        meta = await _locator_meta(locator)
+        visible = meta.get("visible") == "true"
+        real_download = _is_real_download_meta(meta)
+        boleto_like = _is_boleto_candidate(text=meta.get("text", ""), href=meta.get("href", ""), extra=f"{meta.get('title','')} {meta.get('onclick','')} {meta.get('aria','')} {meta.get('cls','')}")
+        if not boleto_like:
+            continue
+        score = 0
+        if real_download:
+            score += 1000
+        if visible:
+            score += 100
+        if label == "download_button":
+            score += 50
+        # Mantém a ordem original como desempate invertido.
+        score -= pos
+        logger.info(
+            "Candidato mapeado [%s]: score=%s visible=%s real_download=%s text=%s title=%s onclick=%s href=%s",
+            label,
+            score,
+            visible,
+            real_download,
+            meta.get("text", "")[:80],
+            meta.get("title", ""),
+            meta.get("onclick", ""),
+            meta.get("href", ""),
+        )
+        collected.append((score, locator, meta))
+    return collected
+
+
 async def _find_boleto_candidates(page, configured_selector: str):
-    # Sempre prioriza o botão real de download do ASSIM, mesmo que a configuração salva no Supabase esteja antiga.
-    selector = f"{DOWNLOAD_BUTTON_SELECTOR}, {configured_selector}"
-    candidates = await page.locator(selector).all()
-    logger.info("Encontrados %s candidato(s) de boleto pelo seletor combinado: %s", len(candidates), selector)
-    return candidates, selector
+    # Não usar um seletor CSS combinado, porque o Playwright devolve em ordem do DOM.
+    # No ASSIM, o menu invisível "2ª via de boleto" aparece antes do botão real.
+    all_candidates: List[Tuple[int, Any, Dict[str, str]]] = []
+    all_candidates.extend(await _collect_candidates(page, DOWNLOAD_BUTTON_SELECTOR, "download_button"))
+    all_candidates.extend(await _collect_candidates(page, configured_selector, "configured"))
+
+    seen_keys: Set[str] = set()
+    unique_candidates: List[Tuple[int, Any, Dict[str, str]]] = []
+    for score, locator, meta in sorted(all_candidates, key=lambda item: item[0], reverse=True):
+        key = f"{meta.get('href','')}|{meta.get('title','')}|{meta.get('onclick','')}|{meta.get('text','')}|{meta.get('visible','')}"
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        unique_candidates.append((score, locator, meta))
+
+    used_selector = f"PRIORIDADE: {DOWNLOAD_BUTTON_SELECTOR} | FALLBACK: {configured_selector}"
+    logger.info("Encontrados %s candidato(s) ordenados de boleto. %s", len(unique_candidates), used_selector)
+    return [locator for _score, locator, _meta in unique_candidates], used_selector
 
 
 async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
@@ -609,7 +668,9 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
 
             max_downloads = int(op.get("maxDownloads", 1))
             download_timeout = int(op.get("downloadTimeoutMs", 45000))
-            for idx, candidate in enumerate(candidates[:max_downloads]):
+            for idx, candidate in enumerate(candidates):
+                if len(downloaded_files) >= max_downloads:
+                    break
                 file_path = await _download_boleto_candidate(page, context, candidate, payload, idx, download_timeout, visited_urls)
                 if file_path:
                     downloaded_files.append(file_path)
@@ -626,7 +687,7 @@ async def _run_playwright_flow(payload: RunRpaPayload) -> List[str]:
     if not downloaded_files:
         raise HTTPException(
             status_code=404,
-            detail="Botão de boleto encontrado, mas nenhum PDF foi baixado. Verifique se o portal abriu nova etapa ou se o downloadBoleto() exige parâmetro adicional.",
+            detail="Botão de boleto encontrado, mas nenhum PDF foi baixado. Verifique se o portal abriu nova etapa, se precisa selecionar a parcela ou se downloadBoleto() exige parâmetro adicional.",
         )
     logger.info("RPA concluído: %s arquivo(s) baixado(s)", len(downloaded_files))
     return downloaded_files
