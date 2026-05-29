@@ -37,7 +37,7 @@ const buildStrictMenuItems = () => {
   normalized.push({
     section: 'Chat',
     items: [
-      { id: 'chat', label: 'Chat', icon: 'MessageCircle', page: 'suporte' },
+      { id: 'chat', label: 'Chat', icon: 'MessageCircle', page: 'chat' },
     ],
   });
 
