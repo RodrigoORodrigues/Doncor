@@ -1,10 +1,11 @@
 """Regras de competência para boletos e faturas do RPA.
 
 Regra principal:
-- O robô nunca deve antecipar automaticamente para o mês seguinte.
 - Uma competência MM/AAAA continua válida até o dia 10 do mês seguinte.
 - Exemplo: competência 06/2026 deve ser procurada até 10/07/2026.
-- Depois da data limite, a busca avança para a próxima competência.
+- Na busca automática, até o dia 10 o robô ainda procura a competência anterior.
+  Exemplo: em 01/06/2026, procurar 05/2026; em 11/06/2026, procurar 06/2026.
+- O robô nunca deve antecipar automaticamente para o mês seguinte.
 """
 
 from __future__ import annotations
@@ -28,6 +29,13 @@ def _add_months(year: int, month: int, delta: int) -> Tuple[int, int]:
 
 def _month_index(year: int, month: int) -> int:
     return year * 12 + month
+
+
+def _automatic_competencia(hoje: _dt.date, cutoff_day: int) -> Tuple[int, int, str]:
+    if hoje.day <= cutoff_day:
+        year, month = _add_months(hoje.year, hoje.month, -1)
+        return year, month, "automatica_competencia_anterior_ate_dia_10"
+    return hoje.year, hoje.month, "automatica_mes_atual_apos_dia_10"
 
 
 def _normalize_year(value: Any) -> Optional[int]:
@@ -91,12 +99,11 @@ def competencia_cutoff_date(year: int, month: int, cutoff_day: int = 10) -> _dt.
 def resolve_competencia_window(operadora: Dict[str, Any], hoje: Optional[_dt.date] = None) -> Dict[str, Any]:
     """Resolve a competência que o robô deve procurar.
 
-    A correção importante é impedir o antigo comportamento de preencher o mês
-    seguinte automaticamente. Em 01/06/2026, por exemplo, a competência padrão é
-    06/2026, não 07/2026.
-
-    Se uma competência estiver configurada, ela é mantida até o dia 10 do mês
-    seguinte. Exemplo: 06/2026 permanece até 10/07/2026. Depois disso, avança.
+    Exemplo prático da regra:
+    - Em 01/06/2026, sem competência manual, procura 05/2026.
+    - Em 10/06/2026, sem competência manual, ainda procura 05/2026.
+    - Em 11/06/2026, sem competência manual, procura 06/2026.
+    - Se 06/2026 for informada manualmente, ela permanece válida até 10/07/2026.
     """
 
     hoje = hoje or _dt.datetime.now().date()
@@ -110,7 +117,6 @@ def resolve_competencia_window(operadora: Dict[str, Any], hoje: Optional[_dt.dat
     cutoff_day = max(1, min(cutoff_day, 28))
 
     configured = _extract_configured_competencia(operadora)
-    origem = "automatica_mes_atual"
 
     if configured:
         year, month = configured
@@ -119,9 +125,9 @@ def resolve_competencia_window(operadora: Dict[str, Any], hoje: Optional[_dt.dat
 
         if configured_idx > current_idx:
             # Proteção contra a regra antiga que montava mês atual + 1.
-            # Ex.: em 01/06/2026 chegava 07/2026; o correto é 06/2026.
-            year, month = hoje.year, hoje.month
-            origem = "corrigida_de_mes_futuro"
+            # Ex.: em 01/06/2026 chegava 07/2026; o correto automático é 05/2026.
+            year, month, origem = _automatic_competencia(hoje, cutoff_day)
+            origem = "corrigida_de_mes_futuro_para_" + origem
         else:
             origem = "configurada"
             advanced = False
@@ -131,7 +137,7 @@ def resolve_competencia_window(operadora: Dict[str, Any], hoje: Optional[_dt.dat
             if advanced:
                 origem = "configurada_avancada_por_limite"
     else:
-        year, month = hoje.year, hoje.month
+        year, month, origem = _automatic_competencia(hoje, cutoff_day)
 
     cutoff = competencia_cutoff_date(year, month, cutoff_day)
     return {
