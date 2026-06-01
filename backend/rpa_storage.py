@@ -15,6 +15,8 @@ from urllib.parse import quote
 
 import requests
 
+from competencia_utils import resolve_competencia_window
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,30 +27,7 @@ def _slug(value: Any, fallback: str = "arquivo") -> str:
 
 
 def _infer_competencia(operadora: Dict[str, Any]) -> str:
-    raw = str(
-        operadora.get("competencia")
-        or operadora.get("mesAno")
-        or operadora.get("mes_ano")
-        or operadora.get("periodo")
-        or ""
-    ).strip()
-    if raw:
-        return raw
-
-    mes = str(operadora.get("mes") or operadora.get("mesBoleto") or operadora.get("boletoMes") or "").strip()
-    ano = str(operadora.get("ano") or operadora.get("anoBoleto") or operadora.get("boletoAno") or "").strip()
-    if mes and ano:
-        if len(ano) == 2:
-            ano = "20" + ano
-        return f"{mes.zfill(2)[-2:]}/{ano}"
-
-    today = datetime.datetime.now()
-    month = today.month + 1
-    year = today.year
-    if month > 12:
-        month = 1
-        year += 1
-    return f"{month:02d}/{year}"
+    return resolve_competencia_window(operadora).get("competencia", "")
 
 
 def _supabase_settings(payload: Any) -> Dict[str, str]:
@@ -123,15 +102,20 @@ def upload_file_to_supabase(local_path: str, payload: Any, idx: int = 0) -> Dict
     operadora = getattr(payload, "operadora", {}) or {}
     apolice_id = getattr(payload, "apolice_id", "")
     user_id = getattr(payload, "user_id", "")
+    competencia_window = resolve_competencia_window(operadora)
 
     file_path = Path(local_path)
     size = file_path.stat().st_size if file_path.exists() else 0
     now = datetime.datetime.utcnow()
+    competencia_slug = competencia_window["competencia"].replace("/", "-")
     filename = (
         f"boleto_{_slug(operadora.get('nome'), 'operadora')}_"
-        f"{_slug(apolice_id, 'apolice')}_{now.strftime('%Y%m%d_%H%M%S')}_{idx + 1}.pdf"
+        f"{_slug(apolice_id, 'apolice')}_{competencia_slug}_{now.strftime('%Y%m%d_%H%M%S')}_{idx + 1}.pdf"
     )
-    object_path = f"rpa/{_slug(operadora.get('nome'), 'operadora')}/{_slug(apolice_id, 'apolice')}/{filename}"
+    object_path = (
+        f"rpa/{_slug(operadora.get('nome'), 'operadora')}/"
+        f"{_slug(apolice_id, 'apolice')}/{competencia_slug}/{filename}"
+    )
 
     base = {
         "local_path": local_path,
@@ -143,7 +127,9 @@ def upload_file_to_supabase(local_path: str, payload: Any, idx: int = 0) -> Dict
         "operadora": operadora.get("nome", "Operadora"),
         "apolice_id": apolice_id,
         "user_id": user_id,
-        "competencia": _infer_competencia(operadora),
+        "competencia": competencia_window["competencia"],
+        "data_limite_busca": competencia_window["data_limite_busca"],
+        "competencia_origem": competencia_window["origem"],
     }
 
     if not settings["url"] or not settings["key"]:
