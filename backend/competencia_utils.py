@@ -1,6 +1,7 @@
 """Regras de competência para boletos e faturas do RPA.
 
 Regra principal:
+- O robô nunca deve antecipar automaticamente para o mês seguinte.
 - Uma competência MM/AAAA continua válida até o dia 10 do mês seguinte.
 - Exemplo: competência 06/2026 deve ser procurada até 10/07/2026.
 - Depois da data limite, a busca avança para a próxima competência.
@@ -23,6 +24,10 @@ def _as_int(value: Any, default: int) -> int:
 def _add_months(year: int, month: int, delta: int) -> Tuple[int, int]:
     absolute = (year * 12) + (month - 1) + delta
     return absolute // 12, (absolute % 12) + 1
+
+
+def _month_index(year: int, month: int) -> int:
+    return year * 12 + month
 
 
 def _normalize_year(value: Any) -> Optional[int]:
@@ -86,13 +91,12 @@ def competencia_cutoff_date(year: int, month: int, cutoff_day: int = 10) -> _dt.
 def resolve_competencia_window(operadora: Dict[str, Any], hoje: Optional[_dt.date] = None) -> Dict[str, Any]:
     """Resolve a competência que o robô deve procurar.
 
-    Se a operadora tiver competência configurada, ela será mantida até o dia
-    limite do mês seguinte. Se a data atual passou desse limite, a competência
-    avança mês a mês até ficar dentro da janela válida.
+    A correção importante é impedir o antigo comportamento de preencher o mês
+    seguinte automaticamente. Em 01/06/2026, por exemplo, a competência padrão é
+    06/2026, não 07/2026.
 
-    Se não houver competência configurada, usa a janela operacional padrão:
-    até o dia 10, procura a competência do mês anterior; após o dia 10, procura
-    a competência do mês atual.
+    Se uma competência estiver configurada, ela é mantida até o dia 10 do mês
+    seguinte. Exemplo: 06/2026 permanece até 10/07/2026. Depois disso, avança.
     """
 
     hoje = hoje or _dt.datetime.now().date()
@@ -106,22 +110,28 @@ def resolve_competencia_window(operadora: Dict[str, Any], hoje: Optional[_dt.dat
     cutoff_day = max(1, min(cutoff_day, 28))
 
     configured = _extract_configured_competencia(operadora)
-    origem = "configurada"
+    origem = "automatica_mes_atual"
 
     if configured:
         year, month = configured
-        advanced = False
-        while hoje > competencia_cutoff_date(year, month, cutoff_day):
-            year, month = _add_months(year, month, 1)
-            advanced = True
-        if advanced:
-            origem = "configurada_avancada_por_limite"
-    else:
-        origem = "automatica_janela_dia_10"
-        if hoje.day <= cutoff_day:
-            year, month = _add_months(hoje.year, hoje.month, -1)
-        else:
+        current_idx = _month_index(hoje.year, hoje.month)
+        configured_idx = _month_index(year, month)
+
+        if configured_idx > current_idx:
+            # Proteção contra a regra antiga que montava mês atual + 1.
+            # Ex.: em 01/06/2026 chegava 07/2026; o correto é 06/2026.
             year, month = hoje.year, hoje.month
+            origem = "corrigida_de_mes_futuro"
+        else:
+            origem = "configurada"
+            advanced = False
+            while hoje > competencia_cutoff_date(year, month, cutoff_day):
+                year, month = _add_months(year, month, 1)
+                advanced = True
+            if advanced:
+                origem = "configurada_avancada_por_limite"
+    else:
+        year, month = hoje.year, hoje.month
 
     cutoff = competencia_cutoff_date(year, month, cutoff_day)
     return {
