@@ -48,6 +48,9 @@ class InclusaoBase(BaseModel):
     empresa: str = "-"
     beneficiario: str
     cpf: str
+    dataNascimento: str = ""
+    telefone: str = ""
+    email: str = ""
     parentesco: str = "Titular"
 
 
@@ -218,7 +221,7 @@ class RoboConfigPayload(BaseModel):
     triggerEndpoint: str = "/api/v1/trigger-rpa"
     rpaServiceUrl: str = ""
     timeoutSegundos: int = 120
-    operadoras: list[OperadoraCredencial] = []
+    operadoras: list[OperadoraCredencial] = Field(default_factory=list)
     supabaseUrl: str = ""
     supabaseServiceRoleKey: str = ""
     supabaseBucketBoletos: str = "boletos"
