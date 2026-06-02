@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Building2, FileText, Receipt, BarChart3, MessageCircle, Paperclip, Send, LogOut } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -26,7 +26,7 @@ const PortalDonCor = () => {
 
   const empresa = session?.empresa || session?.nome || 'Parceiro';
 
-  const loadPortal = async (currentSession = session) => {
+  const loadPortal = useCallback(async (currentSession = session) => {
     if (!currentSession?.documento) return;
     setLoading(true);
     try {
@@ -38,9 +38,9 @@ const PortalDonCor = () => {
       setError(err?.response?.data?.detail || 'Não foi possível carregar o Portal DonCor.');
     }
     setLoading(false);
-  };
+  }, [session]);
 
-  useEffect(() => { loadPortal(); }, []);
+  useEffect(() => { loadPortal(); }, [loadPortal]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
