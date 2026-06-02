@@ -50,6 +50,55 @@ async def _all(collection, sort_field: Optional[str] = None, limit: int = 1000) 
     return await cursor.to_list(limit)
 
 
+def _normalize_partner_payload(payload: Dict[str, Any], now_iso: Callable, now_br: Callable, existing: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    documento = _digits(payload.get("documento") or payload.get("cpfCnpj") or payload.get("cpf_cnpj"))
+    if len(documento) not in {11, 14}:
+        raise HTTPException(status_code=400, detail="Informe um CPF com 11 dígitos ou CNPJ com 14 dígitos.")
+
+    raw_contracts = payload.get("contratos") or payload.get("contratoNumeros") or payload.get("contratosVinculados") or []
+    if isinstance(raw_contracts, str):
+        contratos = [item.strip() for item in re.split(r"[,;\n]", raw_contracts) if item.strip()]
+    else:
+        contratos = [str(item).strip() for item in raw_contracts if str(item).strip()]
+
+    item = {
+        "documento": documento,
+        "tipo": "CPF" if len(documento) == 11 else "CNPJ",
+        "nome": str(payload.get("nome") or payload.get("empresa") or payload.get("razaoSocial") or "").strip(),
+        "empresa": str(payload.get("empresa") or payload.get("nome") or payload.get("razaoSocial") or "").strip(),
+        "email": str(payload.get("email") or "").strip(),
+        "telefone": str(payload.get("telefone") or "").strip(),
+        "contratos": contratos,
+        "status": str(payload.get("status") or "Ativo").strip() or "Ativo",
+        "observacoes": str(payload.get("observacoes") or payload.get("observação") or "").strip(),
+        "updatedAt": now_iso(),
+        "atualizadoEm": now_br(),
+    }
+
+    if existing:
+        item["id"] = existing.get("id") or str(uuid.uuid4())
+        item["createdAt"] = existing.get("createdAt") or now_iso()
+        item["criadoEm"] = existing.get("criadoEm") or now_br()
+    else:
+        item["id"] = str(uuid.uuid4())
+        item["createdAt"] = now_iso()
+        item["criadoEm"] = now_br()
+
+    return item
+
+
+async def _registered_partner(db, documento: str) -> Optional[Dict[str, Any]]:
+    doc = _digits(documento)
+    if not doc:
+        return None
+    partner = await db.portal_parceiros.find_one({"documento": doc}, {"_id": 0})
+    if not partner:
+        return None
+    if str(partner.get("status", "Ativo")).lower() in {"inativo", "bloqueado", "cancelado"}:
+        raise HTTPException(status_code=403, detail="Acesso do Portal DonCor está inativo para este CPF/CNPJ.")
+    return partner
+
+
 async def _find_partner_context(db, documento: str) -> Dict[str, Any]:
     doc = _digits(documento)
     if len(doc) < 11:
@@ -60,36 +109,46 @@ async def _find_partner_context(db, documento: str) -> Dict[str, Any]:
     inclusoes = await _all(db.inclusoes)
     exclusoes = await _all(db.exclusoes)
     transferencias = await _all(db.transferencias)
+    registered = await _registered_partner(db, doc)
 
     contratos: List[Dict[str, Any]] = []
     empresa = ""
     nome = ""
     tipo = "cpf" if len(doc) <= 11 else "cnpj"
 
-    if len(doc) > 11:
-        contratos = [item for item in contratos_emp if _digits(item.get("cnpj")) == doc]
-        if contratos:
-            empresa = contratos[0].get("empresa") or "Empresa"
-            nome = empresa
-    else:
-        contrato_numeros = set()
-        for item in inclusoes + exclusoes:
-            if _digits(item.get("cpf")) == doc:
-                contrato_numeros.add(item.get("contrato"))
-                nome = nome or item.get("beneficiario") or "Beneficiário"
-                empresa = empresa or item.get("empresa") or ""
-        for item in transferencias:
-            if _digits(item.get("cpf")) == doc:
-                contrato_numeros.add(item.get("contratoOrigem"))
-                contrato_numeros.add(item.get("contratoDestino"))
-                nome = nome or item.get("beneficiario") or "Beneficiário"
-
-        contratos = [item for item in contratos_emp + contratos_adh if item.get("numero") in contrato_numeros]
-        if contratos and not empresa:
-            empresa = contratos[0].get("empresa") or "Beneficiário"
+    if registered:
+        tipo = str(registered.get("tipo") or tipo).lower()
+        empresa = registered.get("empresa") or registered.get("nome") or "Parceiro"
+        nome = registered.get("nome") or empresa
+        registered_contracts = set(registered.get("contratos") or [])
+        if registered_contracts:
+            contratos = [item for item in contratos_emp + contratos_adh if item.get("numero") in registered_contracts]
 
     if not contratos:
-        raise HTTPException(status_code=404, detail="Nenhum contrato encontrado para este CPF/CNPJ.")
+        if len(doc) > 11:
+            contratos = [item for item in contratos_emp if _digits(item.get("cnpj")) == doc]
+            if contratos:
+                empresa = empresa or contratos[0].get("empresa") or "Empresa"
+                nome = nome or empresa
+        else:
+            contrato_numeros = set()
+            for item in inclusoes + exclusoes:
+                if _digits(item.get("cpf")) == doc:
+                    contrato_numeros.add(item.get("contrato"))
+                    nome = nome or item.get("beneficiario") or "Beneficiário"
+                    empresa = empresa or item.get("empresa") or ""
+            for item in transferencias:
+                if _digits(item.get("cpf")) == doc:
+                    contrato_numeros.add(item.get("contratoOrigem"))
+                    contrato_numeros.add(item.get("contratoDestino"))
+                    nome = nome or item.get("beneficiario") or "Beneficiário"
+
+            contratos = [item for item in contratos_emp + contratos_adh if item.get("numero") in contrato_numeros]
+            if contratos and not empresa:
+                empresa = contratos[0].get("empresa") or "Beneficiário"
+
+    if not contratos and not registered:
+        raise HTTPException(status_code=404, detail="Nenhum cadastro ou contrato encontrado para este CPF/CNPJ.")
 
     contrato_numeros = [item.get("numero") for item in contratos if item.get("numero")]
     return {
@@ -99,6 +158,7 @@ async def _find_partner_context(db, documento: str) -> Dict[str, Any]:
         "empresa": empresa or nome or "Parceiro",
         "contratos": contratos,
         "contratoNumeros": contrato_numeros,
+        "cadastroPortal": registered or None,
     }
 
 
@@ -132,6 +192,7 @@ async def _portal_payload(db, documento: str) -> Dict[str, Any]:
             "nome": ctx["nome"],
             "empresa": ctx["empresa"],
             "contratos": ctx["contratoNumeros"],
+            "cadastroPortal": ctx.get("cadastroPortal"),
         },
         "resumo": {
             "contratos": len(ctx["contratos"]),
@@ -156,6 +217,51 @@ async def _portal_payload(db, documento: str) -> Dict[str, Any]:
 def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: Callable | None = None, _now_br_func: Callable | None = None) -> None:
     now_iso = _now_iso_func or _now_iso
     now_br = _now_br_func or _now_br
+    projection = _proj() if callable(_proj) else {"_id": 0}
+
+    @app.get("/api/portal-parceiros")
+    async def portal_parceiros_list(search: str = "", status: str = "todos", limit: int = Query(default=200, ge=1, le=1000)):
+        items = await _all(db.portal_parceiros, "createdAt", limit)
+        if status and status != "todos":
+            items = [item for item in items if str(item.get("status", "")).lower() == status.lower()]
+        term = str(search or "").strip().lower()
+        if term:
+            term_digits = _digits(term)
+            items = [
+                item for item in items
+                if term in " ".join(str(item.get(key) or "").lower() for key in ["nome", "empresa", "email", "telefone", "status"]) 
+                or (term_digits and term_digits in _digits(item.get("documento")))
+                or any(term in str(contract).lower() for contract in item.get("contratos", []))
+            ]
+        return items
+
+    @app.post("/api/portal-parceiros")
+    async def portal_parceiros_create(payload: Dict[str, Any] = Body(...)):
+        item = _normalize_partner_payload(payload, now_iso, now_br)
+        existing = await db.portal_parceiros.find_one({"documento": item["documento"]}, projection)
+        if existing:
+            raise HTTPException(status_code=409, detail="Já existe um cadastro para este CPF/CNPJ.")
+        await db.portal_parceiros.insert_one(item)
+        return item
+
+    @app.put("/api/portal-parceiros/{partner_id}")
+    async def portal_parceiros_update(partner_id: str, payload: Dict[str, Any] = Body(...)):
+        existing = await db.portal_parceiros.find_one({"id": partner_id}, projection)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Cadastro do portal não encontrado.")
+        item = _normalize_partner_payload(payload, now_iso, now_br, existing)
+        duplicate = await db.portal_parceiros.find_one({"documento": item["documento"], "id": {"$ne": partner_id}}, projection)
+        if duplicate:
+            raise HTTPException(status_code=409, detail="Outro cadastro já usa este CPF/CNPJ.")
+        await db.portal_parceiros.replace_one({"id": partner_id}, item)
+        return item
+
+    @app.delete("/api/portal-parceiros/{partner_id}")
+    async def portal_parceiros_delete(partner_id: str):
+        result = await db.portal_parceiros.delete_one({"id": partner_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Cadastro do portal não encontrado.")
+        return {"ok": True, "deleted": partner_id}
 
     @app.post("/api/portal-doncor/login")
     async def portal_doncor_login(payload: Dict[str, Any] = Body(...)):
