@@ -20,6 +20,7 @@ import Relatorios from "./pages/Relatorios";
 import Robo from "./pages/Robo";
 import RoboConfig from "./pages/RoboConfig";
 import Chat from "./pages/Chat";
+import PortalDonCor from "./pages/PortalDonCor";
 import { Loader2 } from "lucide-react";
 
 const DEFAULT_ACCESS = "dashboard";
@@ -114,6 +115,7 @@ const LoginScreen = ({ onLogin, error }) => {
           <div style={{ width: "54px", height: "54px", borderRadius: "16px", background: "#3a5a8c", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "20px", marginBottom: "12px" }}>DC</div>
           <h1 style={{ margin: 0, fontSize: "1.35rem", color: "#344050" }}>Don Cor Web</h1>
           <p style={{ margin: "6px 0 0", color: "#6b7280", fontSize: "0.88rem" }}>Gestão de Apólices - Don Cor</p>
+          <a href="/portal-doncor" style={{ display:'inline-block', marginTop:'10px', color:'#2C7BE5', fontSize:'0.82rem', fontWeight:700 }}>Acessar Portal DonCor para empresas</a>
         </div>
 
         {error && (
@@ -294,6 +296,10 @@ function App() {
     setAccessByRole(normalized);
     localStorage.setItem('doncor_access', JSON.stringify(normalized));
   };
+
+  if (window.location.pathname.startsWith('/portal-doncor')) {
+    return <PortalDonCor />;
+  }
 
   if (!session) return <LoginScreen onLogin={handleLogin} error={error} />;
 
