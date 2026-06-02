@@ -260,4 +260,11 @@ export const fetchRoboConfig = () => getObject("/robo/config", {}, roboAuthConfi
 export const saveRoboConfig = (data) => api.post("/robo/config", data, roboAuthConfig).then((r) => r.data);
 export const triggerRoboReal = (data) => api.post("/robo/trigger-real", data, roboAuthConfig).then((r) => r.data);
 
+// ─── Portal DonCor / Parceiros ───────────────────
+export const loginPortalDonCor = (documento) => api.post("/portal-doncor/login", { documento }).then((r) => r.data);
+export const fetchPortalDonCorResumo = (documento) => getObject("/portal-doncor/resumo", {}, { params: { documento } });
+export const fetchPortalDonCorChat = ({ documento = "", empresa = "" } = {}) =>
+  getArray("/portal-doncor/chat", { params: { documento, empresa } });
+export const sendPortalDonCorChat = (data) => api.post("/portal-doncor/chat", data).then((r) => r.data);
+
 export default api;
