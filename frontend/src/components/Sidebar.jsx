@@ -4,13 +4,13 @@ import {
   Users, Handshake, UserPlus, UserMinus, ArrowLeftRight,
   Receipt, DollarSign, Building2, Package, UserCog,
   BarChart3, Download, LayoutDashboard,
-  Menu, Bot, Settings, User, HelpCircle, MessageCircle
+  Menu, Bot, Settings, User, HelpCircle, MessageCircle, UserCheck
 } from 'lucide-react';
 
 const iconMap = {
   Users, Handshake, UserPlus, UserMinus, ArrowLeftRight,
   Receipt, DollarSign, Building2, Package, UserCog,
-  BarChart3, Download, LayoutDashboard, Menu, Bot, Settings, User, HelpCircle, MessageCircle
+  BarChart3, Download, LayoutDashboard, Menu, Bot, Settings, User, HelpCircle, MessageCircle, UserCheck
 };
 
 const buildStrictMenuItems = () => {
@@ -26,6 +26,17 @@ const buildStrictMenuItems = () => {
           ...section.items.filter((item) => !['adesao', 'empresarial'].includes(item.id)),
           { id: 'empresarial', label: 'Empresarial', icon: 'Handshake', page: 'empresarial' },
           { id: 'pme', label: 'PME', icon: 'Handshake', page: 'empresarial' },
+        ],
+      });
+      return;
+    }
+
+    if (section.section === 'Cadastros') {
+      normalized.push({
+        ...section,
+        items: [
+          ...section.items,
+          { id: 'portal-parceiros', label: 'Portal DonCor', icon: 'UserCheck', page: 'portal-parceiros' },
         ],
       });
       return;
