@@ -6,6 +6,9 @@ filtra contratos, faturas, boletos e mensagens para esse documento.
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import os
 import re
 import uuid
 from datetime import datetime, timezone
@@ -50,6 +53,39 @@ async def _all(collection, sort_field: Optional[str] = None, limit: int = 1000) 
     return await cursor.to_list(limit)
 
 
+def _encode_secret(secret: str, salt_b64: str) -> str:
+    salt = base64.b64decode(salt_b64.encode("ascii"))
+    digest = hashlib.pbkdf2_hmac("sha256", str(secret).encode("utf-8"), salt, 160000)
+    return base64.b64encode(digest).decode("ascii")
+
+
+def _set_access_secret(item: Dict[str, Any], secret: str, now_iso: Callable) -> None:
+    secret = str(secret or "")
+    if len(secret) < 6:
+        raise HTTPException(status_code=400, detail="A senha deve ter pelo menos 6 caracteres.")
+    salt_b64 = base64.b64encode(os.urandom(16)).decode("ascii")
+    item["accessSalt"] = salt_b64
+    item["accessDigest"] = _encode_secret(secret, salt_b64)
+    item["senhaDefinida"] = True
+    item["senhaAtualizadaEm"] = now_iso()
+
+
+def _check_access_secret(partner: Dict[str, Any], secret: str) -> bool:
+    salt_b64 = partner.get("accessSalt") or ""
+    digest = partner.get("accessDigest") or ""
+    if not salt_b64 or not digest:
+        return False
+    return _encode_secret(str(secret or ""), salt_b64) == digest
+
+
+def _public_partner(item: Dict[str, Any]) -> Dict[str, Any]:
+    public = dict(item or {})
+    public.pop("accessDigest", None)
+    public.pop("accessSalt", None)
+    public["senhaDefinida"] = bool(item.get("accessDigest") and item.get("accessSalt"))
+    return public
+
+
 def _normalize_partner_payload(payload: Dict[str, Any], now_iso: Callable, now_br: Callable, existing: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     documento = _digits(payload.get("documento") or payload.get("cpfCnpj") or payload.get("cpf_cnpj"))
     if len(documento) not in {11, 14}:
@@ -79,10 +115,22 @@ def _normalize_partner_payload(payload: Dict[str, Any], now_iso: Callable, now_b
         item["id"] = existing.get("id") or str(uuid.uuid4())
         item["createdAt"] = existing.get("createdAt") or now_iso()
         item["criadoEm"] = existing.get("criadoEm") or now_br()
+        item["accessSalt"] = existing.get("accessSalt")
+        item["accessDigest"] = existing.get("accessDigest")
+        item["senhaDefinida"] = bool(existing.get("accessDigest") and existing.get("accessSalt"))
+        item["senhaAtualizadaEm"] = existing.get("senhaAtualizadaEm")
+        item["primeiroAcessoEm"] = existing.get("primeiroAcessoEm")
+        item["ultimoAcessoEm"] = existing.get("ultimoAcessoEm")
     else:
         item["id"] = str(uuid.uuid4())
         item["createdAt"] = now_iso()
         item["criadoEm"] = now_br()
+
+    secret = payload.get("senha") or payload.get("password") or payload.get("senhaPortal")
+    if secret:
+        _set_access_secret(item, str(secret), now_iso)
+    elif not existing:
+        raise HTTPException(status_code=400, detail="Cadastre uma senha de acesso para o Portal DonCor.")
 
     return item
 
@@ -185,6 +233,7 @@ async def _portal_payload(db, documento: str) -> Dict[str, Any]:
         competencia = item.get("competencia") or "Sem competência"
         por_competencia[competencia] = por_competencia.get(competencia, 0) + _money_to_float(item.get("valor"))
 
+    cadastro_portal = ctx.get("cadastroPortal") or {}
     return {
         "parceiro": {
             "documento": ctx["documento"],
@@ -192,7 +241,7 @@ async def _portal_payload(db, documento: str) -> Dict[str, Any]:
             "nome": ctx["nome"],
             "empresa": ctx["empresa"],
             "contratos": ctx["contratoNumeros"],
-            "cadastroPortal": ctx.get("cadastroPortal"),
+            "cadastroPortal": _public_partner(cadastro_portal) if cadastro_portal else None,
         },
         "resumo": {
             "contratos": len(ctx["contratos"]),
@@ -229,11 +278,11 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
             term_digits = _digits(term)
             items = [
                 item for item in items
-                if term in " ".join(str(item.get(key) or "").lower() for key in ["nome", "empresa", "email", "telefone", "status"]) 
+                if term in " ".join(str(item.get(key) or "").lower() for key in ["nome", "empresa", "email", "telefone", "status"])
                 or (term_digits and term_digits in _digits(item.get("documento")))
                 or any(term in str(contract).lower() for contract in item.get("contratos", []))
             ]
-        return items
+        return [_public_partner(item) for item in items]
 
     @app.post("/api/portal-parceiros")
     async def portal_parceiros_create(payload: Dict[str, Any] = Body(...)):
@@ -242,7 +291,7 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
         if existing:
             raise HTTPException(status_code=409, detail="Já existe um cadastro para este CPF/CNPJ.")
         await db.portal_parceiros.insert_one(item)
-        return item
+        return _public_partner(item)
 
     @app.put("/api/portal-parceiros/{partner_id}")
     async def portal_parceiros_update(partner_id: str, payload: Dict[str, Any] = Body(...)):
@@ -254,7 +303,7 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
         if duplicate:
             raise HTTPException(status_code=409, detail="Outro cadastro já usa este CPF/CNPJ.")
         await db.portal_parceiros.replace_one({"id": partner_id}, item)
-        return item
+        return _public_partner(item)
 
     @app.delete("/api/portal-parceiros/{partner_id}")
     async def portal_parceiros_delete(partner_id: str):
@@ -266,7 +315,26 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
     @app.post("/api/portal-doncor/login")
     async def portal_doncor_login(payload: Dict[str, Any] = Body(...)):
         documento = payload.get("documento") or payload.get("cpfCnpj") or payload.get("cpf_cnpj")
+        secret = str(payload.get("senha") or payload.get("password") or "")
+        if not secret:
+            raise HTTPException(status_code=400, detail="Informe a senha de acesso.")
+
+        doc = _digits(documento)
+        partner = await _registered_partner(db, doc)
+        if not partner:
+            raise HTTPException(status_code=404, detail="CPF/CNPJ sem acesso cadastrado. Entre em contato com a DonCor.")
+        if not partner.get("accessDigest") or not partner.get("accessSalt"):
+            raise HTTPException(status_code=403, detail="Senha ainda não cadastrada para este acesso. Entre em contato com a DonCor.")
+        if not _check_access_secret(partner, secret):
+            raise HTTPException(status_code=401, detail="CPF/CNPJ ou senha inválidos.")
+
         context = await _find_partner_context(db, documento)
+        first_access = not bool(partner.get("primeiroAcessoEm"))
+        await db.portal_parceiros.update_one(
+            {"id": partner.get("id")},
+            {"$set": {"ultimoAcessoEm": now_iso(), "primeiroAcessoEm": partner.get("primeiroAcessoEm") or now_iso(), "updatedAt": now_iso(), "atualizadoEm": now_br()}}
+        )
+
         return {
             "token": str(uuid.uuid4()),
             "documento": context["documento"],
@@ -274,7 +342,37 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
             "nome": context["nome"],
             "empresa": context["empresa"],
             "contratos": context["contratoNumeros"],
+            "primeiroAcesso": first_access,
         }
+
+    @app.post("/api/portal-doncor/alterar-senha")
+    async def portal_doncor_alterar_senha(payload: Dict[str, Any] = Body(...)):
+        documento = payload.get("documento") or payload.get("cpfCnpj") or payload.get("cpf_cnpj")
+        current_secret = str(payload.get("senhaAtual") or payload.get("currentPassword") or "")
+        new_secret = str(payload.get("novaSenha") or payload.get("newPassword") or "")
+        if not current_secret or not new_secret:
+            raise HTTPException(status_code=400, detail="Informe a senha atual e a nova senha.")
+        if len(new_secret) < 6:
+            raise HTTPException(status_code=400, detail="A nova senha deve ter pelo menos 6 caracteres.")
+
+        partner = await _registered_partner(db, documento)
+        if not partner or not _check_access_secret(partner, current_secret):
+            raise HTTPException(status_code=401, detail="Senha atual inválida.")
+
+        updated = dict(partner)
+        _set_access_secret(updated, new_secret, now_iso)
+        await db.portal_parceiros.update_one(
+            {"id": partner.get("id")},
+            {"$set": {
+                "accessSalt": updated["accessSalt"],
+                "accessDigest": updated["accessDigest"],
+                "senhaDefinida": True,
+                "senhaAtualizadaEm": updated["senhaAtualizadaEm"],
+                "updatedAt": now_iso(),
+                "atualizadoEm": now_br(),
+            }}
+        )
+        return {"ok": True, "message": "Senha alterada com sucesso."}
 
     @app.get("/api/portal-doncor/resumo")
     async def portal_doncor_resumo(documento: str = Query(...)):
