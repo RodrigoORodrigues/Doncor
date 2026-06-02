@@ -69,6 +69,7 @@ class ExclusaoBase(BaseModel):
     contrato: str
     beneficiario: str
     cpf: str
+    dataFim: str = ""
     motivo: str = "Solicitação do titular"
 
 
