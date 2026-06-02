@@ -21,6 +21,7 @@ import Robo from "./pages/Robo";
 import RoboConfig from "./pages/RoboConfig";
 import Chat from "./pages/Chat";
 import PortalDonCor from "./pages/PortalDonCor";
+import PortalParceiros from "./pages/PortalParceiros";
 import { Loader2 } from "lucide-react";
 
 const DEFAULT_ACCESS = "dashboard";
@@ -38,6 +39,7 @@ const ALL_PAGES = [
   "seguradoras",
   "produtos",
   "colaboradores",
+  "portal-parceiros",
   "relatorios",
   "robo",
   "robo-config",
@@ -62,6 +64,7 @@ const DEFAULT_ACCESS_BY_ROLE = {
     "comissoes",
     "seguradoras",
     "produtos",
+    "portal-parceiros",
     "relatorios",
     "perfil",
     "suporte",
@@ -190,6 +193,7 @@ const pageComponents = {
   seguradoras: Seguradoras,
   produtos: Produtos,
   colaboradores: Colaboradores,
+  "portal-parceiros": PortalParceiros,
   relatorios: Relatorios,
   robo: Robo,
   "robo-config": RoboConfig,
