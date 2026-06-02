@@ -266,7 +266,8 @@ export const fetchPortalParceiros = (search = "", status = "todos") =>
 export const createPortalParceiro = (data) => api.post("/portal-parceiros", data).then((r) => r.data);
 export const updatePortalParceiro = (id, data) => api.put(`/portal-parceiros/${id}`, data).then((r) => r.data);
 export const deletePortalParceiro = (id) => api.delete(`/portal-parceiros/${id}`).then((r) => r.data);
-export const loginPortalDonCor = (documento) => api.post("/portal-doncor/login", { documento }).then((r) => r.data);
+export const loginPortalDonCor = ({ documento, senha }) => api.post("/portal-doncor/login", { documento, senha }).then((r) => r.data);
+export const alterarSenhaPortalDonCor = (data) => api.post("/portal-doncor/alterar-senha", data).then((r) => r.data);
 export const fetchPortalDonCorResumo = (documento) => getObject("/portal-doncor/resumo", {}, { params: { documento } });
 export const fetchPortalDonCorChat = ({ documento = "", empresa = "" } = {}) =>
   getArray("/portal-doncor/chat", { params: { documento, empresa } });
