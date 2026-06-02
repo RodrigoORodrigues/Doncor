@@ -14,6 +14,7 @@ from fastapi import Depends, HTTPException, Query
 
 from models import RoboTriggerPayload
 from server import app, db, _get_robo_config_latest, _require_robo_role, _run_rpa_job
+from portal_routes import attach_portal_routes
 
 
 @app.get("/")
@@ -24,6 +25,7 @@ async def railway_root():
         "docs": "/docs",
         "api": "/api/",
         "diagnostics": "/api/diagnostics",
+        "portalDonCor": "/api/portal-doncor/resumo",
     }
 
 
@@ -239,7 +241,7 @@ async def diagnostics_response():
     tables = {}
     for table in [
         "contratos_adesao", "contratos_empresarial", "faturas", "comissoes", "seguradoras", "produtos", "colaboradores",
-        "robo_config", "robo_estado", "robo_execucoes_log", "boletos_baixados", "robo_arquivos", "robo_diagnosticos",
+        "robo_config", "robo_estado", "robo_execucoes_log", "boletos_baixados", "robo_arquivos", "robo_diagnosticos", "portal_chat",
     ]:
         tables[table] = await _count_table(table)
 
@@ -288,3 +290,6 @@ async def robo_historico(limit: int = Query(default=50, ge=1, le=200), _: None =
         "arquivos": arquivos,
         "diagnosticos": diagnosticos,
     }
+
+
+attach_portal_routes(app, db, _proj, _now_iso, _now_br)
