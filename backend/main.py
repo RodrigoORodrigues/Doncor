@@ -11,10 +11,45 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from fastapi import Depends, HTTPException, Query
+from starlette.middleware.cors import CORSMiddleware
 
 from models import RoboTriggerPayload
 from server import app, db, _get_robo_config_latest, _require_robo_role, _run_rpa_job
 from portal_routes import attach_portal_routes
+
+
+def _build_allowed_origins() -> List[str]:
+    default_origins = [
+        "https://www.doncor.site",
+        "https://doncor.site",
+        "https://doncor-git-main-rodrigoorodrigues-projects.vercel.app",
+        "https://doncor-nze02j1ml-rodrigoorodrigues-projects.vercel.app",
+        "http://localhost:3000",
+        "http://localhost:5173",
+    ]
+    env_values = [
+        os.getenv("FRONTEND_URL", ""),
+        os.getenv("CORS_ORIGINS", ""),
+        os.getenv("ALLOWED_ORIGINS", ""),
+    ]
+    origins = set(default_origins)
+    for value in env_values:
+        for origin in str(value or "").split(","):
+            origin = origin.strip().rstrip("/")
+            if origin:
+                origins.add(origin)
+    return sorted(origins)
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=_build_allowed_origins(),
+    allow_origin_regex=r"https://.*\.vercel\.app|http://localhost:\d+",
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
 
 
 @app.get("/")
