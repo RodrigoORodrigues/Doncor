@@ -105,9 +105,32 @@ const normalizeAccessConfig = (value) => {
 
 const LoginScreen = ({ onLogin, error }) => {
   const [username, setUsername] = useState(MASTER_USERNAME);
+  const [password, setPassword] = useState("");
+
+  const validatePassword = (role, inputPassword) => {
+    const isMaster = role.toLowerCase() === MASTER_USERNAME.toLowerCase();
+    const envKey = isMaster ? process.env.REACT_APP_MASTER_LOGIN_KEY : process.env.REACT_APP_STAFF_LOGIN_KEY;
+
+    if (!envKey) {
+      return { valid: false, message: "A senha do perfil não foi configurada no ambiente de produção." };
+    }
+
+    if (inputPassword !== envKey) {
+      return { valid: false, message: "Senha incorreta." };
+    }
+
+    return { valid: true, message: "" };
+  };
 
   const handleSubmit = (event) => {
     event.preventDefault();
+    const validation = validatePassword(username, password);
+
+    if (!validation.valid) {
+      onLogin(null, validation.message);
+      return;
+    }
+
     onLogin(username.trim());
   };
 
@@ -136,6 +159,17 @@ const LoginScreen = ({ onLogin, error }) => {
           <option value="Gerencia">Gerencia</option>
           <option value="Analista">Analista</option>
         </select>
+
+        <label style={{ display: "block", color: "#344050", fontWeight: 600, fontSize: "0.85rem", marginBottom: "6px" }}>
+          Senha
+        </label>
+        <input
+          type="password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          placeholder="Digite a senha do perfil"
+          style={{ width: "100%", border: "1px solid #d8e2ef", borderRadius: "8px", padding: "10px 12px", marginBottom: "16px", fontSize: "0.95rem", background: "#fff", boxSizing: "border-box" }}
+        />
 
         <button type="submit" style={{ width: "100%", background: "#2C7BE5", color: "#fff", border: "none", borderRadius: "8px", padding: "11px 14px", fontWeight: 700, cursor: "pointer" }}>
           Entrar
@@ -268,7 +302,12 @@ function App() {
   const [accessByRole, setAccessByRole] = useState(() => normalizeAccessConfig(safeParseJSON(localStorage.getItem('doncor_access'), DEFAULT_ACCESS_BY_ROLE)));
 
   const handleLoadingFinish = useCallback(() => setLoading(false), []);
-  const handleLogin = (username) => {
+  const handleLogin = (username, errorMessage = '') => {
+    if (errorMessage) {
+      setError(errorMessage);
+      return;
+    }
+
     const availableRoles = ["Diretoria", "Gerencia", "Analista"];
     const matchedRole = availableRoles.find((roleName) => roleName.toLowerCase() === username.toLowerCase());
     const isMaster = username.toLowerCase() === MASTER_USERNAME.toLowerCase();
