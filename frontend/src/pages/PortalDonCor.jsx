@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Building2, FileText, Receipt, BarChart3, MessageCircle, Paperclip, Send, LogOut } from 'lucide-react';
+import { Building2, FileText, Receipt, BarChart3, MessageCircle, Paperclip, Send, LogOut, KeyRound } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { loginPortalDonCor, fetchPortalDonCorResumo, fetchPortalDonCorChat, sendPortalDonCorChat } from '../services/api';
+import { loginPortalDonCor, fetchPortalDonCorResumo, fetchPortalDonCorChat, sendPortalDonCorChat, alterarSenhaPortalDonCor } from '../services/api';
 
 const STORAGE_KEY = 'doncor_portal_session';
 const readSession = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch { return null; } };
@@ -17,6 +17,13 @@ const StatCard = ({ title, value, icon: Icon }) => (
 const PortalDonCor = () => {
   const [session, setSession] = useState(readSession);
   const [documento, setDocumento] = useState('');
+  const [senha, setSenha] = useState('');
+  const [showForgot, setShowForgot] = useState(false);
+  const [showPassBox, setShowPassBox] = useState(false);
+  const [senhaAtual, setSenhaAtual] = useState('');
+  const [novaSenha, setNovaSenha] = useState('');
+  const [confirmaSenha, setConfirmaSenha] = useState('');
+  const [passMsg, setPassMsg] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [payload, setPayload] = useState(null);
@@ -47,12 +54,17 @@ const PortalDonCor = () => {
     setError('');
     setLoading(true);
     try {
-      const data = await loginPortalDonCor(documento);
+      const data = await loginPortalDonCor({ documento, senha });
       setSession(data);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      setSenha('');
+      if (data.primeiroAcesso) {
+        setShowPassBox(true);
+        setPassMsg('Primeiro acesso confirmado. Você pode trocar sua senha agora.');
+      }
       await loadPortal(data);
     } catch (err) {
-      setError(err?.response?.data?.detail || 'CPF/CNPJ não localizado.');
+      setError(err?.response?.data?.detail || 'CPF/CNPJ ou senha inválidos.');
     }
     setLoading(false);
   };
@@ -62,19 +74,32 @@ const PortalDonCor = () => {
     setSession(null);
     setPayload(null);
     setMessages([]);
+    setDocumento('');
+    setSenha('');
+    setShowPassBox(false);
+  };
+
+  const handleChangePass = async () => {
+    setError('');
+    setPassMsg('');
+    if (!senhaAtual || !novaSenha) return setError('Informe a senha atual e a nova senha.');
+    if (novaSenha.length < 6) return setError('A nova senha deve ter pelo menos 6 caracteres.');
+    if (novaSenha !== confirmaSenha) return setError('A confirmação da nova senha não confere.');
+    try {
+      await alterarSenhaPortalDonCor({ documento: session.documento, senhaAtual, novaSenha });
+      setSenhaAtual('');
+      setNovaSenha('');
+      setConfirmaSenha('');
+      setShowPassBox(false);
+      setPassMsg('Senha alterada com sucesso.');
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Não foi possível alterar a senha.');
+    }
   };
 
   const sendMessage = async () => {
     if (!session || (!message.trim() && !attachment)) return;
-    const saved = await sendPortalDonCorChat({
-      documento: session.documento,
-      empresa,
-      text: message.trim(),
-      attachmentName: attachment?.name || '',
-      attachmentSize: attachment?.size || 0,
-      sender: empresa,
-      senderRole: 'portal',
-    });
+    const saved = await sendPortalDonCorChat({ documento: session.documento, empresa, text: message.trim(), attachmentName: attachment?.name || '', attachmentSize: attachment?.size || 0, sender: empresa, senderRole: 'portal' });
     setMessages((items) => [...items, saved]);
     setMessage('');
     setAttachment(null);
@@ -93,8 +118,12 @@ const PortalDonCor = () => {
             <p style={{ margin:'8px 0 0', color:'#6b7280', fontSize:'0.9rem' }}>Acesso exclusivo para empresas e parceiros cadastrados.</p>
           </div>
           {error && <div style={{ background:'#fff1f2', border:'1px solid #fecdd3', color:'#be123c', borderRadius:'8px', padding:'10px 12px', marginBottom:'14px', fontSize:'0.86rem' }}>{error}</div>}
+          {showForgot && <div style={{ background:'#fff7ed', border:'1px solid #fed7aa', color:'#9a3412', borderRadius:'8px', padding:'10px 12px', marginBottom:'14px', fontSize:'0.82rem' }}>Se esqueceu sua senha, entre em contato com a DonCor para redefinir o acesso.</div>}
           <label style={{ display:'block', color:'#344050', fontWeight:700, fontSize:'0.84rem', marginBottom:'6px' }}>CNPJ ou CPF vinculado</label>
-          <Input value={documento} onChange={(event) => setDocumento(event.target.value)} placeholder="Digite o CNPJ da empresa ou CPF" style={{ marginBottom:'16px' }} />
+          <Input value={documento} onChange={(event) => setDocumento(event.target.value)} placeholder="Digite o CNPJ da empresa ou CPF" style={{ marginBottom:'12px' }} />
+          <label style={{ display:'block', color:'#344050', fontWeight:700, fontSize:'0.84rem', marginBottom:'6px' }}>Senha</label>
+          <Input type="password" value={senha} onChange={(event) => setSenha(event.target.value)} placeholder="Digite sua senha" style={{ marginBottom:'10px' }} />
+          <button type="button" onClick={() => setShowForgot(true)} style={{ border:0, background:'transparent', color:'#2C7BE5', cursor:'pointer', fontSize:'0.78rem', marginBottom:'14px', padding:0 }}>Esqueci minha senha</button>
           <Button type="submit" disabled={loading} style={{ width:'100%', background:'#2C7BE5', color:'#fff', fontWeight:800 }}>{loading ? 'Validando...' : 'Entrar no Portal DonCor'}</Button>
         </form>
       </div>
@@ -105,67 +134,31 @@ const PortalDonCor = () => {
     <div style={{ minHeight:'100vh', background:'#eef4fb' }}>
       <header style={{ background:'#fff', borderBottom:'1px solid #d8e2ef', padding:'14px 24px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <div><strong style={{ color:'#243447', fontSize:'1.1rem' }}>Portal DonCor</strong><div style={{ color:'#6b7280', fontSize:'0.78rem' }}>{empresa} • {session.documento}</div></div>
-        <Button variant="outline" onClick={handleLogout} style={{ display:'flex', gap:'6px' }}><LogOut size={14}/>Sair</Button>
+        <div style={{ display:'flex', gap:'8px' }}><Button variant="outline" onClick={() => setShowPassBox(!showPassBox)} style={{ display:'flex', gap:'6px' }}><KeyRound size={14}/>Alterar senha</Button><Button variant="outline" onClick={handleLogout} style={{ display:'flex', gap:'6px' }}><LogOut size={14}/>Sair</Button></div>
       </header>
-
       <main style={{ padding:'22px', maxWidth:'1280px', margin:'0 auto' }}>
         {error && <div style={{ background:'#fff1f2', border:'1px solid #fecdd3', color:'#be123c', borderRadius:'8px', padding:'10px 12px', marginBottom:'14px' }}>{error}</div>}
+        {passMsg && <div style={{ background:'#ecfdf5', border:'1px solid #bbf7d0', color:'#047857', borderRadius:'8px', padding:'10px 12px', marginBottom:'14px', fontSize:'0.86rem' }}>{passMsg}</div>}
+        {showPassBox && <section style={{ background:'#fff', border:'1px solid #e3e6f0', borderRadius:'14px', padding:'16px', marginBottom:'16px' }}>
+          <h2 style={{ fontSize:'1rem', color:'#243447', margin:'0 0 12px' }}>Alterar senha de acesso</h2>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr auto', gap:'10px', alignItems:'end' }}>
+            <div><label style={{ fontSize:'0.72rem', color:'#8a8d93', fontWeight:700 }}>Senha atual</label><Input type="password" value={senhaAtual} onChange={(e)=>setSenhaAtual(e.target.value)} placeholder="Senha atual" /></div>
+            <div><label style={{ fontSize:'0.72rem', color:'#8a8d93', fontWeight:700 }}>Nova senha</label><Input type="password" value={novaSenha} onChange={(e)=>setNovaSenha(e.target.value)} placeholder="Mínimo 6 caracteres" /></div>
+            <div><label style={{ fontSize:'0.72rem', color:'#8a8d93', fontWeight:700 }}>Confirmar nova senha</label><Input type="password" value={confirmaSenha} onChange={(e)=>setConfirmaSenha(e.target.value)} placeholder="Repita a nova senha" /></div>
+            <Button onClick={handleChangePass} style={{ background:'#2C7BE5', color:'#fff' }}>Salvar senha</Button>
+          </div>
+        </section>}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4, minmax(0, 1fr))', gap:'14px', marginBottom:'16px' }}>
-          <StatCard title="Contratos" value={payload?.resumo?.contratos || 0} icon={Building2}/>
-          <StatCard title="Faturas" value={payload?.resumo?.faturas || 0} icon={FileText}/>
-          <StatCard title="Boletos" value={payload?.resumo?.boletos || 0} icon={Receipt}/>
-          <StatCard title="Total faturado" value={payload?.resumo?.totalFaturado || 'R$ 0,00'} icon={BarChart3}/>
+          <StatCard title="Contratos" value={payload?.resumo?.contratos || 0} icon={Building2}/><StatCard title="Faturas" value={payload?.resumo?.faturas || 0} icon={FileText}/><StatCard title="Boletos" value={payload?.resumo?.boletos || 0} icon={Receipt}/><StatCard title="Total faturado" value={payload?.resumo?.totalFaturado || 'R$ 0,00'} icon={BarChart3}/>
         </div>
-
         <section style={{ background:'#fff', border:'1px solid #e3e6f0', borderRadius:'14px', padding:'16px', marginBottom:'16px' }}>
           <h2 style={{ fontSize:'1rem', color:'#243447', margin:'0 0 12px' }}>Analítico de Faturamento</h2>
-          {(payload?.analitico || []).map((item) => (
-            <div key={item.competencia} style={{ marginBottom:'10px' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.82rem', color:'#344050', fontWeight:700 }}><span>{item.competencia}</span><span>{item.valor}</span></div>
-              <div style={{ height:'8px', background:'#eef4fb', borderRadius:'999px', overflow:'hidden', marginTop:'5px' }}><div style={{ width:`${Math.max((item.valorNumerico / maxAnalitico) * 100, 4)}%`, height:'100%', background:'#2C7BE5' }} /></div>
-            </div>
-          ))}
+          {(payload?.analitico || []).map((item) => <div key={item.competencia} style={{ marginBottom:'10px' }}><div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.82rem', color:'#344050', fontWeight:700 }}><span>{item.competencia}</span><span>{item.valor}</span></div><div style={{ height:'8px', background:'#eef4fb', borderRadius:'999px', overflow:'hidden', marginTop:'5px' }}><div style={{ width:`${Math.max((item.valorNumerico / maxAnalitico) * 100, 4)}%`, height:'100%', background:'#2C7BE5' }} /></div></div>)}
           <div style={{ color:'#6b7280', fontSize:'0.78rem', marginTop:'8px' }}>Total: {new Intl.NumberFormat('pt-BR',{ style:'currency', currency:'BRL' }).format(totalAnalitico)}</div>
         </section>
-
-        <section style={{ background:'#fff', border:'1px solid #e3e6f0', borderRadius:'14px', padding:'16px', marginBottom:'16px', overflow:'auto' }}>
-          <h2 style={{ fontSize:'1rem', color:'#243447', margin:'0 0 12px' }}>Faturas</h2>
-          <table className="data-table"><thead><tr><th>Número</th><th>Contrato</th><th>Seguradora</th><th>Competência</th><th>Vencimento</th><th>Valor</th><th>Status</th></tr></thead>
-            <tbody>{(payload?.faturas || []).map((item) => <tr key={item.id || item.numero}><td>{item.numero}</td><td>{item.contrato}</td><td>{item.seguradora}</td><td>{item.competencia}</td><td>{item.vencimento}</td><td>{item.valor}</td><td>{item.status}</td></tr>)}</tbody>
-          </table>
-        </section>
-
-        <section style={{ background:'#fff', border:'1px solid #e3e6f0', borderRadius:'14px', padding:'16px', marginBottom:'16px', overflow:'auto' }}>
-          <h2 style={{ fontSize:'1rem', color:'#243447', margin:'0 0 12px' }}>Boletos baixados</h2>
-          <table className="data-table"><thead><tr><th>Operadora</th><th>Competência</th><th>Arquivo</th><th>Status</th><th>Abrir</th></tr></thead>
-            <tbody>{(payload?.boletos || []).map((item) => <tr key={item.id || item.storage_path}><td>{item.operadora}</td><td>{item.competencia}</td><td>{item.arquivo_nome || item.nome_arquivo}</td><td>{item.status}</td><td>{item.arquivo_url ? <a href={item.arquivo_url} target="_blank" rel="noreferrer">Abrir PDF</a> : '-'}</td></tr>)}</tbody>
-          </table>
-        </section>
-
-        <section style={{ background:'#fff', border:'1px solid #e3e6f0', borderRadius:'14px', minHeight:'420px', display:'flex', flexDirection:'column' }}>
-          <div style={{ padding:'14px 16px', borderBottom:'1px solid #e3e6f0', display:'flex', alignItems:'center', gap:'8px', color:'#243447', fontWeight:800 }}><MessageCircle size={17}/>Chat com DonCor</div>
-          <div style={{ flex:1, padding:'16px', background:'#f7f9fc', overflowY:'auto' }}>
-            {messages.length === 0 ? <div style={{ color:'#8a8d93', textAlign:'center', marginTop:'50px' }}>Nenhuma mensagem ainda.</div> : messages.map((item) => (
-              <div key={item.id} style={{ display:'flex', justifyContent:item.direction === 'incoming' ? 'flex-end' : 'flex-start', marginBottom:'10px' }}>
-                <div style={{ maxWidth:'72%', background:item.direction === 'incoming' ? '#2C7BE5' : '#fff', color:item.direction === 'incoming' ? '#fff' : '#344050', border:'1px solid #e3e6f0', borderRadius:'12px', padding:'10px 12px' }}>
-                  <div style={{ fontSize:'0.68rem', opacity:0.82, marginBottom:'4px' }}>{item.sender}</div>
-                  {item.text && <div style={{ fontSize:'0.88rem' }}>{item.text}</div>}
-                  {item.attachmentName && <div style={{ marginTop:'8px', display:'flex', alignItems:'center', gap:'6px', fontSize:'0.78rem', fontWeight:700 }}><Paperclip size={13}/>{item.attachmentName}</div>}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div style={{ padding:'14px', borderTop:'1px solid #e3e6f0' }}>
-            <textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Digite sua mensagem para a DonCor..." style={{ width:'100%', minHeight:'76px', border:'1px solid #d8e2ef', borderRadius:'8px', padding:'10px 12px', resize:'vertical', fontFamily:'inherit', fontSize:'0.86rem' }} />
-            <div style={{ display:'flex', justifyContent:'space-between', gap:'10px', marginTop:'10px' }}>
-              <label style={{ border:'1px solid #d8e2ef', borderRadius:'8px', padding:'8px 12px', cursor:'pointer', display:'flex', alignItems:'center', gap:'6px', color:'#344050', fontSize:'0.8rem' }}>
-                <Paperclip size={14}/> {attachment ? attachment.name : 'Anexar documento'}
-                <Input type="file" onChange={(event) => setAttachment(event.target.files?.[0] || null)} style={{ display:'none' }} />
-              </label>
-              <Button onClick={sendMessage} style={{ background:'#2C7BE5', color:'#fff', display:'flex', gap:'6px' }}><Send size={14}/>Enviar</Button>
-            </div>
-          </div>
-        </section>
+        <section style={{ background:'#fff', border:'1px solid #e3e6f0', borderRadius:'14px', padding:'16px', marginBottom:'16px', overflow:'auto' }}><h2 style={{ fontSize:'1rem', color:'#243447', margin:'0 0 12px' }}>Faturas</h2><table className="data-table"><thead><tr><th>Número</th><th>Contrato</th><th>Seguradora</th><th>Competência</th><th>Vencimento</th><th>Valor</th><th>Status</th></tr></thead><tbody>{(payload?.faturas || []).map((item) => <tr key={item.id || item.numero}><td>{item.numero}</td><td>{item.contrato}</td><td>{item.seguradora}</td><td>{item.competencia}</td><td>{item.vencimento}</td><td>{item.valor}</td><td>{item.status}</td></tr>)}</tbody></table></section>
+        <section style={{ background:'#fff', border:'1px solid #e3e6f0', borderRadius:'14px', padding:'16px', marginBottom:'16px', overflow:'auto' }}><h2 style={{ fontSize:'1rem', color:'#243447', margin:'0 0 12px' }}>Boletos baixados</h2><table className="data-table"><thead><tr><th>Operadora</th><th>Competência</th><th>Arquivo</th><th>Status</th><th>Abrir</th></tr></thead><tbody>{(payload?.boletos || []).map((item) => <tr key={item.id || item.storage_path}><td>{item.operadora}</td><td>{item.competencia}</td><td>{item.arquivo_nome || item.nome_arquivo}</td><td>{item.status}</td><td>{item.arquivo_url ? <a href={item.arquivo_url} target="_blank" rel="noreferrer">Abrir PDF</a> : '-'}</td></tr>)}</tbody></table></section>
+        <section style={{ background:'#fff', border:'1px solid #e3e6f0', borderRadius:'14px', minHeight:'420px', display:'flex', flexDirection:'column' }}><div style={{ padding:'14px 16px', borderBottom:'1px solid #e3e6f0', display:'flex', alignItems:'center', gap:'8px', color:'#243447', fontWeight:800 }}><MessageCircle size={17}/>Chat com DonCor</div><div style={{ flex:1, padding:'16px', background:'#f7f9fc', overflowY:'auto' }}>{messages.length === 0 ? <div style={{ color:'#8a8d93', textAlign:'center', marginTop:'50px' }}>Nenhuma mensagem ainda.</div> : messages.map((item) => <div key={item.id} style={{ display:'flex', justifyContent:item.direction === 'incoming' ? 'flex-end' : 'flex-start', marginBottom:'10px' }}><div style={{ maxWidth:'72%', background:item.direction === 'incoming' ? '#2C7BE5' : '#fff', color:item.direction === 'incoming' ? '#fff' : '#344050', border:'1px solid #e3e6f0', borderRadius:'12px', padding:'10px 12px' }}><div style={{ fontSize:'0.68rem', opacity:0.82, marginBottom:'4px' }}>{item.sender}</div>{item.text && <div style={{ fontSize:'0.88rem' }}>{item.text}</div>}{item.attachmentName && <div style={{ marginTop:'8px', display:'flex', alignItems:'center', gap:'6px', fontSize:'0.78rem', fontWeight:700 }}><Paperclip size={13}/>{item.attachmentName}</div>}</div></div>)}</div><div style={{ padding:'14px', borderTop:'1px solid #e3e6f0' }}><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Digite sua mensagem para a DonCor..." style={{ width:'100%', minHeight:'76px', border:'1px solid #d8e2ef', borderRadius:'8px', padding:'10px 12px', resize:'vertical', fontFamily:'inherit', fontSize:'0.86rem' }} /><div style={{ display:'flex', justifyContent:'space-between', gap:'10px', marginTop:'10px' }}><label style={{ border:'1px solid #d8e2ef', borderRadius:'8px', padding:'8px 12px', cursor:'pointer', display:'flex', alignItems:'center', gap:'6px', color:'#344050', fontSize:'0.8rem' }}><Paperclip size={14}/> {attachment ? attachment.name : 'Anexar documento'}<Input type="file" onChange={(event) => setAttachment(event.target.files?.[0] || null)} style={{ display:'none' }} /></label><Button onClick={sendMessage} style={{ background:'#2C7BE5', color:'#fff', display:'flex', gap:'6px' }}><Send size={14}/>Enviar</Button></div></div></section>
       </main>
     </div>
   );
