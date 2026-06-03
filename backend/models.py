@@ -189,6 +189,9 @@ class ColaboradorBase(BaseModel):
     telefone: str = ""
     departamento: str = ""
     status: str = "Ativo"
+    senha: str = ""
+    primeiroAcesso: bool = True
+    senhaTemporaria: bool = True
 
 
 class Colaborador(ColaboradorBase):
