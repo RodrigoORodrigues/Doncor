@@ -1,4 +1,10 @@
-"""Mongo-like adapter using Supabase, with in-memory fallback for tests."""
+"""Mongo-like adapter using Supabase, with in-memory fallback for tests.
+
+The project started with a Mongo-style persistence layer. Some Supabase tables use
+an `id + payload` JSONB layout, while newer RPA tables are flat Postgres tables.
+This adapter supports both layouts so a missing `payload` column does not break
+history/diagnostics reads.
+"""
 
 from __future__ import annotations
 
@@ -40,6 +46,7 @@ class SupabaseCollection:
         self.client = client
         self.table_name = table_name
         self.memory_store = memory_store
+        self._payload_layout: bool | None = None
 
     def _table(self):
         return self.client.table(self.table_name)
@@ -47,18 +54,39 @@ class SupabaseCollection:
     def _memory_table(self):
         return self.memory_store.setdefault(self.table_name, {})
 
+    def _uses_payload_layout(self) -> bool:
+        if self._payload_layout is not None:
+            return self._payload_layout
+        if self.client is None:
+            self._payload_layout = True
+            return True
+        try:
+            self._table().select("id,payload").limit(1).execute()
+            self._payload_layout = True
+        except Exception:
+            self._payload_layout = False
+        return self._payload_layout
+
+    def _row_to_item(self, row: dict[str, Any]) -> dict[str, Any]:
+        if isinstance(row.get("payload"), dict):
+            payload = copy.deepcopy(row.get("payload") or {})
+            payload.setdefault("id", row.get("id"))
+            payload.setdefault("_id", row.get("id"))
+            return payload
+        item = copy.deepcopy(row)
+        item.setdefault("_id", item.get("id"))
+        return item
+
     def _all_items(self):
         if self.client is None:
             return [copy.deepcopy(item) for item in self._memory_table().values()]
 
-        response = self._table().select("id,payload").execute()
-        items = []
-        for row in response.data or []:
-            payload = copy.deepcopy(row.get("payload") or {})
-            payload.setdefault("id", row.get("id"))
-            payload.setdefault("_id", row.get("id"))
-            items.append(payload)
-        return items
+        if self._uses_payload_layout():
+            response = self._table().select("id,payload").execute()
+        else:
+            response = self._table().select("*").execute()
+
+        return [self._row_to_item(row) for row in response.data or []]
 
     def _select_matching(self, query: dict[str, Any] | None = None):
         query = query or {}
@@ -87,8 +115,10 @@ class SupabaseCollection:
 
         if self.client is None:
             self._memory_table()[item_id] = payload
-        else:
+        elif self._uses_payload_layout():
             self._table().upsert({"id": item_id, "payload": payload}).execute()
+        else:
+            self._table().upsert(payload).execute()
         return {"inserted_id": item_id}
 
     async def insert_many(self, documents: list[dict[str, Any]]):
@@ -111,8 +141,10 @@ class SupabaseCollection:
 
         if self.client is None:
             self._memory_table()[item_id] = payload
-        else:
+        elif self._uses_payload_layout():
             self._table().upsert({"id": item_id, "payload": payload}).execute()
+        else:
+            self._table().upsert(payload).execute()
         return UpdateResult(1 if current else 0)
 
     async def delete_one(self, query: dict[str, Any]):

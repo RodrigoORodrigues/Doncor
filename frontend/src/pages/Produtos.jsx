@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import Pagination from '../components/Pagination';
 
 const PAGE_SIZE = 10;
+const EMPTY_FORM = { nome:'', seguradora:'', tipo:'Saúde', cobertura:'Nacional', acomodacao:'Enfermaria', status:'Ativo' };
 
 const Produtos = () => {
   const [data, setData] = useState([]);
@@ -17,7 +18,7 @@ const Produtos = () => {
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
   const [page, setPage] = useState(1);
-  const [form, setForm] = useState({ nome:'', seguradora:'', tipo:'Saúde', cobertura:'Nacional', acomodacao:'Enfermaria', reajuste:'', status:'Ativo' });
+  const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -30,7 +31,7 @@ const Produtos = () => {
 
   const handleCreate = async () => {
     setSaving(true);
-    try { await createProduto(form); setShowNew(false); setForm({ nome:'', seguradora:'', tipo:'Saúde', cobertura:'Nacional', acomodacao:'Enfermaria', reajuste:'', status:'Ativo' }); loadData(); } catch(e){console.error(e);}
+    try { await createProduto(form); setShowNew(false); setForm(EMPTY_FORM); loadData(); } catch(e){console.error(e);}
     setSaving(false);
   };
 
@@ -45,7 +46,10 @@ const Produtos = () => {
     try { await deleteProduto(id); loadData(); } catch(e){console.error(e);}
   };
 
-  const startEdit = (item) => { setEditingId(item.id); setEditData({ nome:item.nome, seguradora:item.seguradora, tipo:item.tipo, cobertura:item.cobertura, acomodacao:item.acomodacao, reajuste:item.reajuste, status:item.status }); };
+  const startEdit = (item) => {
+    setEditingId(item.id);
+    setEditData({ nome:item.nome, seguradora:item.seguradora, tipo:item.tipo, cobertura:item.cobertura, acomodacao:item.acomodacao, status:item.status });
+  };
 
   const totalPages = Math.ceil(data.length / PAGE_SIZE);
   const paged = data.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
@@ -70,10 +74,10 @@ const Produtos = () => {
 
       <div style={{ background:'#fff', borderRadius:'8px', boxShadow:'0 1px 3px rgba(0,0,0,0.06)', overflow:'hidden', marginTop:showFilters?'0':'12px' }}>
         {loading ? <div style={{display:'flex',justifyContent:'center',padding:'40px'}}><Loader2 size={24} style={{color:'#e6832a',animation:'spin 1s linear infinite'}}/></div> : (
-          <table className="data-table"><thead><tr><th>Produto</th><th>Seguradora</th><th>Tipo</th><th>Cobertura</th><th>Acomodação</th><th>Reajuste</th><th>Contratos</th><th>Status</th><th style={{width:'100px'}}>Ações</th></tr></thead>
+          <table className="data-table"><thead><tr><th>Produto</th><th>Seguradora</th><th>Tipo</th><th>Cobertura</th><th>Acomodação</th><th>Contratos</th><th>Status</th><th style={{width:'100px'}}>Ações</th></tr></thead>
             <tbody>{paged.map(item=>(<tr key={item.id}>
               {editingId===item.id ? (<>
-                <td>{inlineInput('nome')}</td><td>{inlineInput('seguradora')}</td><td>{inlineSelect('tipo',['Saúde','Odonto','Vida'])}</td><td>{inlineSelect('cobertura',['Nacional','Regional','Municipal'])}</td><td>{inlineSelect('acomodacao',['Enfermaria','Apartamento'])}</td><td>{inlineInput('reajuste')}</td>
+                <td>{inlineInput('nome')}</td><td>{inlineInput('seguradora')}</td><td>{inlineSelect('tipo',['Saúde','Odonto','Vida'])}</td><td>{inlineSelect('cobertura',['Nacional','Regional','Municipal'])}</td><td>{inlineSelect('acomodacao',['Enfermaria','Apartamento'])}</td>
                 <td style={{textAlign:'center'}}>{item.contratosVinculados}</td>
                 <td>{inlineSelect('status',['Ativo','Cancelado','Suspenso'])}</td>
                 <td><div style={{display:'flex',gap:'4px'}}>
@@ -81,7 +85,7 @@ const Produtos = () => {
                   <button onClick={()=>setEditingId(null)} style={{background:'none',border:'1px solid #e63757',borderRadius:'4px',padding:'4px 6px',cursor:'pointer',color:'#e63757'}}><X size={13}/></button>
                 </div></td>
               </>) : (<>
-                <td style={{fontWeight:600}}>{item.nome}</td><td>{item.seguradora}</td><td>{item.tipo}</td><td>{item.cobertura}</td><td>{item.acomodacao}</td><td style={{fontSize:'0.75rem',color:'#5E6E82'}}>{item.reajuste}</td>
+                <td style={{fontWeight:600}}>{item.nome}</td><td>{item.seguradora}</td><td>{item.tipo}</td><td>{item.cobertura}</td><td>{item.acomodacao}</td>
                 <td style={{textAlign:'center',fontWeight:600}}>{item.contratosVinculados}</td>
                 <td><span className={getStatusBadge(item.status)}>{item.status}</span></td>
                 <td><div style={{display:'flex',gap:'4px'}}>
@@ -101,10 +105,9 @@ const Produtos = () => {
             <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Nome</label><Input value={form.nome} onChange={e=>setForm({...form,nome:e.target.value})}/></div>
             <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Seguradora</label><Input value={form.seguradora} onChange={e=>setForm({...form,seguradora:e.target.value})}/></div>
           </div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px'}}>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
             <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Cobertura</label><select value={form.cobertura} onChange={e=>setForm({...form,cobertura:e.target.value})} style={{width:'100%',border:'1px solid #d8e2ef',borderRadius:'6px',padding:'8px 12px',fontSize:'0.85rem'}}><option>Nacional</option><option>Regional</option><option>Municipal</option></select></div>
             <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Acomodação</label><select value={form.acomodacao} onChange={e=>setForm({...form,acomodacao:e.target.value})} style={{width:'100%',border:'1px solid #d8e2ef',borderRadius:'6px',padding:'8px 12px',fontSize:'0.85rem'}}><option>Enfermaria</option><option>Apartamento</option></select></div>
-            <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Reajuste</label><Input value={form.reajuste} onChange={e=>setForm({...form,reajuste:e.target.value})} placeholder="ANS + X%"/></div>
           </div>
         </div>
         <DialogFooter><Button variant="outline" onClick={()=>setShowNew(false)}>Cancelar</Button><Button style={{background:'#e6832a',color:'#fff'}} onClick={handleCreate} disabled={saving}>{saving?'Salvando...':'Criar'}</Button></DialogFooter>

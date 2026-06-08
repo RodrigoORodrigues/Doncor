@@ -260,4 +260,17 @@ export const fetchRoboConfig = () => getObject("/robo/config", {}, roboAuthConfi
 export const saveRoboConfig = (data) => api.post("/robo/config", data, roboAuthConfig).then((r) => r.data);
 export const triggerRoboReal = (data) => api.post("/robo/trigger-real", data, roboAuthConfig).then((r) => r.data);
 
+// ─── Portal DonCor / Parceiros ───────────────────
+export const fetchPortalParceiros = (search = "", status = "todos") =>
+  getArray("/portal-parceiros", { params: { search, status } });
+export const createPortalParceiro = (data) => api.post("/portal-parceiros", data).then((r) => r.data);
+export const updatePortalParceiro = (id, data) => api.put(`/portal-parceiros/${id}`, data).then((r) => r.data);
+export const deletePortalParceiro = (id) => api.delete(`/portal-parceiros/${id}`).then((r) => r.data);
+export const loginPortalDonCor = ({ documento, senha }) => api.post("/portal-doncor/login", { documento, senha }).then((r) => r.data);
+export const alterarSenhaPortalDonCor = (data) => api.post("/portal-doncor/alterar-senha", data).then((r) => r.data);
+export const fetchPortalDonCorResumo = (documento) => getObject("/portal-doncor/resumo", {}, { params: { documento } });
+export const fetchPortalDonCorChat = ({ documento = "", empresa = "" } = {}) =>
+  getArray("/portal-doncor/chat", { params: { documento, empresa } });
+export const sendPortalDonCorChat = (data) => api.post("/portal-doncor/chat", data).then((r) => r.data);
+
 export default api;

@@ -32,5 +32,5 @@ except (TypeError, ValueError):
     port = 8000
 
 ensure_playwright_browser()
-print(f"Starting Doncor RPA Service on port {port}")
-uvicorn.run("rpa_service_example:app", host="0.0.0.0", port=port)
+print(f"Starting Doncor RPA Service on port {port} with corrected runtime")
+uvicorn.run("rpa_service_runtime:app", host="0.0.0.0", port=port)

@@ -4,19 +4,62 @@ import {
   Users, Handshake, UserPlus, UserMinus, ArrowLeftRight,
   Receipt, DollarSign, Building2, Package, UserCog,
   BarChart3, Download, LayoutDashboard,
-  Menu, Bot, Settings, User, HelpCircle
+  Menu, Bot, Settings, User, HelpCircle, MessageCircle, UserCheck
 } from 'lucide-react';
 
 const iconMap = {
   Users, Handshake, UserPlus, UserMinus, ArrowLeftRight,
   Receipt, DollarSign, Building2, Package, UserCog,
-  BarChart3, Download, LayoutDashboard, Menu, Bot, Settings, User, HelpCircle
+  BarChart3, Download, LayoutDashboard, Menu, Bot, Settings, User, HelpCircle, MessageCircle, UserCheck
+};
+
+const buildStrictMenuItems = () => {
+  const normalized = [];
+
+  menuItems.forEach((section) => {
+    if (section.section === 'Financeiro') return;
+
+    if (section.section === 'Meus Contratos') {
+      normalized.push({
+        ...section,
+        items: [
+          ...section.items.filter((item) => !['adesao', 'empresarial'].includes(item.id)),
+          { id: 'empresarial', label: 'Empresarial', icon: 'Handshake', page: 'empresarial' },
+          { id: 'pme', label: 'PME', icon: 'Handshake', page: 'empresarial' },
+        ],
+      });
+      return;
+    }
+
+    if (section.section === 'Cadastros') {
+      normalized.push({
+        ...section,
+        items: [
+          ...section.items,
+          { id: 'portal-parceiros', label: 'Portal DonCor', icon: 'UserCheck', page: 'portal-parceiros' },
+        ],
+      });
+      return;
+    }
+
+    normalized.push(section);
+  });
+
+  normalized.push({
+    section: 'Chat',
+    items: [
+      { id: 'chat', label: 'Chat', icon: 'MessageCircle', page: 'chat' },
+    ],
+  });
+
+  return normalized;
 };
 
 const Sidebar = ({ collapsed, onToggle, onMenuClick, activeItem, allowedPages = [] }) => {
+  const visibleMenuItems = buildStrictMenuItems();
+
   return (
     <nav className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
-      {/* Logo Area */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -63,23 +106,19 @@ const Sidebar = ({ collapsed, onToggle, onMenuClick, activeItem, allowedPages = 
         )}
       </div>
 
-      {/* Menu Items */}
       <div style={{ overflowY: 'auto', overflowX: 'hidden', height: 'calc(100vh - 56px)', padding: '8px 0' }}>
-        {/* Dashboard item */}
         <div style={{ padding: '0 0 4px 0' }}>
           <div
             className={`sidebar-item ${activeItem === 'dashboard' ? 'active' : ''}`}
             onClick={() => onMenuClick({ id: 'dashboard', label: 'Dashboard do Usuário', icon: 'LayoutDashboard', page: 'dashboard' })}
             title="Dashboard do Usuário"
           >
-            <span className="icon">
-              <LayoutDashboard size={16} />
-            </span>
+            <span className="icon"><LayoutDashboard size={16} /></span>
             {!collapsed && <span>Dashboard</span>}
           </div>
         </div>
 
-        {menuItems.map((section, sIdx) => (
+        {visibleMenuItems.map((section, sIdx) => (
           <div key={sIdx}>
             {!collapsed && (
               <>
@@ -97,9 +136,7 @@ const Sidebar = ({ collapsed, onToggle, onMenuClick, activeItem, allowedPages = 
                   onClick={() => onMenuClick(item)}
                   title={item.label}
                 >
-                  <span className="icon">
-                    <IconComp size={16} />
-                  </span>
+                  <span className="icon"><IconComp size={16} /></span>
                   {!collapsed && <span>{item.label}</span>}
                 </div>
               );

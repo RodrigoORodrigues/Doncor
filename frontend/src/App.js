@@ -19,6 +19,9 @@ import Colaboradores from "./pages/Colaboradores";
 import Relatorios from "./pages/Relatorios";
 import Robo from "./pages/Robo";
 import RoboConfig from "./pages/RoboConfig";
+import Chat from "./pages/Chat";
+import PortalDonCor from "./pages/PortalDonCor";
+import PortalParceiros from "./pages/PortalParceiros";
 import { Loader2 } from "lucide-react";
 
 const DEFAULT_ACCESS = "dashboard";
@@ -27,6 +30,7 @@ const ALL_PAGES = [
   "dashboard",
   "adesao",
   "empresarial",
+  "chat",
   "inclusao",
   "exclusao",
   "transferencia",
@@ -35,6 +39,7 @@ const ALL_PAGES = [
   "seguradoras",
   "produtos",
   "colaboradores",
+  "portal-parceiros",
   "relatorios",
   "robo",
   "robo-config",
@@ -51,6 +56,7 @@ const DEFAULT_ACCESS_BY_ROLE = {
     "dashboard",
     "adesao",
     "empresarial",
+    "chat",
     "inclusao",
     "exclusao",
     "transferencia",
@@ -58,6 +64,7 @@ const DEFAULT_ACCESS_BY_ROLE = {
     "comissoes",
     "seguradoras",
     "produtos",
+    "portal-parceiros",
     "relatorios",
     "perfil",
     "suporte",
@@ -98,9 +105,32 @@ const normalizeAccessConfig = (value) => {
 
 const LoginScreen = ({ onLogin, error }) => {
   const [username, setUsername] = useState(MASTER_USERNAME);
+  const [password, setPassword] = useState("");
+
+  const validatePassword = (role, inputPassword) => {
+    const isMaster = role.toLowerCase() === MASTER_USERNAME.toLowerCase();
+    const envKey = isMaster ? process.env.REACT_APP_MASTER_LOGIN_KEY : process.env.REACT_APP_STAFF_LOGIN_KEY;
+
+    if (!envKey) {
+      return { valid: false, message: "A senha do perfil não foi configurada no ambiente de produção." };
+    }
+
+    if (inputPassword !== envKey) {
+      return { valid: false, message: "Senha incorreta." };
+    }
+
+    return { valid: true, message: "" };
+  };
 
   const handleSubmit = (event) => {
     event.preventDefault();
+    const validation = validatePassword(username, password);
+
+    if (!validation.valid) {
+      onLogin(null, validation.message);
+      return;
+    }
+
     onLogin(username.trim());
   };
 
@@ -111,6 +141,7 @@ const LoginScreen = ({ onLogin, error }) => {
           <div style={{ width: "54px", height: "54px", borderRadius: "16px", background: "#3a5a8c", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "20px", marginBottom: "12px" }}>DC</div>
           <h1 style={{ margin: 0, fontSize: "1.35rem", color: "#344050" }}>Don Cor Web</h1>
           <p style={{ margin: "6px 0 0", color: "#6b7280", fontSize: "0.88rem" }}>Gestão de Apólices - Don Cor</p>
+          <a href="/portal-doncor" style={{ display:'inline-block', marginTop:'10px', color:'#2C7BE5', fontSize:'0.82rem', fontWeight:700 }}>Acessar Portal do Cliente</a>
         </div>
 
         {error && (
@@ -128,6 +159,17 @@ const LoginScreen = ({ onLogin, error }) => {
           <option value="Gerencia">Gerencia</option>
           <option value="Analista">Analista</option>
         </select>
+
+        <label style={{ display: "block", color: "#344050", fontWeight: 600, fontSize: "0.85rem", marginBottom: "6px" }}>
+          Senha
+        </label>
+        <input
+          type="password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          placeholder="Digite a senha do perfil"
+          style={{ width: "100%", border: "1px solid #d8e2ef", borderRadius: "8px", padding: "10px 12px", marginBottom: "16px", fontSize: "0.95rem", background: "#fff", boxSizing: "border-box" }}
+        />
 
         <button type="submit" style={{ width: "100%", background: "#2C7BE5", color: "#fff", border: "none", borderRadius: "8px", padding: "11px 14px", fontWeight: 700, cursor: "pointer" }}>
           Entrar
@@ -176,6 +218,7 @@ const pageComponents = {
   dashboard: Dashboard,
   adesao: Adesao,
   empresarial: Empresarial,
+  chat: Chat,
   inclusao: Inclusao,
   exclusao: Exclusao,
   transferencia: Transferencia,
@@ -184,6 +227,7 @@ const pageComponents = {
   seguradoras: Seguradoras,
   produtos: Produtos,
   colaboradores: Colaboradores,
+  "portal-parceiros": PortalParceiros,
   relatorios: Relatorios,
   robo: Robo,
   "robo-config": RoboConfig,
@@ -258,7 +302,12 @@ function App() {
   const [accessByRole, setAccessByRole] = useState(() => normalizeAccessConfig(safeParseJSON(localStorage.getItem('doncor_access'), DEFAULT_ACCESS_BY_ROLE)));
 
   const handleLoadingFinish = useCallback(() => setLoading(false), []);
-  const handleLogin = (username) => {
+  const handleLogin = (username, errorMessage = '') => {
+    if (errorMessage) {
+      setError(errorMessage);
+      return;
+    }
+
     const availableRoles = ["Diretoria", "Gerencia", "Analista"];
     const matchedRole = availableRoles.find((roleName) => roleName.toLowerCase() === username.toLowerCase());
     const isMaster = username.toLowerCase() === MASTER_USERNAME.toLowerCase();
@@ -290,6 +339,10 @@ function App() {
     setAccessByRole(normalized);
     localStorage.setItem('doncor_access', JSON.stringify(normalized));
   };
+
+  if (window.location.pathname.startsWith('/portal-doncor')) {
+    return <PortalDonCor />;
+  }
 
   if (!session) return <LoginScreen onLogin={handleLogin} error={error} />;
 
