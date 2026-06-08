@@ -160,9 +160,9 @@ const PortalDonCor = () => {
     setAttachment(null);
   };
 
-  const faturas = payload?.faturas || [];
-  const boletos = payload?.boletos || [];
-  const analitico = payload?.analitico || [];
+  const faturas = useMemo(() => payload?.faturas || [], [payload]);
+  const boletos = useMemo(() => payload?.boletos || [], [payload]);
+  const analitico = useMemo(() => payload?.analitico || [], [payload]);
   const totalAnalitico = useMemo(() => analitico.reduce((sum, item) => sum + (Number(item.valorNumerico) || 0), 0), [analitico]);
   const maxAnalitico = useMemo(() => Math.max(...analitico.map((item) => Number(item.valorNumerico) || 0), 1), [analitico]);
   const contratos = useMemo(() => {
