@@ -141,7 +141,7 @@ const LoginScreen = ({ onLogin, error }) => {
           <div style={{ width: "54px", height: "54px", borderRadius: "16px", background: "#3a5a8c", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "20px", marginBottom: "12px" }}>DC</div>
           <h1 style={{ margin: 0, fontSize: "1.35rem", color: "#344050" }}>Don Cor Web</h1>
           <p style={{ margin: "6px 0 0", color: "#6b7280", fontSize: "0.88rem" }}>Gestão de Apólices - Don Cor</p>
-          <a href="/portal-doncor" style={{ display:'inline-block', marginTop:'10px', color:'#2C7BE5', fontSize:'0.82rem', fontWeight:700 }}>Acessar Portal DonCor para empresas</a>
+          <a href="/portal-doncor" style={{ display:'inline-block', marginTop:'10px', color:'#2C7BE5', fontSize:'0.82rem', fontWeight:700 }}>Acessar Portal do Cliente</a>
         </div>
 
         {error && (
