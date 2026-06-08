@@ -35,6 +35,15 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
+
+beforeEach(() => {
+  jest.spyOn(window, 'confirm').mockReturnValue(true);
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
 test('exibe estado carregado com status e histórico', async () => {
   fetchRoboStatus.mockResolvedValue({ status: 'ready', queue: 3, successRate: 98 });
   fetchRoboExecucoes.mockResolvedValue([{ id: '1', processo: 'Proc', inicio: 'Hoje', duracao: '1m', status: 'Concluído' }]);
