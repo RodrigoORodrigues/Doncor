@@ -21,54 +21,55 @@ const Relatorios = () => {
   const barData = segData.map(s => ({ name: s.seguradora, contratos: s.contratos, vidas: s.vidas }));
 
   const summaryCards = [
-    { label: 'Contratos Adesão', value: data.totalContratosAdesao, icon: FileText, color: '#4979bb' },
+    { label: 'Contratos Adesão', value: data.totalContratosAdesao, icon: FileText, color: '#1a3a52' },
     { label: 'Contratos Empresarial', value: data.totalContratosEmpresarial, icon: Handshake, color: '#e6832a' },
     { label: 'Total Inclusões', value: data.totalInclusoes, icon: UserPlus, color: '#27ae60' },
     { label: 'Total Exclusões', value: data.totalExclusoes, icon: UserMinus, color: '#e63757' },
-    { label: 'Total Transferências', value: data.totalTransferencias, icon: ArrowLeftRight, color: '#8e44ad' },
   ];
 
   return (
     <div className="animate-fade-in">
-      <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'20px' }}>
-        <div style={{ width:'36px', height:'36px', borderRadius:'8px', background:'#4979bb15', display:'flex', alignItems:'center', justifyContent:'center' }}><BarChart3 size={18} color="#4979bb" /></div>
-        <div><h2 style={{ fontSize:'1.1rem', fontWeight:600, color:'#344050', margin:0 }}>Relatórios</h2><p style={{ fontSize:'0.72rem', color:'#8a8d93', margin:0 }}>Visão consolidada de dados da corretora</p></div>
+      <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'24px' }}>
+        <div style={{ width:'40px', height:'40px', borderRadius:'10px', background:'#1a3a5215', display:'flex', alignItems:'center', justifyContent:'center' }}><BarChart3 size={22} color="#1a3a52" /></div>
+        <div><h2 style={{ fontSize:'1.2rem', fontWeight:600, color:'#1a3a52', margin:0 }}>Relatórios</h2><p style={{ fontSize:'0.75rem', color:'#6c7680', margin:0 }}>Visão consolidada de dados da corretora</p></div>
       </div>
 
       {/* Summary Cards */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:'12px', marginBottom:'20px' }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:'16px', marginBottom:'24px' }}>
         {summaryCards.map((card, i) => {
           const Icon = card.icon;
           return (
             <div key={i} className="stat-card">
-              <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'6px' }}>
-                <div style={{ width:'32px', height:'32px', borderRadius:'8px', background:`${card.color}15`, display:'flex', alignItems:'center', justifyContent:'center' }}><Icon size={16} color={card.color} /></div>
+              <div style={{ display:'flex', alignItems:'center', gap:'12px', marginBottom:'12px' }}>
+                <div style={{ width:'44px', height:'44px', borderRadius:'10px', background:`${card.color}15`, display:'flex', alignItems:'center', justifyContent:'center' }}><Icon size={22} color={card.color} /></div>
+                <div>
+                  <div style={{ fontSize:'0.75rem', color:'#6c7680' }}>{card.label}</div>
+                  <div style={{ fontSize:'1.6rem', fontWeight:700, color:card.color }}>{card.value}</div>
+                </div>
               </div>
-              <div style={{ fontSize:'1.4rem', fontWeight:700, color:'#344050' }}>{card.value}</div>
-              <div style={{ fontSize:'0.68rem', color:'#8a8d93', marginTop:'2px' }}>{card.label}</div>
             </div>
           );
         })}
       </div>
 
       {/* Charts */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px', marginBottom:'20px' }}>
-        <div style={{ background:'#fff', borderRadius:'8px', padding:'16px', boxShadow:'0 1px 3px rgba(0,0,0,0.06)' }}>
-          <h3 style={{ fontSize:'0.85rem', fontWeight:600, color:'#344050', marginBottom:'16px' }}>Contratos e Vidas por Seguradora</h3>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px', marginBottom:'24px' }}>
+        <div style={{ background:'#fff', borderRadius:'8px', padding:'20px', boxShadow:'0 2px 8px rgba(0,0,0,0.08)' }}>
+          <h3 style={{ fontSize:'0.9rem', fontWeight:600, color:'#1a3a52', marginBottom:'16px' }}>Contratos e Vidas por Seguradora</h3>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={barData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f2f5" />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#8a8d93' }} angle={-15} textAnchor="end" height={50} />
-              <YAxis tick={{ fontSize: 11, fill: '#8a8d93' }} />
+              <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6c7680' }} angle={-15} textAnchor="end" height={50} />
+              <YAxis tick={{ fontSize: 11, fill: '#6c7680' }} />
               <Tooltip contentStyle={{ fontSize: '0.75rem', borderRadius: '6px', border: '1px solid #e3e6f0' }} />
-              <Bar dataKey="vidas" name="Vidas" fill="#4979bb" radius={[3,3,0,0]} />
+              <Bar dataKey="vidas" name="Vidas" fill="#1a3a52" radius={[3,3,0,0]} />
               <Bar dataKey="contratos" name="Contratos" fill="#e6832a" radius={[3,3,0,0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <div style={{ background:'#fff', borderRadius:'8px', padding:'16px', boxShadow:'0 1px 3px rgba(0,0,0,0.06)' }}>
-          <h3 style={{ fontSize:'0.85rem', fontWeight:600, color:'#344050', marginBottom:'16px' }}>Distribuição de Vidas</h3>
-          <ResponsiveContainer width="100%" height={220}>
+        <div style={{ background:'#fff', borderRadius:'8px', padding:'20px', boxShadow:'0 2px 8px rgba(0,0,0,0.08)' }}>
+          <h3 style={{ fontSize:'0.9rem', fontWeight:600, color:'#1a3a52', marginBottom:'16px' }}>Distribuição de Vidas</h3>
+          <ResponsiveContainer width="100%" height={250}>
             <PieChart><Pie data={pieData} cx="50%" cy="50%" outerRadius={85} paddingAngle={2} dataKey="value" label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} labelLine={false} style={{fontSize:'0.6rem'}}>
               {pieData.map((_,i)=>(<Cell key={i} fill={COLORS[i%COLORS.length]}/>))}
             </Pie><Tooltip contentStyle={{ fontSize: '0.75rem', borderRadius: '6px', border: '1px solid #e3e6f0' }} /></PieChart>
@@ -77,17 +78,17 @@ const Relatorios = () => {
       </div>
 
       {/* Status Tables */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px' }}>
-        <div style={{ background:'#fff', borderRadius:'8px', padding:'16px', boxShadow:'0 1px 3px rgba(0,0,0,0.06)' }}>
-          <h3 style={{ fontSize:'0.85rem', fontWeight:600, color:'#344050', marginBottom:'12px' }}>Status - Contratos Adesão</h3>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px' }}>
+        <div style={{ background:'#fff', borderRadius:'8px', padding:'20px', boxShadow:'0 2px 8px rgba(0,0,0,0.08)' }}>
+          <h3 style={{ fontSize:'0.9rem', fontWeight:600, color:'#1a3a52', marginBottom:'12px' }}>Status - Contratos Adesão</h3>
           <table className="data-table"><thead><tr><th>Status</th><th>Quantidade</th></tr></thead>
             <tbody>{Object.entries(data.statusAdesao||{}).map(([st, qt]) => (
               <tr key={st}><td><span className={({'Ativo':'badge-ativo','Cancelado':'badge-cancelado','Suspenso':'badge-suspenso'})[st]||'badge-pendente'}>{st}</span></td><td style={{fontWeight:600}}>{qt}</td></tr>
             ))}</tbody>
           </table>
         </div>
-        <div style={{ background:'#fff', borderRadius:'8px', padding:'16px', boxShadow:'0 1px 3px rgba(0,0,0,0.06)' }}>
-          <h3 style={{ fontSize:'0.85rem', fontWeight:600, color:'#344050', marginBottom:'12px' }}>Status - Contratos Empresarial</h3>
+        <div style={{ background:'#fff', borderRadius:'8px', padding:'20px', boxShadow:'0 2px 8px rgba(0,0,0,0.08)' }}>
+          <h3 style={{ fontSize:'0.9rem', fontWeight:600, color:'#1a3a52', marginBottom:'12px' }}>Status - Contratos Empresarial</h3>
           <table className="data-table"><thead><tr><th>Status</th><th>Quantidade</th></tr></thead>
             <tbody>{Object.entries(data.statusEmpresarial||{}).map(([st, qt]) => (
               <tr key={st}><td><span className={({'Ativo':'badge-ativo','Cancelado':'badge-cancelado','Vencido':'badge-vencido','Suspenso':'badge-suspenso'})[st]||'badge-pendente'}>{st}</span></td><td style={{fontWeight:600}}>{qt}</td></tr>

@@ -7,7 +7,7 @@
   left: 0;
   width: 100vw;
   height: 100vh;
-  background-color: #edf2f9;
+  background-color: #eef4fb;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -24,7 +24,7 @@
   width: 500px;
   height: 500px;
   border-radius: 50%;
-  background: radial-gradient(ellipse, rgba(173, 216, 255, 0.4) 0%, transparent 70%);
+  background: radial-gradient(ellipse, rgba(42, 95, 207, 0.3) 0%, transparent 70%);
 }
 
 .loading-screen::after {
@@ -35,7 +35,7 @@
   width: 600px;
   height: 600px;
   border-radius: 50%;
-  background: radial-gradient(ellipse, rgba(173, 216, 255, 0.3) 0%, transparent 70%);
+  background: radial-gradient(ellipse, rgba(26, 58, 82, 0.2) 0%, transparent 70%);
 }
 
 .loading-corner-tl {
@@ -44,7 +44,7 @@
   left: 0;
   width: 300px;
   height: 300px;
-  background: radial-gradient(ellipse at top left, rgba(173, 216, 255, 0.5) 0%, transparent 70%);
+  background: radial-gradient(ellipse at top left, rgba(42, 95, 207, 0.3) 0%, transparent 70%);
 }
 
 .loading-corner-br {
@@ -53,7 +53,7 @@
   right: 0;
   width: 400px;
   height: 400px;
-  background: radial-gradient(ellipse at bottom right, rgba(173, 230, 200, 0.3) 0%, transparent 70%);
+  background: radial-gradient(ellipse at bottom right, rgba(42, 95, 207, 0.2) 0%, transparent 70%);
 }
 
 .loading-corner-tr {
@@ -62,7 +62,7 @@
   right: 0;
   width: 350px;
   height: 350px;
-  background: radial-gradient(ellipse at top right, rgba(200, 230, 180, 0.3) 0%, transparent 70%);
+  background: radial-gradient(ellipse at top right, rgba(42, 95, 207, 0.25) 0%, transparent 70%);
 }
 
 /* Sidebar */
@@ -70,8 +70,8 @@
   width: 240px;
   min-width: 240px;
   height: 100vh;
-  background: #fff;
-  border-right: 1px solid #e3e6f0;
+  background: #1a3a52;
+  border-right: 1px solid #0f3a7d;
   transition: width 0.3s ease, min-width 0.3s ease;
   overflow: hidden;
   position: fixed;
@@ -88,7 +88,7 @@
 .sidebar-section-label {
   font-size: 0.7rem;
   font-weight: 600;
-  color: #2C7BE5;
+  color: #2a5fcf;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 12px 16px 4px;
@@ -98,7 +98,7 @@
   display: flex;
   align-items: center;
   padding: 8px 16px;
-  color: #5E6E82;
+  color: #a8b5c3;
   cursor: pointer;
   transition: background-color 0.2s ease, color 0.2s ease;
   font-size: 0.82rem;
@@ -108,13 +108,13 @@
 }
 
 .sidebar-item:hover {
-  background-color: #edf2f9;
-  color: #2C7BE5;
+  background-color: #2a5fcf;
+  color: #fff;
 }
 
 .sidebar-item.active {
-  background-color: #d7e6fb;
-  color: #2C7BE5;
+  background-color: #2a5fcf;
+  color: #fff;
   border-radius: 7px;
 }
 
@@ -143,9 +143,9 @@
 /* Top Navigation */
 .top-nav {
   height: 56px;
-  background: rgba(237, 242, 249, 0.9);
+  background: rgba(238, 244, 251, 0.95);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(227, 230, 240, 0.5);
+  border-bottom: 1px solid rgba(201, 218, 235, 0.6);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -159,11 +159,11 @@
 .tab-bar {
   display: flex;
   align-items: flex-end;
-  background-color: #edf2f9;
+  background-color: #eef4fb;
   padding: 0 4px;
   min-height: 40px;
   overflow-x: auto;
-  border-bottom: 1px solid #d8e2ef;
+  border-bottom: 1px solid #c1d9ed;
 }
 
 .tab-item {
@@ -172,26 +172,26 @@
   padding: 8px 14px;
   font-size: 0.78rem;
   font-weight: 500;
-  color: #5E6E82;
+  color: #6c7680;
   cursor: pointer;
   border-top: 3px solid transparent;
   transition: all 0.2s ease;
   white-space: nowrap;
   position: relative;
-  background: #e4e9f2;
+  background: #dae8f5;
   border-radius: 5px 5px 0 0;
   margin-right: 2px;
 }
 
 .tab-item:hover {
-  background: #d7e1ee;
-  color: #344050;
+  background: #c9dff1;
+  color: #1a3a52;
 }
 
 .tab-item.active {
-  background-color: #4979bb;
+  background-color: #1a3a52;
   color: #fff;
-  border-top: 3px solid #4979bb;
+  border-top: 3px solid #1a3a52;
 }
 
 .tab-item .tab-close {
@@ -211,7 +211,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #4979bb;
+  background: #1a3a52;
   color: #fff;
   height: 40px;
   padding: 0 12px;
@@ -222,14 +222,14 @@
 }
 
 .tab-refresh:hover {
-  background: #2a599b;
+  background: #0f3a7d;
 }
 
 /* Content Area */
 .main-content {
   margin-left: 240px;
   min-height: 100vh;
-  background-color: #edf2f9;
+  background-color: #eef4fb;
   transition: margin-left 0.3s ease;
 }
 
@@ -246,14 +246,18 @@
 .stat-card {
   background: #fff;
   border-radius: 8px;
-  padding: 16px 20px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   transition: box-shadow 0.2s ease, transform 0.2s ease;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .stat-card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  transform: translateY(-1px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.12);
+  transform: translateY(-2px);
 }
 
 /* Table Styles */
@@ -265,21 +269,21 @@
 }
 
 .data-table thead th {
-  background: #f5f7fb;
-  color: #5E6E82;
+  background: #f0f5fa;
+  color: #6c7680;
   font-weight: 600;
-  padding: 10px 14px;
+  padding: 12px 14px;
   text-align: left;
-  border-bottom: 2px solid #e3e6f0;
+  border-bottom: 2px solid #c9dff1;
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
 .data-table tbody td {
-  padding: 10px 14px;
+  padding: 12px 14px;
   border-bottom: 1px solid #f0f2f5;
-  color: #344050;
+  color: #1a3a52;
 }
 
 .data-table tbody tr {
@@ -287,7 +291,7 @@
 }
 
 .data-table tbody tr:hover {
-  background-color: #f5f8fc;
+  background-color: #f5f9fc;
 }
 
 /* Status Badges */
@@ -383,7 +387,7 @@
 
 /* Filters bar */
 .filters-toggle {
-  background-color: #4979bb;
+  background-color: #1a3a52;
   color: #fff;
   width: 100px;
   text-align: center;
@@ -402,5 +406,5 @@
 }
 
 .filters-toggle:hover {
-  background-color: #2a599b;
+  background-color: #0f3a7d;
 }
