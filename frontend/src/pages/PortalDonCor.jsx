@@ -452,6 +452,29 @@ const PortalDonCor = () => {
             </div>
           </div>
         </section>
+
+        <section style={{ ...card, padding: 24 }}>
+          <h3 style={{ color: theme.primary, margin: '0 0 14px', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <FileText size={20}/> Detalhes da Inclusão
+          </h3>
+          <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18 }}>
+            <label style={fieldLabel}>Descreva os detalhes da inclusão *</label>
+            <textarea
+              placeholder="Informe observações, condições ou instruções adicionais para esta inclusão..."
+              style={{
+                width: '100%',
+                minHeight: 128,
+                border: `1px solid ${theme.border}`,
+                borderRadius: 10,
+                padding: 14,
+                fontFamily: 'inherit',
+                fontSize: '0.92rem',
+                color: theme.text,
+                resize: 'vertical'
+              }}
+            />
+          </div>
+        </section>
       </div>
 
       <div style={{ display: 'grid', gap: 22, alignContent: 'start' }}>
@@ -485,7 +508,7 @@ const PortalDonCor = () => {
             <Paperclip size={20}/> Anexos Necessários
           </h3>
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 14, display: 'grid', gap: 12 }}>
-            {['RG / CPF', 'Comprovante de Residência', 'CTPS / eSocial', 'Formulário Assinado'].map((doc) => (
+            {['RG / CPF', 'Comprovante de Residência', 'CTPS / eSocial', 'Formulário Assinado', 'Outros'].map((doc) => (
               <label key={doc} style={{ ...checkboxRow, border: `1px solid ${theme.border}`, padding: '12px 14px', borderRadius: 10, justifyContent: 'space-between', cursor: 'pointer' }}>
                 <span>
                   <input type="checkbox" style={{ marginRight: 10 }} />
@@ -547,6 +570,30 @@ const PortalDonCor = () => {
             </div>
           </div>
         </section>
+
+        <section style={{ ...card, padding: 24 }}>
+          <h3 style={{ color: theme.primary, margin: '0 0 14px', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <FileText size={20}/> Detalhes da Exclusão
+          </h3>
+          <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18 }}>
+            <label style={fieldLabel}>Descreva os detalhes da exclusão *</label>
+            <textarea
+              placeholder="Informe o motivo, observações ou instruções adicionais para esta exclusão..."
+              style={{
+                width: '100%',
+                minHeight: 128,
+                border: `1px solid ${theme.border}`,
+                borderRadius: 10,
+                padding: 14,
+                fontFamily: 'inherit',
+                fontSize: '0.92rem',
+                color: theme.text,
+                resize: 'vertical'
+              }}
+            />
+          </div>
+        </section>
+
       </div>
 
       <div style={{ display: 'grid', gap: 22, alignContent: 'start' }}>
@@ -580,7 +627,7 @@ const PortalDonCor = () => {
             <Paperclip size={20}/> Anexos Necessários
           </h3>
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 14, display: 'grid', gap: 12 }}>
-            {['Termo de Rescisão', 'Formulário de Exclusão Assinado'].map((doc) => (
+            {['Termo de Rescisão', 'Formulário de Exclusão Assinado', 'Outros'].map((doc) => (
               <label key={doc} style={{ ...checkboxRow, border: `1px solid ${theme.border}`, padding: '12px 14px', borderRadius: 10, justifyContent: 'space-between', cursor: 'pointer' }}>
                 <span>
                   <input type="checkbox" style={{ marginRight: 10 }} />
