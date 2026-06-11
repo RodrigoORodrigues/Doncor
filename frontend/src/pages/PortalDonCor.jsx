@@ -31,6 +31,12 @@ const menuItems = [
   { id: 'chat', label: 'Chat', icon: MessageCircle },
 ];
 
+const movementSubItems = [
+  { id: 'inclusao', label: 'Inclusão' },
+  { id: 'exclusao', label: 'Exclusão' },
+  { id: 'alteracao', label: 'Alteração' },
+];
+
 const card = { background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 18, boxShadow: '0 10px 28px rgba(15,23,42,0.05)' };
 const money = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 
@@ -685,7 +691,15 @@ const PortalDonCor = () => {
     </div>
   );
 
-  const renderMovimentacao = () => <div><SectionTitle title="Movimentação" subtitle="Gerencie inclusões, exclusões e alterações de beneficiários." /><div style={{ display:'flex', gap:34, borderBottom:`1px solid ${theme.border}`, marginBottom:26 }}>{[['inclusao','Inclusão'], ['exclusao','Exclusão'], ['alteracao','Alteração']].map(([id, label]) => <button key={id} onClick={() => setActiveMovementTab(id)} style={{ border:0, background:'transparent', cursor:'pointer', padding:'0 0 14px', color:activeMovementTab === id ? theme.primary : theme.text, borderBottom:activeMovementTab === id ? `2px solid ${theme.blue}` : '2px solid transparent', fontWeight:activeMovementTab === id ? 900 : 500, fontSize:'1rem' }}>{label}</button>)}</div>{activeMovementTab === 'inclusao' && renderInclusao()}{activeMovementTab === 'exclusao' && renderExclusao()}{activeMovementTab === 'alteracao' && renderAlteracao()}<button onClick={() => setActiveSection('chat')} style={{ position:'fixed', right:28, bottom:28, width:54, height:54, borderRadius:14, border:0, background:theme.primary, color:'#fff', boxShadow:'0 10px 25px rgba(0,45,105,.25)', cursor:'pointer' }}><MessageCircle size={22}/></button></div>;
+  const renderMovimentacao = () => (
+    <div>
+      <SectionTitle title="Movimentação" subtitle="Gerencie inclusões, exclusões e alterações de beneficiários." />
+      {activeMovementTab === 'inclusao' && renderInclusao()}
+      {activeMovementTab === 'exclusao' && renderExclusao()}
+      {activeMovementTab === 'alteracao' && renderAlteracao()}
+      <button onClick={() => setActiveSection('chat')} style={{ position:'fixed', right:28, bottom:28, width:54, height:54, borderRadius:14, border:0, background:theme.primary, color:'#fff', boxShadow:'0 10px 25px rgba(0,45,105,.25)', cursor:'pointer' }}><MessageCircle size={22}/></button>
+    </div>
+  );
 
   const renderSolicitacoes = () => (
     <div>
@@ -807,7 +821,37 @@ const PortalDonCor = () => {
 
   return (
     <div style={{ minHeight:'100vh', background:theme.bg, display:'grid', gridTemplateColumns:'278px 1fr' }}>
-      <aside style={{ background:theme.navy, color:'#fff', padding:20, display:'flex', flexDirection:'column', gap:18 }}><div style={{ display:'flex', alignItems:'center', gap:12, padding:'6px 4px 18px', borderBottom:'1px solid #ffffff1f' }}><div style={{ width:44, height:44, borderRadius:15, background:'#ffffff1f', display:'flex', alignItems:'center', justifyContent:'center' }}><Shield size={24}/></div><div><div style={{ fontWeight:900, fontSize:'1.04rem' }}>{empresa}</div><div style={{ color:'#cbd5e1', fontSize:'0.75rem' }}>Portal do Cliente</div></div></div><Button onClick={() => setActiveSection('solicitacoes')} style={{ background:theme.blue, color:'#fff', justifyContent:'flex-start', gap:8 }}><FileText size={15}/>Novo chamado</Button><nav style={{ display:'grid', gap:6 }}>{menuItems.map((item) => <button key={item.id} onClick={() => setActiveSection(item.id)} style={{ border:0, borderRadius:12, padding:'10px 12px', cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', gap:10, background:activeSection === item.id ? '#ffffff18' : 'transparent', color:activeSection === item.id ? '#fff' : '#cbd5e1', fontWeight:activeSection === item.id ? 900 : 700 }}><item.icon size={17}/>{item.label}</button>)}</nav><div style={{ marginTop:'auto', borderTop:'1px solid #ffffff1f', paddingTop:14 }}><button onClick={handleLogout} style={{ width:'100%', border:0, background:'transparent', color:'#cbd5e1', display:'flex', alignItems:'center', gap:10, padding:'10px 12px', cursor:'pointer', fontWeight:800 }}><LogOut size={17}/>Sair</button></div></aside>
+      <aside style={{ background:theme.navy, color:'#fff', padding:20, display:'flex', flexDirection:'column', gap:18 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12, padding:'6px 4px 18px', borderBottom:'1px solid #ffffff1f' }}>
+          <div style={{ width:44, height:44, borderRadius:15, background:'#ffffff1f', display:'flex', alignItems:'center', justifyContent:'center' }}><Shield size={24}/></div>
+          <div>
+            <div style={{ fontWeight:900, fontSize:'1.04rem' }}>{empresa}</div>
+            <div style={{ color:'#cbd5e1', fontSize:'0.75rem' }}>Portal do Cliente</div>
+          </div>
+        </div>
+        <Button onClick={() => setActiveSection('solicitacoes')} style={{ background:theme.blue, color:'#fff', justifyContent:'flex-start', gap:8 }}><FileText size={15}/>Novo chamado</Button>
+        <nav style={{ display:'grid', gap:6 }}>
+          {menuItems.map((item) => (
+            <React.Fragment key={item.id}>
+              <button onClick={() => setActiveSection(item.id)} style={{ border:0, borderRadius:12, padding:'10px 12px', cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', gap:10, background:activeSection === item.id ? '#ffffff18' : 'transparent', color:activeSection === item.id ? '#fff' : '#cbd5e1', fontWeight:activeSection === item.id ? 900 : 700 }}>
+                <item.icon size={17}/>{item.label}
+              </button>
+              {item.id === 'movimentacao' && activeSection === 'movimentacao' && (
+                <div style={{ display:'grid', gap:4, margin:'-2px 0 2px 28px', paddingLeft:10, borderLeft:'1px solid #ffffff24' }}>
+                  {movementSubItems.map((subItem) => (
+                    <button key={subItem.id} onClick={() => { setActiveSection('movimentacao'); setActiveMovementTab(subItem.id); }} style={{ border:0, borderRadius:10, padding:'8px 10px', cursor:'pointer', textAlign:'left', background:activeMovementTab === subItem.id ? '#ffffff18' : 'transparent', color:activeMovementTab === subItem.id ? '#fff' : '#cbd5e1', fontWeight:activeMovementTab === subItem.id ? 900 : 700, fontSize:'0.82rem' }}>
+                      {subItem.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </React.Fragment>
+          ))}
+        </nav>
+        <div style={{ marginTop:'auto', borderTop:'1px solid #ffffff1f', paddingTop:14 }}>
+          <button onClick={handleLogout} style={{ width:'100%', border:0, background:'transparent', color:'#cbd5e1', display:'flex', alignItems:'center', gap:10, padding:'10px 12px', cursor:'pointer', fontWeight:800 }}><LogOut size={17}/>Sair</button>
+        </div>
+      </aside>
       <div style={{ minWidth:0 }}><header style={{ background:'#fff', borderBottom:`1px solid ${theme.border}`, padding:'14px 24px', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:5 }}><div style={{ display:'flex', alignItems:'center', gap:14 }}><div style={{ width:40, height:40, borderRadius:14, background:'#eff6ff', color:theme.blue, display:'flex', alignItems:'center', justifyContent:'center' }}><Building2 size={19}/></div><div><strong style={{ color:theme.text, fontSize:'1rem' }}>{empresa}</strong><div style={{ color:theme.muted, fontSize:'0.78rem' }}>{session.documento}</div></div></div><div style={{ width:420 }}><Input placeholder="Buscar..." /></div><div style={{ display:'flex', alignItems:'center', gap:8 }}><button style={{ border:`1px solid ${theme.border}`, background:'#fff', borderRadius:12, padding:9, color:theme.muted }}><Bell size={16}/></button><button style={{ border:`1px solid ${theme.border}`, background:'#fff', borderRadius:12, padding:9, color:theme.muted }}><HelpCircle size={16}/></button><Button variant="outline" onClick={() => setShowPassBox(!showPassBox)}>Alterar senha</Button></div></header><main style={{ padding:24, maxWidth:1320, margin:'0 auto' }}>{error && <div style={{ background:'#fff1f2', border:'1px solid #fecdd3', color:'#be123c', borderRadius:10, padding:'10px 12px', marginBottom:14 }}>{error}</div>}{passMsg && <div style={{ background:'#ecfdf5', border:'1px solid #bbf7d0', color:'#047857', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{passMsg}</div>}{showPassBox && <section style={{ ...card, padding:16, marginBottom:16 }}><h2 style={{ fontSize:'1rem', color:theme.text, margin:'0 0 12px' }}>Alterar senha de acesso</h2><div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr auto', gap:10, alignItems:'end' }}><div><label style={{ fontSize:'0.72rem', color:theme.muted, fontWeight:800 }}>Senha atual</label><Input type="password" value={senhaAtual} onChange={(e)=>setSenhaAtual(e.target.value)} placeholder="Senha atual" /></div><div><label style={{ fontSize:'0.72rem', color:theme.muted, fontWeight:800 }}>Nova senha</label><Input type="password" value={novaSenha} onChange={(e)=>setNovaSenha(e.target.value)} placeholder="Mínimo 6 caracteres" /></div><div><label style={{ fontSize:'0.72rem', color:theme.muted, fontWeight:800 }}>Confirmar nova senha</label><Input type="password" value={confirmaSenha} onChange={(e)=>setConfirmaSenha(e.target.value)} placeholder="Repita a nova senha" /></div><Button onClick={handleChangePass} style={{ background:theme.blue, color:'#fff' }}>Salvar senha</Button></div></section>}{loading && <div style={{ marginBottom:14, color:theme.muted, display:'flex', alignItems:'center', gap:8 }}><Activity size={16}/>Atualizando informações do cliente...</div>}{renderActiveSection()}</main></div>
     </div>
   );
