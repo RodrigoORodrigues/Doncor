@@ -348,87 +348,29 @@ const PortalDonCor = () => {
   );
 
   const renderBi = () => (
-    <div>
-      <SectionTitle 
-        title="Sinistralidade e BI" 
-        subtitle="Área para relatórios estratégicos, análises e acompanhamento analítico de sua carteira."
-      />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <section style={{ ...card, padding: 18 }}>
-          <div style={{ marginBottom: 18 }}>
-            <h3 style={{ margin: '0 0 6px', color: theme.text, fontSize: '0.95rem', fontWeight: 700 }}>Upload de Relatórios BI</h3>
-            <p style={{ margin: 0, color: theme.muted, fontSize: '0.8rem' }}>Formatos aceitos: PDF, XLSX, CSV</p>
-          </div>
-          <div style={{ border: `2px dashed ${theme.border}`, borderRadius: 16, padding: 28, textAlign: 'center', background: '#f8fafc' }}>
-            <UploadCloud size={36} color={theme.blue} />
-            <h4 style={{ margin: '12px 0 4px', color: theme.text }}>Arraste ou selecione arquivo</h4>
-            <p style={{ margin: '0 0 16px', color: theme.muted, fontSize: '0.8rem' }}>Clique para abrir o explorador de arquivos do seu computador</p>
-            <label style={{ display: 'inline-block' }}>
-              <Button style={{ background: theme.blue, color: '#fff', cursor: 'pointer' }}>
-                <UploadCloud size={14} /> Selecionar arquivo
-              </Button>
-              <Input type="file" onChange={(e) => {
-                if (e.target.files?.[0]) {
-                  const file = e.target.files[0];
-                  console.log('Arquivo selecionado:', file.name);
-                }
-              }} style={{ display: 'none' }} />
-            </label>
-          </div>
-        </section>
-
-        <section style={{ ...card, padding: 18 }}>
-          <h3 style={{ margin: '0 0 14px', color: theme.text, fontSize: '0.95rem', fontWeight: 700 }}>Histórico de Relatórios</h3>
-          <p style={{ margin: '0 0 14px', color: theme.muted, fontSize: '0.8rem' }}>Últimos documentos processados pelo BI</p>
-          <div style={{ display: 'grid', gap: 10 }}>
-            {[
-              { name: 'Relatório de Sinistralidade Q2 2023.pdf', size: '3,2 MB', date: '15/01/2023' },
-              { name: 'Base_Sinistro_Carência_Final.xlsx', size: '1,1 MB', date: '15/01/2023' },
-              { name: 'Base_Histórico_jan_e_Jun_2023.csv', size: '0,8 MB', date: '15/01/2023' },
-              { name: 'Relatório_Sinistralidade_Q2_2023.pdf', size: '2,2 MB', date: '15/01/2023' }
-            ].map((file, idx) => (
-              <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', border: `1px solid ${theme.border}`, borderRadius: 10, background: '#f8fafc' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <FileText color={theme.blue} size={16} />
-                  <div>
-                    <div style={{ color: theme.text, fontWeight: 600, fontSize: '0.85rem' }}>{file.name}</div>
-                    <div style={{ color: theme.muted, fontSize: '0.7rem' }}>{file.size} • {file.date}</div>
-                  </div>
-                </div>
-                <Download size={16} color={theme.muted} style={{ cursor: 'pointer' }} />
+    <section style={{ ...card, padding: 18 }}>
+      <h3 style={{ margin: '0 0 14px', color: theme.text, fontSize: '0.95rem', fontWeight: 700 }}>Histórico de Relatórios</h3>
+      <p style={{ margin: '0 0 14px', color: theme.muted, fontSize: '0.8rem' }}>Últimos documentos processados pelo BI</p>
+      <div style={{ display: 'grid', gap: 10 }}>
+        {[
+          { name: 'Relatório de Sinistralidade Q2 2023.pdf', size: '3,2 MB', date: '15/01/2023' },
+          { name: 'Base_Sinistro_Carência_Final.xlsx', size: '1,1 MB', date: '15/01/2023' },
+          { name: 'Base_Histórico_jan_e_Jun_2023.csv', size: '0,8 MB', date: '15/01/2023' },
+          { name: 'Relatório_Sinistralidade_Q2_2023.pdf', size: '2,2 MB', date: '15/01/2023' }
+        ].map((file, idx) => (
+          <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', border: `1px solid ${theme.border}`, borderRadius: 10, background: '#f8fafc' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <FileText color={theme.blue} size={16} />
+              <div>
+                <div style={{ color: theme.text, fontWeight: 600, fontSize: '0.85rem' }}>{file.name}</div>
+                <div style={{ color: theme.muted, fontSize: '0.7rem' }}>{file.size} • {file.date}</div>
               </div>
-            ))}
+            </div>
+            <Download size={16} color={theme.muted} style={{ cursor: 'pointer' }} />
           </div>
-        </section>
+        ))}
       </div>
-
-      <section style={{ ...card, padding: 22, marginTop: 16 }}>
-        <div style={{ marginBottom: 16 }}>
-          <h3 style={{ margin: '0 0 4px', color: theme.text, fontSize: '0.95rem', fontWeight: 700 }}>
-            <Activity size={16} style={{ display: 'inline-block', marginRight: 8 }} />
-            Novo Relatório
-          </h3>
-          <p style={{ margin: 0, color: theme.muted, fontSize: '0.8rem' }}>Solicite um novo relatório customizado para sua análise</p>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 14, alignItems: 'end' }}>
-          <div>
-            <label style={{ ...fieldLabel }}>Tipo de Relatório</label>
-            <select style={selectStyle}>
-              <option>Selecione o tipo de relatório</option>
-              <option>Sinistralidade</option>
-              <option>Faturamento</option>
-              <option>Utilização</option>
-              <option>Análise Estatística</option>
-            </select>
-          </div>
-          <div>
-            <label style={{ ...fieldLabel }}>Período</label>
-            <Input type="month" />
-          </div>
-          <Button style={{ background: theme.primary, color: '#fff', height: '40px' }}>Solicitar</Button>
-        </div>
-      </section>
-    </div>
+    </section>
   );
 
   const fieldLabel = { display:'block', color:theme.text, fontWeight:800, fontSize:'0.74rem', marginBottom:6, letterSpacing:'0.02em' };
