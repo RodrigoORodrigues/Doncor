@@ -617,50 +617,38 @@ const PortalDonCor = () => {
   );
 
   const renderExclusao = () => (
-    <section style={{ ...card, padding: 28 }}>
-      <div style={{ maxWidth: 900 }}>
-        <div style={{ marginBottom: 28 }}>
-          <label style={fieldLabel}>Operadora *</label>
-          <select style={{ ...selectStyle, maxWidth: 420 }}>
-            <option>Selecione a operadora</option>
-            <option>Assim Saúde</option>
-            <option>Amil</option>
-            <option>SulAmérica</option>
-          </select>
-        </div>
-
-        <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 24, marginBottom: 24 }}>
-          <h3 style={{ color: theme.primary, margin: '0 0 16px', fontSize: '1.25rem' }}>📋 Seleção de Contrato</h3>
-          <div style={{ display: 'flex', gap: 32 }}>
-            <label style={checkboxRow}><input type="checkbox" defaultChecked /> Dental</label>
-            <label style={checkboxRow}><input type="checkbox" /> Saúde</label>
-          </div>
-        </div>
-
-        <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 24, marginBottom: 24 }}>
-          <h3 style={{ color: theme.primary, margin: '0 0 16px', fontSize: '1.25rem' }}>⏱️ Tipo de Exclusão</h3>
-          <div style={{ display: 'grid', gap: 14 }}>
-            <label style={{ ...checkboxRow, gap: 12 }}>
-              <input type="radio" name="tipo-exclusao" defaultChecked />
-              <span>
-                <strong style={{ color: theme.text }}>No vencimento</strong>
-                <div style={{ color: theme.muted, fontSize: '0.82rem', marginTop: 4 }}>A exclusão ocorrerá na data de aniversário do contrato.</div>
-              </span>
-            </label>
-            <label style={{ ...checkboxRow, gap: 12 }}>
-              <input type="radio" name="tipo-exclusao"/>
-              <span>
-                <strong style={{ color: theme.text }}>Imediato</strong>
-                <div style={{ color: theme.muted, fontSize: '0.82rem', marginTop: 4 }}>A exclusão imediata pode estar sujeita a multas ou restrições contratuais.</div>
-              </span>
-            </label>
-          </div>
-        </div>
-
-        <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 24, marginBottom: 24 }}>
-          <h3 style={{ color: theme.primary, margin: '0 0 16px', fontSize: '1.25rem' }}>👤 Dados do Beneficiário</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '2fr 0.95fr', gap: 22 }}>
+      <div style={{ display: 'grid', gap: 22 }}>
+        <section style={{ ...card, padding: 24 }}>
+          <h3 style={{ color: theme.primary, margin: '0 0 14px', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Building2 size={20}/> Dados do Contrato
+          </h3>
+          <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
             <div>
+              <label style={fieldLabel}>Operadora *</label>
+              <select style={selectStyle}>
+                <option>Selecione a operadora</option>
+                <option>Assim Saúde</option>
+                <option>Amil</option>
+                <option>SulAmérica</option>
+              </select>
+            </div>
+            <div>
+              <label style={fieldLabel}>Plano *</label>
+              <div style={{ display: 'flex', gap: 18, marginTop: 12 }}>
+                <label style={checkboxRow}><input type="checkbox" defaultChecked /> Dental</label>
+                <label style={checkboxRow}><input type="checkbox" /> Saúde</label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section style={{ ...card, padding: 24 }}>
+          <h3 style={{ color: theme.primary, margin: '0 0 14px', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <UserMinus size={20}/> Dados do Beneficiário
+          </h3>
+          <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+            <div style={{ gridColumn: '1 / -1' }}>
               <label style={fieldLabel}>Nome Completo *</label>
               <Input placeholder="Nome do beneficiário" />
             </div>
@@ -669,102 +657,149 @@ const PortalDonCor = () => {
               <Input placeholder="000.000.000-00" />
             </div>
           </div>
-        </div>
+        </section>
+      </div>
 
-        <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 24 }}>
-          <h3 style={{ color: theme.primary, margin: '0 0 8px', fontSize: '1.25rem' }}>📎 Anexos Necessários</h3>
-          <p style={{ color: theme.muted, margin: '0 0 16px', fontSize: '0.86rem' }}>Selecione os documentos que serão enviados para esta solicitação.</p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gap: 22, alignContent: 'start' }}>
+        <section style={{ ...card, padding: 24, background: '#eef4ff', border: `1px solid #bad3ff` }}>
+          <h3 style={{ color: theme.primary, margin: '0 0 18px', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <RefreshCw size={20}/> Tipo de Exclusão
+          </h3>
+          <div style={{ display: 'grid', gap: 14 }}>
+            <label style={{ ...radioCard, alignItems: 'flex-start' }}>
+              <input type="radio" name="tipo-exclusao" defaultChecked />
+              <div>
+                <strong style={{ color: theme.text }}>No vencimento</strong>
+                <div style={{ color: theme.muted, marginTop: 4, fontSize: '0.82rem' }}>A exclusão ocorrerá na data de aniversário do contrato.</div>
+              </div>
+            </label>
+            <label style={{ ...radioCard, alignItems: 'flex-start', background: '#fff' }}>
+              <input type="radio" name="tipo-exclusao"/>
+              <div>
+                <strong style={{ color: theme.text }}>Imediato</strong>
+                <div style={{ color: theme.muted, marginTop: 6 }}>
+                  <span style={{ background: '#fed7aa', color: '#9a3412', fontSize: '0.7rem', fontWeight: 900, borderRadius: 6, padding: '3px 7px' }}>ATENÇÃO</span>
+                </div>
+                <div style={{ color: theme.text, marginTop: 8, fontSize: '0.84rem' }}>Pode estar sujeita a multas ou restrições contratuais.</div>
+              </div>
+            </label>
+          </div>
+        </section>
+
+        <section style={{ ...card, padding: 24 }}>
+          <h3 style={{ color: theme.primary, margin: '0 0 14px', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Paperclip size={20}/> Anexos Necessários
+          </h3>
+          <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 14, display: 'grid', gap: 12 }}>
             {['Termo de Rescisão', 'Formulário de Exclusão Assinado'].map((doc) => (
-              <label key={doc} style={{ ...checkboxRow, border: `1px solid ${theme.border}`, borderRadius: 10, padding: '14px 16px', cursor: 'pointer' }}>
-                <input type="checkbox" />
-                {doc}
+              <label key={doc} style={{ ...checkboxRow, border: `1px solid ${theme.border}`, padding: '12px 14px', borderRadius: 10, justifyContent: 'space-between', cursor: 'pointer' }}>
+                <span>
+                  <input type="checkbox" style={{ marginRight: 10 }} />
+                  {doc}
+                </span>
+                <UploadCloud size={18} color={theme.muted} />
               </label>
             ))}
           </div>
-          {uploadBox}
-        </div>
+        </section>
 
-        <div style={{ borderTop: `1px solid ${theme.border}`, marginTop: 28, paddingTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-          <Button variant="outline">Cancelar</Button>
-          <Button style={{ background: theme.primary, color: '#fff' }}>Enviar Solicitação</Button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Button variant="outline" style={{ flex: 1 }}>Cancelar</Button>
+          <Button style={{ flex: 1, background: theme.primary, color: '#fff' }}>Enviar Solicitação</Button>
         </div>
       </div>
-    </section>
+    </div>
   );
 
   const renderAlteracao = () => (
-    <section style={{ ...card, padding: 28 }}>
-      <h3 style={{ color: theme.primary, margin: '0 0 18px', fontSize: '1.35rem' }}>✏️ Solicitar Alteração</h3>
-      <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 24 }}>
-        <h4 style={{ margin: '0 0 14px', color: theme.text, fontSize: '1rem', fontWeight: 700 }}>1. Selecione o(s) Contrato(s) *</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 28 }}>
-          <label style={{ ...radioCard, alignItems: 'center', cursor: 'pointer' }}>
-            <input type="checkbox" defaultChecked/>
-            <div>
-              <strong style={{ color: theme.text }}>Saúde</strong>
-              <div style={{ color: theme.muted, fontSize: '0.82rem' }}>Apólice nº 987654321</div>
-            </div>
-          </label>
-          <label style={{ ...radioCard, alignItems: 'center', cursor: 'pointer' }}>
-            <input type="checkbox"/>
-            <div>
-              <strong style={{ color: theme.text }}>Dental</strong>
-              <div style={{ color: theme.muted, fontSize: '0.82rem' }}>Apólice nº 123456789</div>
-            </div>
-          </label>
-        </div>
-
-        <h4 style={{ margin: '0 0 14px', color: theme.text, fontSize: '1rem', fontWeight: 700 }}>2. Tipo de Solicitação *</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
-          {['Alteração Cadastral', 'Upgrade', 'Downgrade', 'Outros'].map((tipo, index) => (
-            <label key={tipo} style={{ ...checkboxRow, border: `1px solid ${theme.border}`, borderRadius: 10, padding: '14px 16px', cursor: 'pointer', background: index === 0 ? '#eef4ff' : '#fff' }}>
-              <input type="checkbox" defaultChecked={index === 0} style={{ marginRight: 8 }} />
-              <span style={{ fontWeight: 600, color: theme.text, fontSize: '0.85rem' }}>{tipo}</span>
-            </label>
-          ))}
-        </div>
-
-        <h4 style={{ margin: '0 0 14px', color: theme.text, fontSize: '1rem', fontWeight: 700 }}>3. Detalhes da Alteração *</h4>
-        <textarea 
-          placeholder="Descreva os dados que precisam ser alterados ou as especificações do upgrade/downgrade..." 
-          style={{ 
-            width: '100%', 
-            minHeight: 110, 
-            border: `1px solid ${theme.border}`, 
-            borderRadius: 10, 
-            padding: 14, 
-            fontFamily: 'inherit', 
-            fontSize: '0.92rem', 
-            marginBottom: 28,
-            color: theme.text,
-            resize: 'vertical'
-          }} 
-        />
-
-        <h4 style={{ margin: '0 0 14px', color: theme.text, fontSize: '1rem', fontWeight: 700 }}>4. Anexos</h4>
-        {uploadBox}
-        
-        <div style={{ marginTop: 20 }}>
-          <h5 style={{ margin: '0 0 12px', color: theme.text, fontSize: '0.9rem', fontWeight: 600 }}>Arquivos Anexados:</h5>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${theme.border}`, borderRadius: 10, padding: '12px 16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <FileText size={20} color={theme.muted}/>
+    <div style={{ display: 'grid', gridTemplateColumns: '2fr 0.95fr', gap: 22 }}>
+      <div style={{ display: 'grid', gap: 22 }}>
+        <section style={{ ...card, padding: 24 }}>
+          <h3 style={{ color: theme.primary, margin: '0 0 14px', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Building2 size={20}/> Dados do Contrato
+          </h3>
+          <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <label style={{ ...radioCard, alignItems: 'center', cursor: 'pointer' }}>
+              <input type="checkbox" defaultChecked/>
               <div>
-                <strong style={{ color: theme.text }}>comprovante_residencia.pdf</strong>
-                <div style={{ color: theme.muted, fontSize: '0.75rem' }}>1.2 MB</div>
+                <strong style={{ color: theme.text }}>Saúde</strong>
+                <div style={{ color: theme.muted, fontSize: '0.82rem' }}>Apólice nº 987654321</div>
               </div>
-            </div>
-            <button style={{ border: 0, background: 'transparent', color: '#dc2626', cursor: 'pointer', fontWeight: 900 }}>✕ Remover</button>
+            </label>
+            <label style={{ ...radioCard, alignItems: 'center', cursor: 'pointer' }}>
+              <input type="checkbox"/>
+              <div>
+                <strong style={{ color: theme.text }}>Dental</strong>
+                <div style={{ color: theme.muted, fontSize: '0.82rem' }}>Apólice nº 123456789</div>
+              </div>
+            </label>
           </div>
-        </div>
+        </section>
 
-        <div style={{ borderTop: `1px solid ${theme.border}`, marginTop: 28, paddingTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-          <Button variant="outline">Cancelar</Button>
-          <Button style={{ background: theme.primary, color: '#fff' }}>Enviar Solicitação</Button>
+        <section style={{ ...card, padding: 24 }}>
+          <h3 style={{ color: theme.primary, margin: '0 0 14px', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <FileText size={20}/> Detalhes da Alteração
+          </h3>
+          <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18 }}>
+            <label style={fieldLabel}>Descreva a alteração *</label>
+            <textarea
+              placeholder="Descreva os dados que precisam ser alterados ou as especificações do upgrade/downgrade..."
+              style={{
+                width: '100%',
+                minHeight: 128,
+                border: `1px solid ${theme.border}`,
+                borderRadius: 10,
+                padding: 14,
+                fontFamily: 'inherit',
+                fontSize: '0.92rem',
+                color: theme.text,
+                resize: 'vertical'
+              }}
+            />
+          </div>
+        </section>
+      </div>
+
+      <div style={{ display: 'grid', gap: 22, alignContent: 'start' }}>
+        <section style={{ ...card, padding: 24, background: '#eef4ff', border: `1px solid #bad3ff` }}>
+          <h3 style={{ color: theme.primary, margin: '0 0 18px', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <RefreshCw size={20}/> Tipo de Solicitação
+          </h3>
+          <div style={{ display: 'grid', gap: 12 }}>
+            {['Alteração Cadastral', 'Upgrade', 'Downgrade', 'Outros'].map((tipo, index) => (
+              <label key={tipo} style={{ ...radioCard, alignItems: 'center', cursor: 'pointer', background: index === 0 ? '#fff' : '#f8faff' }}>
+                <input type="checkbox" defaultChecked={index === 0} />
+                <span style={{ fontWeight: 700, color: theme.text, fontSize: '0.88rem' }}>{tipo}</span>
+              </label>
+            ))}
+          </div>
+        </section>
+
+        <section style={{ ...card, padding: 24 }}>
+          <h3 style={{ color: theme.primary, margin: '0 0 14px', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Paperclip size={20}/> Anexos
+          </h3>
+          <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 14 }}>
+            {uploadBox}
+            <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${theme.border}`, borderRadius: 10, padding: '12px 14px', background: '#fff' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <FileText size={20} color={theme.muted}/>
+                <div>
+                  <strong style={{ color: theme.text, fontSize: '0.86rem' }}>comprovante_residencia.pdf</strong>
+                  <div style={{ color: theme.muted, fontSize: '0.75rem' }}>1.2 MB</div>
+                </div>
+              </div>
+              <button style={{ border: 0, background: 'transparent', color: '#dc2626', cursor: 'pointer', fontWeight: 900 }}>Remover</button>
+            </div>
+          </div>
+        </section>
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Button variant="outline" style={{ flex: 1 }}>Cancelar</Button>
+          <Button style={{ flex: 1, background: theme.primary, color: '#fff' }}>Enviar Solicitação</Button>
         </div>
       </div>
-    </section>
+    </div>
   );
 
   const renderMovimentacao = () => <div><SectionTitle title="Movimentação" subtitle="Gerencie inclusões, exclusões e alterações de beneficiários." /><div style={{ display:'flex', gap:34, borderBottom:`1px solid ${theme.border}`, marginBottom:26 }}>{[['inclusao','Inclusão'], ['exclusao','Exclusão'], ['alteracao','Alteração']].map(([id, label]) => <button key={id} onClick={() => setActiveMovementTab(id)} style={{ border:0, background:'transparent', cursor:'pointer', padding:'0 0 14px', color:activeMovementTab === id ? theme.primary : theme.text, borderBottom:activeMovementTab === id ? `2px solid ${theme.blue}` : '2px solid transparent', fontWeight:activeMovementTab === id ? 900 : 500, fontSize:'1rem' }}>{label}</button>)}</div>{activeMovementTab === 'inclusao' && renderInclusao()}{activeMovementTab === 'exclusao' && renderExclusao()}{activeMovementTab === 'alteracao' && renderAlteracao()}<button onClick={() => setActiveSection('chat')} style={{ position:'fixed', right:28, bottom:28, width:54, height:54, borderRadius:14, border:0, background:theme.primary, color:'#fff', boxShadow:'0 10px 25px rgba(0,45,105,.25)', cursor:'pointer' }}><MessageCircle size={22}/></button></div>;
