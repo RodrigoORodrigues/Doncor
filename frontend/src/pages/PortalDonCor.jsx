@@ -766,6 +766,7 @@ const PortalDonCor = () => {
           { title: 'Formulários de Movimentação', icon: '📋', docs: ['Guia de Inclusão - Tabela A', 'Guia de Inclusão - Tabela B'] },
           { title: 'Tabelas de Reembolso', icon: '📊', docs: ['Tabela de Reembolso', 'Valores de Carência'] },
           { title: 'Informações de Carência', icon: '⏱️', docs: ['Tabela de Carência 2024', 'Aviso Carencial']},
+          { title: 'Regras de Coparticipação', icon: '⚖️', docs: ['Comunicado Regras', 'Tabela Atualizada'] },
           { title: 'Coberturas e Exclusões', icon: '📄', docs: ['Cobertura Completa', 'Itens Excluídos'] },
           { title: 'Manuais Operacionais', icon: '📘', docs: ['Manual do Participante', 'Guia Prático'] }
         ].map((section, idx) => (
