@@ -758,7 +758,6 @@ const PortalDonCor = () => {
           { title: 'Formulários de Movimentação', icon: '📋', docs: ['Guia de Inclusão - Tabela A', 'Guia de Inclusão - Tabela B'] },
           { title: 'Tabelas de Reembolso', icon: '📊', docs: ['Tabela de Reembolso', 'Valores de Carência'] },
           { title: 'Informações de Carência', icon: '⏱️', docs: ['Tabela de Carência 2024', 'Aviso Carencial']},
-          { title: 'Regras de Coparticipação', icon: '⚖️', docs: ['Comunicado Regras', 'Tabela Atualizada'] },
           { title: 'Coberturas e Exclusões', icon: '📄', docs: ['Cobertura Completa', 'Itens Excluídos'] },
           { title: 'Manuais Operacionais', icon: '📘', docs: ['Manual do Participante', 'Guia Prático'] }
         ].map((section, idx) => (
@@ -779,32 +778,6 @@ const PortalDonCor = () => {
           </section>
         ))}
       </div>
-
-      <section style={{ ...card, padding: 22 }}>
-        <div style={{ borderBottom: `2px solid ${theme.border}`, paddingBottom: 16, marginBottom: 20 }}>
-          <h3 style={{ margin: 0, color: theme.text, fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Shield size={20} color={theme.primary} />
-            Regras de Coparticipação
-          </h3>
-          <p style={{ margin: '8px 0 0', color: theme.muted, fontSize: '0.85rem' }}>As regras de franquia e coparticipação valem para procedimentos clínicos e cirúrgicos em redes credenciadas.</p>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 20, alignItems: 'center' }}>
-          <div>
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ color: theme.muted, fontSize: '0.75rem', fontWeight: 700, marginBottom: 4 }}>EXEMPLO DE COPARTICIPAÇÃO</div>
-              <div style={{ fontSize: '0.9rem', color: theme.text, lineHeight: 1.6 }}>
-                <strong>Consulta:</strong> R$ 35,00 ou 10% do valor (o que for menor)<br/>
-                <strong>Exames:</strong> R$ 50,00 ou 20% do valor (o que for menor)<br/>
-                <strong>Internação:</strong> R$ 200,00 por dia
-              </div>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <Button variant="outline">Visualizar Detalhes</Button>
-            <Button style={{ background: theme.primary, color: '#fff' }}>Baixar Documento</Button>
-          </div>
-        </div>
-      </section>
     </div>
   );
 
