@@ -744,7 +744,6 @@ const PortalDonCor = () => {
       {activeMovementTab === 'inclusao' && renderInclusao()}
       {activeMovementTab === 'exclusao' && renderExclusao()}
       {activeMovementTab === 'alteracao' && renderAlteracao()}
-      <button onClick={() => setActiveSection('chat')} style={{ position:'fixed', right:28, bottom:28, width:54, height:54, borderRadius:14, border:0, background:theme.primary, color:'#fff', boxShadow:'0 10px 25px rgba(0,45,105,.25)', cursor:'pointer' }}><MessageCircle size={22}/></button>
     </div>
   );
 
