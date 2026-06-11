@@ -295,117 +295,56 @@ const PortalDonCor = () => {
   );
 
   const renderFaturas = () => (
-    <div style={{ display: 'grid', gap: 16 }}>
-      <SectionTitle 
-        title="Gestão de Faturas e Boletos" 
-        subtitle="Acompanhe pagamentos, competências, vencimentos e downloads de boletos."
-        action={<Button style={{ background: theme.blue, color: '#fff' }}><Download size={14}/> Segunda via agrupada</Button>}
-      />
-      
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14 }}>
-        <div style={{ ...card, padding: 16, borderLeft: `4px solid ${theme.primary}` }}>
-          <div style={{ color: theme.muted, fontSize: '0.75rem', fontWeight: 700, marginBottom: 8 }}>FATURAS ABERTAS</div>
-          <div style={{ fontSize: '1.8rem', fontWeight: 900, color: theme.primary, marginBottom: 4 }}>R$ 14.520,00</div>
-          <div style={{ color: theme.muted, fontSize: '0.75rem' }}>Total faturado neste mês</div>
-        </div>
-        <div style={{ ...card, padding: 16, borderLeft: `4px solid ${theme.warning}` }}>
-          <div style={{ color: theme.muted, fontSize: '0.75rem', fontWeight: 700, marginBottom: 8 }}>PRÓXIMOS VENCIMENTOS</div>
-          <div style={{ fontSize: '1.8rem', fontWeight: 900, color: theme.warning, marginBottom: 4 }}>R$ 15 NOS</div>
-          <div style={{ color: theme.muted, fontSize: '0.75rem' }}>Valor dos documentos próximos a vencer</div>
-        </div>
-        <div style={{ ...card, padding: 16, borderLeft: `4px solid ${theme.ok}` }}>
-          <div style={{ color: theme.muted, fontSize: '0.75rem', fontWeight: 700, marginBottom: 8 }}>TOTAL ANUAL</div>
-          <div style={{ fontSize: '1.8rem', fontWeight: 900, color: theme.ok, marginBottom: 4 }}>R$ 158.400,00</div>
-          <div style={{ color: theme.muted, fontSize: '0.75rem' }}>Projeção para o exercício</div>
+    <section style={{ ...card, padding: 18 }}>
+      <div style={{ marginBottom: 14 }}>
+        <h3 style={{ margin: '0 0 12px', color: theme.text, fontSize: '0.95rem', fontWeight: 700 }}>Histórico de Faturas</h3>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: theme.muted }} />
+            <Input placeholder="Buscar por contrato ou competência..." style={{ paddingLeft: '32px', fontSize: '0.8rem' }} />
+          </div>
+          <select style={{ ...selectStyle, maxWidth: 150 }}>
+            <option>Status: Todos</option>
+            <option>Aberta</option>
+            <option>Paga</option>
+            <option>Vencida</option>
+          </select>
         </div>
       </div>
-
-      <section style={{ ...card, padding: 18 }}>
-        <div style={{ marginBottom: 14 }}>
-          <h3 style={{ margin: '0 0 12px', color: theme.text, fontSize: '0.95rem', fontWeight: 700 }}>Histórico de Faturas</h3>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <div style={{ flex: 1, position: 'relative' }}>
-              <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: theme.muted }} />
-              <Input placeholder="Buscar por contrato ou competência..." style={{ paddingLeft: '32px', fontSize: '0.8rem' }} />
-            </div>
-            <select style={{ ...selectStyle, maxWidth: 150 }}>
-              <option>Status: Todos</option>
-              <option>Aberta</option>
-              <option>Paga</option>
-              <option>Vencida</option>
-            </select>
-          </div>
-        </div>
-        <table className="data-table" style={{ fontSize: '0.82rem' }}>
-          <thead>
-            <tr style={{ background: '#f8fafc', borderBottom: `2px solid ${theme.border}` }}>
-              <th style={{ textAlign: 'left' }}>Número</th>
-              <th style={{ textAlign: 'left' }}>Contrato</th>
-              <th style={{ textAlign: 'left' }}>Seguradora</th>
-              <th style={{ textAlign: 'left' }}>Competência</th>
-              <th style={{ textAlign: 'left' }}>Vencimento</th>
-              <th style={{ textAlign: 'right' }}>Valor</th>
-              <th style={{ textAlign: 'left' }}>Status</th>
-              <th style={{ textAlign: 'center' }}>Ações</th>
+      <table className="data-table" style={{ fontSize: '0.82rem' }}>
+        <thead>
+          <tr style={{ background: '#f8fafc', borderBottom: `2px solid ${theme.border}` }}>
+            <th style={{ textAlign: 'left' }}>Número</th>
+            <th style={{ textAlign: 'left' }}>Contrato</th>
+            <th style={{ textAlign: 'left' }}>Seguradora</th>
+            <th style={{ textAlign: 'left' }}>Competência</th>
+            <th style={{ textAlign: 'left' }}>Vencimento</th>
+            <th style={{ textAlign: 'right' }}>Valor</th>
+            <th style={{ textAlign: 'left' }}>Status</th>
+            <th style={{ textAlign: 'center' }}>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {faturas.map((item, i) => (
+            <tr key={i} style={{ borderBottom: `1px solid ${theme.border}` }}>
+              <td style={{ fontWeight: 600, color: theme.primary }}>{item.numero}</td>
+              <td>{item.contrato}</td>
+              <td>{item.seguradora}</td>
+              <td>{item.competencia}</td>
+              <td>{item.vencimento}</td>
+              <td style={{ textAlign: 'right', fontWeight: 600 }}>{item.valor}</td>
+              <td><StatusPill status={item.status}/></td>
+              <td style={{ textAlign: 'center' }}>
+                <button style={{ border: 0, background: 'transparent', color: theme.blue, cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>
+                  <Download size={14} /> PDF
+                </button>
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {faturas.map((item, i) => (
-              <tr key={i} style={{ borderBottom: `1px solid ${theme.border}` }}>
-                <td style={{ fontWeight: 600, color: theme.primary }}>{item.numero}</td>
-                <td>{item.contrato}</td>
-                <td>{item.seguradora}</td>
-                <td>{item.competencia}</td>
-                <td>{item.vencimento}</td>
-                <td style={{ textAlign: 'right', fontWeight: 600 }}>{item.valor}</td>
-                <td><StatusPill status={item.status}/></td>
-                <td style={{ textAlign: 'center' }}>
-                  <button style={{ border: 0, background: 'transparent', color: theme.blue, cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>
-                    <Download size={14} /> PDF
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {faturas.length === 0 && <EmptyState>Nenhuma fatura encontrada.</EmptyState>}
-      </section>
-
-      <section style={{ ...card, padding: 18 }}>
-        <h3 style={{ margin: '0 0 12px', color: theme.text, fontSize: '0.95rem', fontWeight: 700 }}>Boletos Disponíveis</h3>
-        <table className="data-table" style={{ fontSize: '0.82rem' }}>
-          <thead>
-            <tr style={{ background: '#f8fafc', borderBottom: `2px solid ${theme.border}` }}>
-              <th style={{ textAlign: 'left' }}>Operadora</th>
-              <th style={{ textAlign: 'left' }}>Competência</th>
-              <th style={{ textAlign: 'left' }}>Arquivo</th>
-              <th style={{ textAlign: 'left' }}>Status</th>
-              <th style={{ textAlign: 'center' }}>Download</th>
-            </tr>
-          </thead>
-          <tbody>
-            {boletos.map((item, i) => (
-              <tr key={i} style={{ borderBottom: `1px solid ${theme.border}` }}>
-                <td>{item.operadora}</td>
-                <td>{item.competencia}</td>
-                <td style={{ color: theme.blue, fontWeight: 600 }}>{item.arquivo_nome || item.nome_arquivo}</td>
-                <td><StatusPill status={item.status}/></td>
-                <td style={{ textAlign: 'center' }}>
-                  {item.arquivo_url ? (
-                    <a href={item.arquivo_url} target="_blank" rel="noreferrer" style={{ color: theme.blue, fontWeight: 700, textDecoration: 'none', fontSize: '0.8rem' }}>
-                      <Download size={14} style={{ display: 'inline-block' }} /> Abrir PDF
-                    </a>
-                  ) : (
-                    <span style={{ color: theme.muted, fontSize: '0.8rem' }}>-</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {boletos.length === 0 && <EmptyState>Nenhum boleto disponível.</EmptyState>}
-      </section>
-    </div>
+          ))}
+        </tbody>
+      </table>
+      {faturas.length === 0 && <EmptyState>Nenhuma fatura encontrada.</EmptyState>}
+    </section>
   );
 
   const renderBi = () => (
