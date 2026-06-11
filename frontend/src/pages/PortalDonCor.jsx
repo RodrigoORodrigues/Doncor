@@ -37,9 +37,11 @@ const money = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', cur
 const StatusPill = ({ status }) => {
   const normalized = String(status || '').toLowerCase();
   const ok = normalized.includes('pago') || normalized.includes('ativo') || normalized.includes('baixado') || normalized.includes('concl');
-  const warn = normalized.includes('pend') || normalized.includes('abert') || normalized.includes('andamento');
-  const color = ok ? theme.ok : warn ? theme.warning : theme.muted;
-  const bg = ok ? '#ECFDF5' : warn ? '#FFFBEB' : '#F1F5F9';
+  const danger = normalized.includes('pend');
+  const warn = normalized.includes('andamento');
+  const neutral = normalized.includes('enviado') || normalized.includes('abert');
+  const color = ok ? theme.ok : danger ? '#DC2626' : warn ? theme.warning : neutral ? theme.muted : theme.muted;
+  const bg = ok ? '#ECFDF5' : danger ? '#FEF2F2' : warn ? '#FFFBEB' : '#F1F5F9';
   return <span style={{ color, background: bg, borderRadius: 999, padding: '4px 10px', fontSize: '0.72rem', fontWeight: 800 }}>{status || 'Em análise'}</span>;
 };
 
@@ -696,7 +698,7 @@ const PortalDonCor = () => {
         <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
           <div style={{ flex: 1, position: 'relative' }}>
             <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: theme.muted }} />
-            <Input placeholder="Buscar por protocolo, CPF ou descrição..." style={{ paddingLeft: '32px', fontSize: '0.8rem' }} />
+            <Input placeholder="Buscar por protocolo, CPF ou nome do beneficiário..." style={{ paddingLeft: '32px', fontSize: '0.8rem' }} />
           </div>
           <select style={{ ...selectStyle, maxWidth: 150 }}>
             <option>Tipo: Todos</option>
@@ -706,7 +708,8 @@ const PortalDonCor = () => {
           </select>
           <select style={{ ...selectStyle, maxWidth: 150 }}>
             <option>Status: Todos</option>
-            <option>Aberto</option>
+            <option>Enviado</option>
+            <option>Pendente</option>
             <option>Em Andamento</option>
             <option>Concluído</option>
           </select>
@@ -716,24 +719,29 @@ const PortalDonCor = () => {
             <tr style={{ background: '#f8fafc', borderBottom: `2px solid ${theme.border}` }}>
               <th style={{ textAlign: 'left' }}>Tipo</th>
               <th style={{ textAlign: 'left' }}>Protocolo</th>
-              <th style={{ textAlign: 'left' }}>Descrição</th>
+              <th style={{ textAlign: 'left' }}>Nome do Beneficiário</th>
               <th style={{ textAlign: 'left' }}>CPF</th>
-              <th style={{ textAlign: 'left' }}>Data Reativação</th>
+              <th style={{ textAlign: 'left' }}>Data de envio</th>
               <th style={{ textAlign: 'left' }}>Data Conclusão</th>
               <th style={{ textAlign: 'left' }}>Status</th>
               <th style={{ textAlign: 'center' }}>Ações</th>
             </tr>
           </thead>
           <tbody>
-            {['Inclusão', 'Alteração', 'Exclusão'].map((tipo, idx) => (
+            {[
+              { tipo: 'Inclusão', beneficiario: 'João da Silva', cpf: '000.000.000-00', status: 'Enviado', conclusao: '-' },
+              { tipo: 'Alteração', beneficiario: 'Maria Oliveira', cpf: '000.000.000-00', status: 'Pendente', conclusao: '-' },
+              { tipo: 'Exclusão', beneficiario: 'Carlos Santos', cpf: '000.000.000-00', status: 'Em andamento', conclusao: '-' },
+              { tipo: 'Inclusão', beneficiario: 'Ana Pereira', cpf: '000.000.000-00', status: 'Concluído', conclusao: new Date().toLocaleDateString('pt-BR') }
+            ].map((item, idx) => (
               <tr key={idx} style={{ borderBottom: `1px solid ${theme.border}` }}>
-                <td style={{ fontWeight: 600 }}>{tipo}</td>
+                <td style={{ fontWeight: 600 }}>{item.tipo}</td>
                 <td style={{ color: theme.primary, fontWeight: 700 }}>#CLI-{String(idx + 1).padStart(4, '0')}</td>
-                <td>{tipo === 'Inclusão' ? 'Novo beneficiário' : tipo === 'Exclusão' ? 'Remoção de dependente' : 'Atualização cadastral'}</td>
-                <td>000.000.000-00</td>
+                <td>{item.beneficiario}</td>
+                <td>{item.cpf}</td>
                 <td>{new Date().toLocaleDateString('pt-BR')}</td>
-                <td style={{ color: theme.muted }}>-</td>
-                <td><StatusPill status={idx === 0 ? 'Aberto' : 'Em andamento'}/></td>
+                <td style={{ color: theme.muted }}>{item.conclusao}</td>
+                <td><StatusPill status={item.status}/></td>
                 <td style={{ textAlign: 'center' }}>
                   <Button variant="outline" size="sm" onClick={() => setActiveSection('chat')} style={{ fontSize: '0.75rem', padding: '4px 8px' }}>
                     <MessageCircle size={13}/> Chat
