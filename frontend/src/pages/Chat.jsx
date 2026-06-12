@@ -1,22 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Building2, MessageCircle, Paperclip, Send, Bell, CheckCheck } from 'lucide-react';
-import { fetchContratosEmpresarial } from '../services/api';
+import { fetchContratosEmpresarial, fetchPortalParceiros, fetchPortalDonCorChat, sendPortalDonCorChat, markPortalDonCorChatRead } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 
-const STORAGE_MESSAGES = 'doncor_chat_messages';
 const STORAGE_UNREAD = 'doncor_chat_unread';
 
 const defaultCompanies = ['Tech Solutions Ltda', 'Global Commerce SA', 'Indústria ABC ME'];
-
-const readJson = (key, fallback) => {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
-};
 
 const saveUnread = (count) => {
   localStorage.setItem(STORAGE_UNREAD, String(count));
@@ -26,83 +16,89 @@ const saveUnread = (count) => {
 const Chat = ({ session }) => {
   const [companies, setCompanies] = useState(defaultCompanies);
   const [selectedCompany, setSelectedCompany] = useState(defaultCompanies[0]);
-  const [messages, setMessages] = useState(() => readJson(STORAGE_MESSAGES, []));
+  const [companyDocuments, setCompanyDocuments] = useState({});
+  const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState('');
   const [attachment, setAttachment] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const userRole = session?.role || 'Usuário';
   const userName = session?.username || 'Usuário';
 
-  useEffect(() => {
-    const loadCompanies = async () => {
-      try {
-        const contratos = await fetchContratosEmpresarial('', 'todos');
-        const names = Array.from(new Set((contratos || []).map((item) => item.empresa).filter(Boolean)));
-        if (names.length) {
-          setCompanies(names);
-          setSelectedCompany((current) => current || names[0]);
-        }
-      } catch (error) {
-        console.error(error);
+  const loadChatData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [contratos, parceiros, chat] = await Promise.all([
+        fetchContratosEmpresarial('', 'todos'),
+        fetchPortalParceiros('', 'todos'),
+        fetchPortalDonCorChat({}),
+      ]);
+      const documents = {};
+      const names = [];
+      const addCompany = (name, documento = '') => {
+        const cleanName = String(name || '').trim();
+        if (!cleanName) return;
+        if (!names.includes(cleanName)) names.push(cleanName);
+        if (documento) documents[cleanName] = documento;
+      };
+
+      (parceiros || []).forEach((item) => addCompany(item.empresa || item.nome, item.documento));
+      (chat || []).forEach((item) => addCompany(item.empresa || item.company, item.documento));
+      (contratos || []).forEach((item) => addCompany(item.empresa, item.cnpj));
+
+      setMessages(chat || []);
+      setCompanyDocuments(documents);
+      if (names.length) {
+        setCompanies(names);
+        setSelectedCompany((current) => names.includes(current) ? current : names[0]);
       }
-    };
-    loadCompanies();
+    } catch (error) {
+      console.error(error);
+    }
+    setLoading(false);
   }, []);
 
+  useEffect(() => { loadChatData(); }, [loadChatData]);
+
   useEffect(() => {
-    localStorage.setItem(STORAGE_MESSAGES, JSON.stringify(messages));
     const unread = messages.filter((item) => item.direction === 'incoming' && !item.read).length;
     saveUnread(unread);
   }, [messages]);
 
   const companyMessages = useMemo(
-    () => messages.filter((item) => item.company === selectedCompany),
+    () => messages.filter((item) => (item.company || item.empresa) === selectedCompany),
     [messages, selectedCompany]
   );
 
   const unreadByCompany = useMemo(() => {
     return messages.reduce((acc, item) => {
-      if (item.direction === 'incoming' && !item.read) acc[item.company] = (acc[item.company] || 0) + 1;
+      const company = item.company || item.empresa;
+      if (item.direction === 'incoming' && !item.read && company) acc[company] = (acc[company] || 0) + 1;
       return acc;
     }, {});
   }, [messages]);
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!selectedCompany || (!message.trim() && !attachment)) return;
-    const next = {
-      id: `${Date.now()}-${Math.random()}`,
-      company: selectedCompany,
+    const saved = await sendPortalDonCorChat({
+      documento: companyDocuments[selectedCompany] || '',
+      empresa: selectedCompany,
       text: message.trim(),
       attachmentName: attachment?.name || '',
       attachmentSize: attachment?.size || 0,
+      attachments: attachment ? [{ name: attachment.name, size: attachment.size, type: attachment.type, category: 'Chat' }] : [],
       sender: `${userName} (${userRole})`,
-      direction: 'outgoing',
-      read: true,
-      createdAt: new Date().toISOString(),
-    };
-    setMessages((items) => [...items, next]);
+      senderRole: 'corretor',
+    });
+    setMessages((items) => [...items, saved]);
     setMessage('');
     setAttachment(null);
   };
 
-  const simulateIncoming = () => {
+  const markSelectedAsRead = async () => {
     if (!selectedCompany) return;
-    const next = {
-      id: `${Date.now()}-${Math.random()}`,
-      company: selectedCompany,
-      text: 'Nova mensagem recebida da empresa cadastrada.',
-      attachmentName: '',
-      attachmentSize: 0,
-      sender: selectedCompany,
-      direction: 'incoming',
-      read: false,
-      createdAt: new Date().toISOString(),
-    };
-    setMessages((items) => [...items, next]);
-  };
-
-  const markSelectedAsRead = () => {
-    setMessages((items) => items.map((item) => item.company === selectedCompany ? { ...item, read: true } : item));
+    await markPortalDonCorChatRead({ documento: companyDocuments[selectedCompany] || '', empresa: selectedCompany });
+    setMessages((items) => items.map((item) => (item.company === selectedCompany || item.empresa === selectedCompany) ? { ...item, read: true } : item));
   };
 
   const formatDate = (iso) => new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
@@ -151,8 +147,8 @@ const Chat = ({ session }) => {
               <div style={{ fontWeight:700, color:'#344050' }}>{selectedCompany}</div>
               <div style={{ fontSize:'0.72rem', color:'#8a8d93' }}>Canal exclusivo para mensagens, documentos e avisos</div>
             </div>
-            <Button onClick={simulateIncoming} variant="outline" style={{ fontSize:'0.75rem', display:'flex', gap:'6px' }}>
-              <Bell size={13}/>Simular nova mensagem
+            <Button onClick={loadChatData} variant="outline" style={{ fontSize:'0.75rem', display:'flex', gap:'6px' }}>
+              <Bell size={13}/>{loading ? 'Atualizando...' : 'Atualizar'}
             </Button>
           </div>
 

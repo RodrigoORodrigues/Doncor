@@ -2,7 +2,15 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, BarChart3, Bell, Building2, Download, Eye, FileText, FolderOpen, HelpCircle, Home, LifeBuoy, LogOut, MessageCircle, Paperclip, Receipt, RefreshCw, Search, Send, Shield, UploadCloud, UserMinus, UserPlus } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { loginPortalDonCor, fetchPortalDonCorResumo, fetchPortalDonCorChat, sendPortalDonCorChat, alterarSenhaPortalDonCor } from '../services/api';
+import {
+  loginPortalDonCor,
+  fetchPortalDonCorResumo,
+  fetchPortalDonCorSolicitacoes,
+  createPortalDonCorMovimentacao,
+  fetchPortalDonCorChat,
+  sendPortalDonCorChat,
+  alterarSenhaPortalDonCor
+} from '../services/api';
 
 const STORAGE_KEY = 'doncor_portal_cliente_session';
 const readSession = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch { return null; } };
@@ -36,6 +44,47 @@ const movementSubItems = [
   { id: 'exclusao', label: 'Exclusão' },
   { id: 'alteracao', label: 'Alteração' },
 ];
+
+const defaultMovementForms = {
+  inclusao: {
+    operadora: '',
+    planos: ['Saúde'],
+    beneficiario: '',
+    cpf: '',
+    dataNascimento: '',
+    estadoCivil: '',
+    email: '',
+    telefone: '',
+    detalhes: '',
+    tipoMovimentacao: 'No vencimento',
+  },
+  exclusao: {
+    operadora: '',
+    planos: ['Dental'],
+    beneficiario: '',
+    cpf: '',
+    detalhes: '',
+    tipoMovimentacao: 'No vencimento',
+  },
+  alteracao: {
+    planos: ['Saúde'],
+    detalhes: '',
+    tipoMovimentacao: ['Alteração Cadastral'],
+  },
+};
+
+const defaultMovementAttachments = {
+  inclusao: {},
+  exclusao: {},
+  alteracao: [],
+};
+
+const attachmentMeta = (file, category = '') => ({
+  name: file?.name || category,
+  size: file?.size || 0,
+  type: file?.type || '',
+  category,
+});
 
 const card = { background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 18, boxShadow: '0 10px 28px rgba(15,23,42,0.05)' };
 const money = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
@@ -94,6 +143,14 @@ const PortalDonCor = () => {
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState('');
   const [attachment, setAttachment] = useState(null);
+  const [solicitacoes, setSolicitacoes] = useState([]);
+  const [solicitacoesSearch, setSolicitacoesSearch] = useState('');
+  const [solicitacoesTipo, setSolicitacoesTipo] = useState('todos');
+  const [solicitacoesStatus, setSolicitacoesStatus] = useState('todos');
+  const [movementForms, setMovementForms] = useState(defaultMovementForms);
+  const [movementAttachments, setMovementAttachments] = useState(defaultMovementAttachments);
+  const [submittingMovement, setSubmittingMovement] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
 
   const empresa = session?.empresa || session?.nome || 'Cliente';
 
@@ -101,10 +158,14 @@ const PortalDonCor = () => {
     if (!currentSession?.documento) return;
     setLoading(true);
     try {
-      const resumo = await fetchPortalDonCorResumo(currentSession.documento);
-      const chat = await fetchPortalDonCorChat({ documento: currentSession.documento, empresa: currentSession.empresa });
+      const [resumo, chat, solicitacoesData] = await Promise.all([
+        fetchPortalDonCorResumo(currentSession.documento),
+        fetchPortalDonCorChat({ documento: currentSession.documento, empresa: currentSession.empresa }),
+        fetchPortalDonCorSolicitacoes({ documento: currentSession.documento }),
+      ]);
       setPayload(resumo);
       setMessages(chat || []);
+      setSolicitacoes(solicitacoesData || []);
     } catch (err) {
       setError(err?.response?.data?.detail || 'Não foi possível carregar o Portal do Cliente.');
     }
@@ -163,10 +224,91 @@ const PortalDonCor = () => {
 
   const sendMessage = async () => {
     if (!session || (!message.trim() && !attachment)) return;
-    const saved = await sendPortalDonCorChat({ documento: session.documento, empresa, text: message.trim(), attachmentName: attachment?.name || '', attachmentSize: attachment?.size || 0, sender: empresa, senderRole: 'portal' });
+    const saved = await sendPortalDonCorChat({
+      documento: session.documento,
+      empresa,
+      text: message.trim(),
+      attachmentName: attachment?.name || '',
+      attachmentSize: attachment?.size || 0,
+      attachments: attachment ? [attachmentMeta(attachment, 'Chat')] : [],
+      sender: empresa,
+      senderRole: 'portal'
+    });
     setMessages((items) => [...items, saved]);
     setMessage('');
     setAttachment(null);
+  };
+
+  const updateMovementField = (section, field, value) => {
+    setMovementForms((current) => ({
+      ...current,
+      [section]: { ...current[section], [field]: value },
+    }));
+  };
+
+  const toggleMovementArrayValue = (section, field, value) => {
+    setMovementForms((current) => {
+      const values = current[section][field] || [];
+      const nextValues = values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
+      return { ...current, [section]: { ...current[section], [field]: nextValues } };
+    });
+  };
+
+  const updateChecklistAttachment = (section, category, file) => {
+    setMovementAttachments((current) => {
+      const nextSection = { ...(current[section] || {}) };
+      if (file === undefined) {
+        delete nextSection[category];
+      } else {
+        nextSection[category] = file ? attachmentMeta(file, category) : { name: category, size: 0, type: '', category };
+      }
+      return { ...current, [section]: nextSection };
+    });
+  };
+
+  const updateAlteracaoAttachments = (files) => {
+    setMovementAttachments((current) => ({
+      ...current,
+      alteracao: Array.from(files || []).map((file) => attachmentMeta(file, 'Alteração')),
+    }));
+  };
+
+  const resetMovementForm = (section) => {
+    setMovementForms((current) => ({ ...current, [section]: defaultMovementForms[section] }));
+    setMovementAttachments((current) => ({ ...current, [section]: defaultMovementAttachments[section] }));
+  };
+
+  const getMovementAttachments = (section) => {
+    const value = movementAttachments[section];
+    if (Array.isArray(value)) return value;
+    return Object.values(value || {}).filter((item) => item?.name);
+  };
+
+  const submitMovimentacao = async (section) => {
+    if (!session) return;
+    setError('');
+    setSuccessMsg('');
+    const form = movementForms[section];
+    const contrato = form.contrato || payload?.parceiro?.contratos?.[0] || contratos?.[0]?.contrato || '';
+    setSubmittingMovement(true);
+    try {
+      const saved = await createPortalDonCorMovimentacao({
+        tipo: section,
+        documento: session.documento,
+        empresa,
+        contrato,
+        ...form,
+        anexos: getMovementAttachments(section),
+      });
+      setSolicitacoes((items) => [saved, ...items]);
+      setSuccessMsg(`Solicitação ${saved.protocolo} enviada com sucesso.`);
+      resetMovementForm(section);
+      setActiveSection('solicitacoes');
+      await loadPortal(session);
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Não foi possível enviar a solicitação.');
+    }
+    setSubmittingMovement(false);
   };
 
   const faturas = useMemo(() => payload?.faturas || [], [payload]);
@@ -183,6 +325,17 @@ const PortalDonCor = () => {
     if (map.size === 0 && payload?.resumo?.contratos) map.set('Contrato Principal', { contrato: 'Contrato Principal', plano: 'Plano empresarial', seguradora: 'DonCor', status: 'Ativo', vigencia: '-', vidas: '-' });
     return Array.from(map.values());
   }, [faturas, payload]);
+  const filteredSolicitacoes = useMemo(() => {
+    const term = solicitacoesSearch.trim().toLowerCase();
+    return (solicitacoes || []).filter((item) => {
+      const tipoOk = solicitacoesTipo === 'todos' || String(item.tipo || item.tipoLabel || '').toLowerCase() === solicitacoesTipo;
+      const statusOk = solicitacoesStatus === 'todos' || String(item.status || '').toLowerCase() === solicitacoesStatus;
+      if (!tipoOk || !statusOk) return false;
+      if (!term) return true;
+      return ['protocolo', 'tipoLabel', 'beneficiario', 'cpf', 'contrato', 'status', 'detalhes']
+        .some((key) => String(item[key] || '').toLowerCase().includes(term));
+    });
+  }, [solicitacoes, solicitacoesSearch, solicitacoesTipo, solicitacoesStatus]);
 
   if (!session) {
     return (
@@ -212,7 +365,7 @@ const PortalDonCor = () => {
 
   const renderDashboard = () => (
     <>
-      <SectionTitle title={`Bem-vindo ao seu Portal, ${empresa}`} subtitle="Resumo das suas informações e operações ativas hoje." action={<Button onClick={() => setActiveSection('solicitacoes')} style={{ background: theme.blue, color: '#fff', display: 'flex', gap: 8 }}><FileText size={15}/>Novo chamado</Button>} />
+      <SectionTitle title={`Bem-vindo ao seu Portal, ${empresa}`} subtitle="Resumo das suas informações e operações ativas hoje." action={<Button onClick={() => { setActiveSection('movimentacao'); setActiveMovementTab('inclusao'); }} style={{ background: theme.blue, color: '#fff', display: 'flex', gap: 8 }}><FileText size={15}/>Novo chamado</Button>} />
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4, minmax(0, 1fr))', gap:14, marginBottom:16 }}><StatCard title="Contratos vigentes" value={payload?.resumo?.contratos || contratos.length || 0} subtitle="Ativos" icon={FolderOpen}/><StatCard title="Faturas em aberto" value={payload?.resumo?.faturas || faturas.length || 0} subtitle="Vencimentos próximos" icon={Receipt} tone={theme.warning}/><StatCard title="Boletos disponíveis" value={payload?.resumo?.boletos || boletos.length || 0} subtitle="PDFs no sistema" icon={Download} tone={theme.ok}/><StatCard title="Total faturado" value={payload?.resumo?.totalFaturado || money(totalAnalitico)} subtitle="Base analítica" icon={BarChart3} tone={theme.primary}/></div>
       <div style={{ display:'grid', gridTemplateColumns:'1.35fr 0.65fr', gap:16 }}><section style={{ ...card, padding:18 }}><SectionTitle title="Resumo Operacional" subtitle="Evolução financeira por competência." />{analitico.length === 0 ? <EmptyState>Os dados analíticos serão exibidos assim que houver faturamento vinculado.</EmptyState> : analitico.map((item) => <div key={item.competencia} style={{ marginBottom:12 }}><div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.84rem', color:theme.text, fontWeight:800 }}><span>{item.competencia}</span><span>{item.valor}</span></div><div style={{ height:10, background:'#edf2f7', borderRadius:999, overflow:'hidden', marginTop:6 }}><div style={{ width:`${Math.max((item.valorNumerico / maxAnalitico) * 100, 4)}%`, height:'100%', background:`linear-gradient(90deg, ${theme.blue}, ${theme.primary})` }} /></div></div>)}</section><section style={{ ...card, padding:18 }}><SectionTitle title="Precisa de ajuda?" subtitle="Fale com um especialista da equipe." /><div style={{ display:'flex', alignItems:'center', gap:12, padding:14, borderRadius:14, background:'#eff6ff' }}><LifeBuoy color={theme.blue}/><div><strong style={{ color:theme.text }}>Atendimento online</strong><div style={{ color:theme.muted, fontSize:'0.8rem' }}>Envie mensagens e documentos pelo chat.</div></div></div><Button onClick={() => setActiveSection('chat')} style={{ width:'100%', marginTop:14, background:theme.primary, color:'#fff', display:'flex', gap:8 }}><MessageCircle size={15}/>Fale com seu especialista</Button></section></div>
     </>
@@ -223,7 +376,7 @@ const PortalDonCor = () => {
       <SectionTitle 
         title="Contratos Vigentes" 
         subtitle="Gerencie suas apólices, vigência e status de todos os contratos."
-        action={<Button style={{ background: theme.blue, color: '#fff' }}><FileText size={14}/> Novo Chamado</Button>}
+        action={<Button onClick={() => { setActiveSection('movimentacao'); setActiveMovementTab('inclusao'); }} style={{ background: theme.blue, color: '#fff' }}><FileText size={14}/> Novo Chamado</Button>}
       />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, marginBottom: 24 }}>
         {contratos.map((item, idx) => (
@@ -387,7 +540,10 @@ const PortalDonCor = () => {
   const radioCard = { border:`1px solid ${theme.border}`, borderRadius:10, padding:14, background:'#fff', display:'flex', gap:10, alignItems:'flex-start' };
   const uploadBox = <div style={{ border:'2px dashed #d5dcec', borderRadius:12, background:'#f8faff', padding:28, textAlign:'center', color:theme.text }}><UploadCloud size={26} color={theme.muted}/><div style={{ marginTop:8, fontWeight:800 }}>Arraste e solte os arquivos aqui</div><div style={{ color:theme.muted, fontSize:'0.82rem', marginTop:4 }}>ou clique para selecionar no computador</div><Button variant="outline" style={{ marginTop:12 }}>Selecionar Arquivos</Button></div>;
 
-  const renderInclusao = () => (
+  const renderInclusao = () => {
+    const form = movementForms.inclusao;
+    const attachments = movementAttachments.inclusao;
+    return (
     <div style={{ display: 'grid', gridTemplateColumns: '2fr 0.95fr', gap: 22 }}>
       <div style={{ display: 'grid', gap: 22 }}>
         <section style={{ ...card, padding: 24 }}>
@@ -397,8 +553,8 @@ const PortalDonCor = () => {
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
             <div>
               <label style={fieldLabel}>Operadora *</label>
-              <select style={selectStyle}>
-                <option>Selecione a Operadora</option>
+              <select style={selectStyle} value={form.operadora} onChange={(event) => updateMovementField('inclusao', 'operadora', event.target.value)}>
+                <option value="">Selecione a Operadora</option>
                 <option>Assim Saúde</option>
                 <option>Amil</option>
                 <option>SulAmérica</option>
@@ -408,8 +564,8 @@ const PortalDonCor = () => {
             <div>
               <label style={fieldLabel}>Plano *</label>
               <div style={{ display: 'flex', gap: 18, marginTop: 12 }}>
-                <label style={checkboxRow}><input type="checkbox" defaultChecked /> Saúde</label>
-                <label style={checkboxRow}><input type="checkbox" /> Dental</label>
+                <label style={checkboxRow}><input type="checkbox" checked={form.planos.includes('Saúde')} onChange={() => toggleMovementArrayValue('inclusao', 'planos', 'Saúde')} /> Saúde</label>
+                <label style={checkboxRow}><input type="checkbox" checked={form.planos.includes('Dental')} onChange={() => toggleMovementArrayValue('inclusao', 'planos', 'Dental')} /> Dental</label>
               </div>
             </div>
           </div>
@@ -422,20 +578,20 @@ const PortalDonCor = () => {
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={fieldLabel}>Nome Completo *</label>
-              <Input placeholder="Ex: João da Silva" />
+              <Input placeholder="Ex: João da Silva" value={form.beneficiario} onChange={(event) => updateMovementField('inclusao', 'beneficiario', event.target.value)} />
             </div>
             <div>
               <label style={fieldLabel}>CPF *</label>
-              <Input placeholder="000.000.000-00" />
+              <Input placeholder="000.000.000-00" value={form.cpf} onChange={(event) => updateMovementField('inclusao', 'cpf', event.target.value)} />
             </div>
             <div>
               <label style={fieldLabel}>Data de Nascimento *</label>
-              <Input type="date" />
+              <Input type="date" value={form.dataNascimento} onChange={(event) => updateMovementField('inclusao', 'dataNascimento', event.target.value)} />
             </div>
             <div>
               <label style={fieldLabel}>Estado Civil *</label>
-              <select style={selectStyle}>
-                <option>Selecione</option>
+              <select style={selectStyle} value={form.estadoCivil} onChange={(event) => updateMovementField('inclusao', 'estadoCivil', event.target.value)}>
+                <option value="">Selecione</option>
                 <option>Solteiro(a)</option>
                 <option>Casado(a)</option>
                 <option>Divorciado(a)</option>
@@ -444,11 +600,11 @@ const PortalDonCor = () => {
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={fieldLabel}>E-mail *</label>
-              <Input placeholder="email@exemplo.com" type="email" />
+              <Input placeholder="email@exemplo.com" type="email" value={form.email} onChange={(event) => updateMovementField('inclusao', 'email', event.target.value)} />
             </div>
             <div>
               <label style={fieldLabel}>Telefone *</label>
-              <Input placeholder="(11) 90000-0000" />
+              <Input placeholder="(11) 90000-0000" value={form.telefone} onChange={(event) => updateMovementField('inclusao', 'telefone', event.target.value)} />
             </div>
           </div>
         </section>
@@ -460,6 +616,8 @@ const PortalDonCor = () => {
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18 }}>
             <label style={fieldLabel}>Descreva os detalhes da inclusão *</label>
             <textarea
+              value={form.detalhes}
+              onChange={(event) => updateMovementField('inclusao', 'detalhes', event.target.value)}
               placeholder="Informe observações, condições ou instruções adicionais para esta inclusão..."
               style={{
                 width: '100%',
@@ -484,14 +642,14 @@ const PortalDonCor = () => {
           </h3>
           <div style={{ display: 'grid', gap: 14 }}>
             <label style={{ ...radioCard, alignItems: 'flex-start' }}>
-              <input type="radio" name="tipo-inclusao" defaultChecked />
+              <input type="radio" name="tipo-inclusao" checked={form.tipoMovimentacao === 'No vencimento'} onChange={() => updateMovementField('inclusao', 'tipoMovimentacao', 'No vencimento')} />
               <div>
                 <strong style={{ color: theme.text }}>No vencimento</strong>
                 <div style={{ color: theme.muted, marginTop: 4, fontSize: '0.82rem' }}>Inclusão programada para a próxima fatura.</div>
               </div>
             </label>
             <label style={{ ...radioCard, alignItems: 'flex-start', background: '#fff' }}>
-              <input type="radio" name="tipo-inclusao"/>
+              <input type="radio" name="tipo-inclusao" checked={form.tipoMovimentacao === 'Imediato'} onChange={() => updateMovementField('inclusao', 'tipoMovimentacao', 'Imediato')} />
               <div>
                 <strong style={{ color: theme.text }}>Imediato</strong>
                 <div style={{ color: theme.muted, marginTop: 6 }}>
@@ -511,24 +669,32 @@ const PortalDonCor = () => {
             {['RG / CPF', 'Comprovante de Residência', 'CTPS / eSocial', 'Formulário Assinado', 'Outros'].map((doc) => (
               <label key={doc} style={{ ...checkboxRow, border: `1px solid ${theme.border}`, padding: '12px 14px', borderRadius: 10, justifyContent: 'space-between', cursor: 'pointer' }}>
                 <span>
-                  <input type="checkbox" style={{ marginRight: 10 }} />
+                  <input type="checkbox" checked={!!attachments[doc]} onChange={(event) => updateChecklistAttachment('inclusao', doc, event.target.checked ? null : undefined)} style={{ marginRight: 10 }} />
                   {doc}
+                  {attachments[doc]?.name && attachments[doc].name !== doc && <span style={{ color: theme.muted, marginLeft: 6, fontSize: '0.72rem' }}>({attachments[doc].name})</span>}
                 </span>
-                <UploadCloud size={18} color={theme.muted} />
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <UploadCloud size={18} color={theme.muted} />
+                  <Input type="file" onChange={(event) => updateChecklistAttachment('inclusao', doc, event.target.files?.[0])} style={{ maxWidth: 112, fontSize: '0.68rem', padding: 4 }} />
+                </span>
               </label>
             ))}
           </div>
         </section>
 
         <div style={{ display: 'flex', gap: 10 }}>
-          <Button variant="outline" style={{ flex: 1 }}>Cancelar</Button>
-          <Button style={{ flex: 1, background: theme.primary, color: '#fff' }}>Enviar Solicitação</Button>
+          <Button variant="outline" onClick={() => resetMovementForm('inclusao')} style={{ flex: 1 }}>Cancelar</Button>
+          <Button disabled={submittingMovement} onClick={() => submitMovimentacao('inclusao')} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
-  const renderExclusao = () => (
+  const renderExclusao = () => {
+    const form = movementForms.exclusao;
+    const attachments = movementAttachments.exclusao;
+    return (
     <div style={{ display: 'grid', gridTemplateColumns: '2fr 0.95fr', gap: 22 }}>
       <div style={{ display: 'grid', gap: 22 }}>
         <section style={{ ...card, padding: 24 }}>
@@ -538,8 +704,8 @@ const PortalDonCor = () => {
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
             <div>
               <label style={fieldLabel}>Operadora *</label>
-              <select style={selectStyle}>
-                <option>Selecione a operadora</option>
+              <select style={selectStyle} value={form.operadora} onChange={(event) => updateMovementField('exclusao', 'operadora', event.target.value)}>
+                <option value="">Selecione a operadora</option>
                 <option>Assim Saúde</option>
                 <option>Amil</option>
                 <option>SulAmérica</option>
@@ -548,8 +714,8 @@ const PortalDonCor = () => {
             <div>
               <label style={fieldLabel}>Plano *</label>
               <div style={{ display: 'flex', gap: 18, marginTop: 12 }}>
-                <label style={checkboxRow}><input type="checkbox" defaultChecked /> Dental</label>
-                <label style={checkboxRow}><input type="checkbox" /> Saúde</label>
+                <label style={checkboxRow}><input type="checkbox" checked={form.planos.includes('Dental')} onChange={() => toggleMovementArrayValue('exclusao', 'planos', 'Dental')} /> Dental</label>
+                <label style={checkboxRow}><input type="checkbox" checked={form.planos.includes('Saúde')} onChange={() => toggleMovementArrayValue('exclusao', 'planos', 'Saúde')} /> Saúde</label>
               </div>
             </div>
           </div>
@@ -562,11 +728,11 @@ const PortalDonCor = () => {
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={fieldLabel}>Nome Completo *</label>
-              <Input placeholder="Nome do beneficiário" />
+              <Input placeholder="Nome do beneficiário" value={form.beneficiario} onChange={(event) => updateMovementField('exclusao', 'beneficiario', event.target.value)} />
             </div>
             <div>
               <label style={fieldLabel}>CPF *</label>
-              <Input placeholder="000.000.000-00" />
+              <Input placeholder="000.000.000-00" value={form.cpf} onChange={(event) => updateMovementField('exclusao', 'cpf', event.target.value)} />
             </div>
           </div>
         </section>
@@ -578,6 +744,8 @@ const PortalDonCor = () => {
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18 }}>
             <label style={fieldLabel}>Descreva os detalhes da exclusão *</label>
             <textarea
+              value={form.detalhes}
+              onChange={(event) => updateMovementField('exclusao', 'detalhes', event.target.value)}
               placeholder="Informe o motivo, observações ou instruções adicionais para esta exclusão..."
               style={{
                 width: '100%',
@@ -603,14 +771,14 @@ const PortalDonCor = () => {
           </h3>
           <div style={{ display: 'grid', gap: 14 }}>
             <label style={{ ...radioCard, alignItems: 'flex-start' }}>
-              <input type="radio" name="tipo-exclusao" defaultChecked />
+              <input type="radio" name="tipo-exclusao" checked={form.tipoMovimentacao === 'No vencimento'} onChange={() => updateMovementField('exclusao', 'tipoMovimentacao', 'No vencimento')} />
               <div>
                 <strong style={{ color: theme.text }}>No vencimento</strong>
                 <div style={{ color: theme.muted, marginTop: 4, fontSize: '0.82rem' }}>A exclusão ocorrerá na data de aniversário do contrato.</div>
               </div>
             </label>
             <label style={{ ...radioCard, alignItems: 'flex-start', background: '#fff' }}>
-              <input type="radio" name="tipo-exclusao"/>
+              <input type="radio" name="tipo-exclusao" checked={form.tipoMovimentacao === 'Imediato'} onChange={() => updateMovementField('exclusao', 'tipoMovimentacao', 'Imediato')} />
               <div>
                 <strong style={{ color: theme.text }}>Imediato</strong>
                 <div style={{ color: theme.muted, marginTop: 6 }}>
@@ -630,24 +798,32 @@ const PortalDonCor = () => {
             {['Termo de Rescisão', 'Formulário de Exclusão Assinado', 'Outros'].map((doc) => (
               <label key={doc} style={{ ...checkboxRow, border: `1px solid ${theme.border}`, padding: '12px 14px', borderRadius: 10, justifyContent: 'space-between', cursor: 'pointer' }}>
                 <span>
-                  <input type="checkbox" style={{ marginRight: 10 }} />
+                  <input type="checkbox" checked={!!attachments[doc]} onChange={(event) => updateChecklistAttachment('exclusao', doc, event.target.checked ? null : undefined)} style={{ marginRight: 10 }} />
                   {doc}
+                  {attachments[doc]?.name && attachments[doc].name !== doc && <span style={{ color: theme.muted, marginLeft: 6, fontSize: '0.72rem' }}>({attachments[doc].name})</span>}
                 </span>
-                <UploadCloud size={18} color={theme.muted} />
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <UploadCloud size={18} color={theme.muted} />
+                  <Input type="file" onChange={(event) => updateChecklistAttachment('exclusao', doc, event.target.files?.[0])} style={{ maxWidth: 112, fontSize: '0.68rem', padding: 4 }} />
+                </span>
               </label>
             ))}
           </div>
         </section>
 
         <div style={{ display: 'flex', gap: 10 }}>
-          <Button variant="outline" style={{ flex: 1 }}>Cancelar</Button>
-          <Button style={{ flex: 1, background: theme.primary, color: '#fff' }}>Enviar Solicitação</Button>
+          <Button variant="outline" onClick={() => resetMovementForm('exclusao')} style={{ flex: 1 }}>Cancelar</Button>
+          <Button disabled={submittingMovement} onClick={() => submitMovimentacao('exclusao')} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
-  const renderAlteracao = () => (
+  const renderAlteracao = () => {
+    const form = movementForms.alteracao;
+    const attachments = movementAttachments.alteracao;
+    return (
     <div style={{ display: 'grid', gridTemplateColumns: '2fr 0.95fr', gap: 22 }}>
       <div style={{ display: 'grid', gap: 22 }}>
         <section style={{ ...card, padding: 24 }}>
@@ -656,14 +832,14 @@ const PortalDonCor = () => {
           </h3>
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <label style={{ ...radioCard, alignItems: 'center', cursor: 'pointer' }}>
-              <input type="checkbox" defaultChecked/>
+              <input type="checkbox" checked={form.planos.includes('Saúde')} onChange={() => toggleMovementArrayValue('alteracao', 'planos', 'Saúde')} />
               <div>
                 <strong style={{ color: theme.text }}>Saúde</strong>
                 <div style={{ color: theme.muted, fontSize: '0.82rem' }}>Apólice nº 987654321</div>
               </div>
             </label>
             <label style={{ ...radioCard, alignItems: 'center', cursor: 'pointer' }}>
-              <input type="checkbox"/>
+              <input type="checkbox" checked={form.planos.includes('Dental')} onChange={() => toggleMovementArrayValue('alteracao', 'planos', 'Dental')} />
               <div>
                 <strong style={{ color: theme.text }}>Dental</strong>
                 <div style={{ color: theme.muted, fontSize: '0.82rem' }}>Apólice nº 123456789</div>
@@ -679,6 +855,8 @@ const PortalDonCor = () => {
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18 }}>
             <label style={fieldLabel}>Descreva a alteração *</label>
             <textarea
+              value={form.detalhes}
+              onChange={(event) => updateMovementField('alteracao', 'detalhes', event.target.value)}
               placeholder="Descreva os dados que precisam ser alterados ou as especificações do upgrade/downgrade..."
               style={{
                 width: '100%',
@@ -704,7 +882,7 @@ const PortalDonCor = () => {
           <div style={{ display: 'grid', gap: 12 }}>
             {['Alteração Cadastral', 'Upgrade', 'Downgrade', 'Outros'].map((tipo, index) => (
               <label key={tipo} style={{ ...radioCard, alignItems: 'center', cursor: 'pointer', background: index === 0 ? '#fff' : '#f8faff' }}>
-                <input type="checkbox" defaultChecked={index === 0} />
+                <input type="checkbox" checked={form.tipoMovimentacao.includes(tipo)} onChange={() => toggleMovementArrayValue('alteracao', 'tipoMovimentacao', tipo)} />
                 <span style={{ fontWeight: 700, color: theme.text, fontSize: '0.88rem' }}>{tipo}</span>
               </label>
             ))}
@@ -716,27 +894,30 @@ const PortalDonCor = () => {
             <Paperclip size={20}/> Anexos
           </h3>
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 14 }}>
-            {uploadBox}
-            <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${theme.border}`, borderRadius: 10, padding: '12px 14px', background: '#fff' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <FileText size={20} color={theme.muted}/>
-                <div>
-                  <strong style={{ color: theme.text, fontSize: '0.86rem' }}>comprovante_residencia.pdf</strong>
-                  <div style={{ color: theme.muted, fontSize: '0.75rem' }}>1.2 MB</div>
+            <label style={{ border:'2px dashed #d5dcec', borderRadius:12, background:'#f8faff', padding:28, textAlign:'center', color:theme.text, display:'block', cursor:'pointer' }}>
+              <UploadCloud size={26} color={theme.muted}/>
+              <div style={{ marginTop:8, fontWeight:800 }}>Selecione arquivos de apoio</div>
+              <div style={{ color:theme.muted, fontSize:'0.82rem', marginTop:4 }}>PDF, imagens ou documentos do pedido</div>
+              <Input type="file" multiple onChange={(event) => updateAlteracaoAttachments(event.target.files)} style={{ marginTop:12 }} />
+            </label>
+            <div style={{ marginTop: 14, display: 'grid', gap: 8 }}>
+              {attachments.length === 0 ? <div style={{ color: theme.muted, fontSize: '0.78rem' }}>Nenhum anexo selecionado.</div> : attachments.map((file) => (
+                <div key={`${file.name}-${file.size}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${theme.border}`, borderRadius: 10, padding: '10px 12px', background: '#fff' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: theme.text, fontSize: '0.82rem', fontWeight: 700 }}><FileText size={16} color={theme.muted}/>{file.name}</span>
                 </div>
-              </div>
-              <button style={{ border: 0, background: 'transparent', color: '#dc2626', cursor: 'pointer', fontWeight: 900 }}>Remover</button>
+              ))}
             </div>
           </div>
         </section>
 
         <div style={{ display: 'flex', gap: 10 }}>
-          <Button variant="outline" style={{ flex: 1 }}>Cancelar</Button>
-          <Button style={{ flex: 1, background: theme.primary, color: '#fff' }}>Enviar Solicitação</Button>
+          <Button variant="outline" onClick={() => resetMovementForm('alteracao')} style={{ flex: 1 }}>Cancelar</Button>
+          <Button disabled={submittingMovement} onClick={() => submitMovimentacao('alteracao')} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   const renderMovimentacao = () => (
     <div>
@@ -752,26 +933,26 @@ const PortalDonCor = () => {
       <SectionTitle 
         title="Solicitações" 
         subtitle="Acompanhe o histórico e status de todas as suas demandas."
-        action={<Button style={{ background: theme.blue, color: '#fff' }}><FileText size={14}/> Nova Solicitação</Button>}
+        action={<Button onClick={() => { setActiveSection('movimentacao'); setActiveMovementTab('inclusao'); }} style={{ background: theme.blue, color: '#fff' }}><FileText size={14}/> Nova Solicitação</Button>}
       />
       <section style={{ ...card, padding: 18 }}>
         <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
           <div style={{ flex: 1, position: 'relative' }}>
             <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: theme.muted }} />
-            <Input placeholder="Buscar por protocolo, CPF ou nome do beneficiário..." style={{ paddingLeft: '32px', fontSize: '0.8rem' }} />
+            <Input value={solicitacoesSearch} onChange={(event) => setSolicitacoesSearch(event.target.value)} placeholder="Buscar por protocolo, CPF ou nome do beneficiário..." style={{ paddingLeft: '32px', fontSize: '0.8rem' }} />
           </div>
-          <select style={{ ...selectStyle, maxWidth: 150 }}>
-            <option>Tipo: Todos</option>
-            <option>Inclusão</option>
-            <option>Exclusão</option>
-            <option>Alteração</option>
+          <select value={solicitacoesTipo} onChange={(event) => setSolicitacoesTipo(event.target.value)} style={{ ...selectStyle, maxWidth: 150 }}>
+            <option value="todos">Tipo: Todos</option>
+            <option value="inclusao">Inclusão</option>
+            <option value="exclusao">Exclusão</option>
+            <option value="alteracao">Alteração</option>
           </select>
-          <select style={{ ...selectStyle, maxWidth: 150 }}>
-            <option>Status: Todos</option>
-            <option>Enviado</option>
-            <option>Pendente</option>
-            <option>Em Andamento</option>
-            <option>Concluído</option>
+          <select value={solicitacoesStatus} onChange={(event) => setSolicitacoesStatus(event.target.value)} style={{ ...selectStyle, maxWidth: 150 }}>
+            <option value="todos">Status: Todos</option>
+            <option value="enviado">Enviado</option>
+            <option value="pendente">Pendente</option>
+            <option value="em andamento">Em Andamento</option>
+            <option value="concluído">Concluído</option>
           </select>
         </div>
         <table className="data-table" style={{ fontSize: '0.85rem' }}>
@@ -788,19 +969,14 @@ const PortalDonCor = () => {
             </tr>
           </thead>
           <tbody>
-            {[
-              { tipo: 'Inclusão', beneficiario: 'João da Silva', cpf: '000.000.000-00', status: 'Enviado', conclusao: '-' },
-              { tipo: 'Alteração', beneficiario: 'Maria Oliveira', cpf: '000.000.000-00', status: 'Pendente', conclusao: '-' },
-              { tipo: 'Exclusão', beneficiario: 'Carlos Santos', cpf: '000.000.000-00', status: 'Em andamento', conclusao: '-' },
-              { tipo: 'Inclusão', beneficiario: 'Ana Pereira', cpf: '000.000.000-00', status: 'Concluído', conclusao: new Date().toLocaleDateString('pt-BR') }
-            ].map((item, idx) => (
-              <tr key={idx} style={{ borderBottom: `1px solid ${theme.border}` }}>
-                <td style={{ fontWeight: 600 }}>{item.tipo}</td>
-                <td style={{ color: theme.primary, fontWeight: 700 }}>#CLI-{String(idx + 1).padStart(4, '0')}</td>
-                <td>{item.beneficiario}</td>
-                <td>{item.cpf}</td>
-                <td>{new Date().toLocaleDateString('pt-BR')}</td>
-                <td style={{ color: theme.muted }}>{item.conclusao}</td>
+            {filteredSolicitacoes.map((item) => (
+              <tr key={item.id || item.protocolo} style={{ borderBottom: `1px solid ${theme.border}` }}>
+                <td style={{ fontWeight: 600 }}>{item.tipoLabel || item.tipo}</td>
+                <td style={{ color: theme.primary, fontWeight: 700 }}>#{item.protocolo}</td>
+                <td>{item.beneficiario || '-'}</td>
+                <td>{item.cpf || '-'}</td>
+                <td>{item.dataEnvio || item.criadoEm || '-'}</td>
+                <td style={{ color: theme.muted }}>{item.dataConclusao || '-'}</td>
                 <td><StatusPill status={item.status}/></td>
                 <td style={{ textAlign: 'center' }}>
                   <Button variant="outline" size="sm" onClick={() => setActiveSection('chat')} style={{ fontSize: '0.75rem', padding: '4px 8px' }}>
@@ -809,6 +985,11 @@ const PortalDonCor = () => {
                 </td>
               </tr>
             ))}
+            {filteredSolicitacoes.length === 0 && (
+              <tr>
+                <td colSpan="8" style={{ textAlign: 'center', color: theme.muted, padding: 28 }}>Nenhuma solicitação encontrada.</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </section>
@@ -875,7 +1056,7 @@ const PortalDonCor = () => {
             <div style={{ color:'#cbd5e1', fontSize:'0.75rem' }}>Portal do Cliente</div>
           </div>
         </div>
-        <Button onClick={() => setActiveSection('solicitacoes')} style={{ background:theme.blue, color:'#fff', justifyContent:'flex-start', gap:8 }}><FileText size={15}/>Novo chamado</Button>
+        <Button onClick={() => { setActiveSection('movimentacao'); setActiveMovementTab('inclusao'); }} style={{ background:theme.blue, color:'#fff', justifyContent:'flex-start', gap:8 }}><FileText size={15}/>Novo chamado</Button>
         <nav style={{ display:'grid', gap:6 }}>
           {menuItems.map((item) => (
             <React.Fragment key={item.id}>
@@ -898,7 +1079,7 @@ const PortalDonCor = () => {
           <button onClick={handleLogout} style={{ width:'100%', border:0, background:'transparent', color:'#cbd5e1', display:'flex', alignItems:'center', gap:10, padding:'10px 12px', cursor:'pointer', fontWeight:800 }}><LogOut size={17}/>Sair</button>
         </div>
       </aside>
-      <div style={{ minWidth:0 }}><header style={{ background:'#fff', borderBottom:`1px solid ${theme.border}`, padding:'14px 24px', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:5 }}><div style={{ display:'flex', alignItems:'center', gap:14 }}><div style={{ width:40, height:40, borderRadius:14, background:'#eff6ff', color:theme.blue, display:'flex', alignItems:'center', justifyContent:'center' }}><Building2 size={19}/></div><div><strong style={{ color:theme.text, fontSize:'1rem' }}>{empresa}</strong><div style={{ color:theme.muted, fontSize:'0.78rem' }}>{session.documento}</div></div></div><div style={{ width:420 }}><Input placeholder="Buscar..." /></div><div style={{ display:'flex', alignItems:'center', gap:8 }}><button style={{ border:`1px solid ${theme.border}`, background:'#fff', borderRadius:12, padding:9, color:theme.muted }}><Bell size={16}/></button><button style={{ border:`1px solid ${theme.border}`, background:'#fff', borderRadius:12, padding:9, color:theme.muted }}><HelpCircle size={16}/></button><Button variant="outline" onClick={() => setShowPassBox(!showPassBox)}>Alterar senha</Button></div></header><main style={{ padding:24, maxWidth:1320, margin:'0 auto' }}>{error && <div style={{ background:'#fff1f2', border:'1px solid #fecdd3', color:'#be123c', borderRadius:10, padding:'10px 12px', marginBottom:14 }}>{error}</div>}{passMsg && <div style={{ background:'#ecfdf5', border:'1px solid #bbf7d0', color:'#047857', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{passMsg}</div>}{showPassBox && <section style={{ ...card, padding:16, marginBottom:16 }}><h2 style={{ fontSize:'1rem', color:theme.text, margin:'0 0 12px' }}>Alterar senha de acesso</h2><div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr auto', gap:10, alignItems:'end' }}><div><label style={{ fontSize:'0.72rem', color:theme.muted, fontWeight:800 }}>Senha atual</label><Input type="password" value={senhaAtual} onChange={(e)=>setSenhaAtual(e.target.value)} placeholder="Senha atual" /></div><div><label style={{ fontSize:'0.72rem', color:theme.muted, fontWeight:800 }}>Nova senha</label><Input type="password" value={novaSenha} onChange={(e)=>setNovaSenha(e.target.value)} placeholder="Mínimo 6 caracteres" /></div><div><label style={{ fontSize:'0.72rem', color:theme.muted, fontWeight:800 }}>Confirmar nova senha</label><Input type="password" value={confirmaSenha} onChange={(e)=>setConfirmaSenha(e.target.value)} placeholder="Repita a nova senha" /></div><Button onClick={handleChangePass} style={{ background:theme.blue, color:'#fff' }}>Salvar senha</Button></div></section>}{loading && <div style={{ marginBottom:14, color:theme.muted, display:'flex', alignItems:'center', gap:8 }}><Activity size={16}/>Atualizando informações do cliente...</div>}{renderActiveSection()}</main></div>
+      <div style={{ minWidth:0 }}><header style={{ background:'#fff', borderBottom:`1px solid ${theme.border}`, padding:'14px 24px', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:5 }}><div style={{ display:'flex', alignItems:'center', gap:14 }}><div style={{ width:40, height:40, borderRadius:14, background:'#eff6ff', color:theme.blue, display:'flex', alignItems:'center', justifyContent:'center' }}><Building2 size={19}/></div><div><strong style={{ color:theme.text, fontSize:'1rem' }}>{empresa}</strong><div style={{ color:theme.muted, fontSize:'0.78rem' }}>{session.documento}</div></div></div><div style={{ width:420 }}><Input placeholder="Buscar..." /></div><div style={{ display:'flex', alignItems:'center', gap:8 }}><button style={{ border:`1px solid ${theme.border}`, background:'#fff', borderRadius:12, padding:9, color:theme.muted }}><Bell size={16}/></button><button style={{ border:`1px solid ${theme.border}`, background:'#fff', borderRadius:12, padding:9, color:theme.muted }}><HelpCircle size={16}/></button><Button variant="outline" onClick={() => setShowPassBox(!showPassBox)}>Alterar senha</Button></div></header><main style={{ padding:24, maxWidth:1320, margin:'0 auto' }}>{error && <div style={{ background:'#fff1f2', border:'1px solid #fecdd3', color:'#be123c', borderRadius:10, padding:'10px 12px', marginBottom:14 }}>{error}</div>}{successMsg && <div style={{ background:'#ecfdf5', border:'1px solid #bbf7d0', color:'#047857', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{successMsg}</div>}{passMsg && <div style={{ background:'#ecfdf5', border:'1px solid #bbf7d0', color:'#047857', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{passMsg}</div>}{showPassBox && <section style={{ ...card, padding:16, marginBottom:16 }}><h2 style={{ fontSize:'1rem', color:theme.text, margin:'0 0 12px' }}>Alterar senha de acesso</h2><div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr auto', gap:10, alignItems:'end' }}><div><label style={{ fontSize:'0.72rem', color:theme.muted, fontWeight:800 }}>Senha atual</label><Input type="password" value={senhaAtual} onChange={(e)=>setSenhaAtual(e.target.value)} placeholder="Senha atual" /></div><div><label style={{ fontSize:'0.72rem', color:theme.muted, fontWeight:800 }}>Nova senha</label><Input type="password" value={novaSenha} onChange={(e)=>setNovaSenha(e.target.value)} placeholder="Mínimo 6 caracteres" /></div><div><label style={{ fontSize:'0.72rem', color:theme.muted, fontWeight:800 }}>Confirmar nova senha</label><Input type="password" value={confirmaSenha} onChange={(e)=>setConfirmaSenha(e.target.value)} placeholder="Repita a nova senha" /></div><Button onClick={handleChangePass} style={{ background:theme.blue, color:'#fff' }}>Salvar senha</Button></div></section>}{loading && <div style={{ marginBottom:14, color:theme.muted, display:'flex', alignItems:'center', gap:8 }}><Activity size={16}/>Atualizando informações do cliente...</div>}{renderActiveSection()}</main></div>
     </div>
   );
 };

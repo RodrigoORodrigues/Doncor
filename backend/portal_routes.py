@@ -38,6 +38,10 @@ def _format_brl(value: float) -> str:
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def _portal_protocol(seq: int) -> str:
+    return f"CLI-{seq:04d}"
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -263,6 +267,86 @@ async def _portal_payload(db, documento: str) -> Dict[str, Any]:
     }
 
 
+def _attachment_list(value: Any) -> List[Dict[str, Any]]:
+    if not value:
+        return []
+    if not isinstance(value, list):
+        value = [value]
+
+    attachments: List[Dict[str, Any]] = []
+    for item in value:
+        if isinstance(item, dict):
+            name = str(item.get("name") or item.get("nome") or item.get("attachmentName") or item.get("documento") or "").strip()
+            if name:
+                attachments.append({
+                    "name": name,
+                    "size": item.get("size") or item.get("tamanho") or item.get("attachmentSize") or 0,
+                    "type": item.get("type") or item.get("contentType") or "",
+                    "category": item.get("category") or item.get("categoria") or item.get("documento") or "",
+                })
+        else:
+            name = str(item or "").strip()
+            if name:
+                attachments.append({"name": name, "size": 0, "type": "", "category": ""})
+    return attachments
+
+
+def _request_text(item: Dict[str, Any]) -> str:
+    lines = [
+        f"Nova solicitação de {item.get('tipoLabel') or item.get('tipo')} enviada pelo Portal do Cliente.",
+        f"Protocolo: {item.get('protocolo')}",
+        f"Empresa: {item.get('empresa')}",
+        f"Contrato: {item.get('contrato') or '-'}",
+    ]
+    if item.get("beneficiario"):
+        lines.append(f"Beneficiário: {item.get('beneficiario')}")
+    if item.get("cpf"):
+        lines.append(f"CPF: {item.get('cpf')}")
+    if item.get("detalhes"):
+        lines.append(f"Detalhes: {item.get('detalhes')}")
+    return "\n".join(lines)
+
+
+async def _insert_operational_request(db, tipo: str, item: Dict[str, Any], payload: Dict[str, Any]) -> None:
+    base = {
+        "id": str(uuid.uuid4()),
+        "protocolo": item["protocolo"],
+        "contrato": item.get("contrato") or "",
+        "empresa": item.get("empresa") or "",
+        "beneficiario": item.get("beneficiario") or "",
+        "cpf": item.get("cpf") or "",
+        "dataSolicitacao": item["dataEnvio"],
+        "status": "Pendente",
+        "origem": "portal_cliente",
+        "portalSolicitacaoId": item["id"],
+        "detalhes": item.get("detalhes") or "",
+        "anexos": item.get("anexos") or [],
+        "createdAt": item["createdAt"],
+        "criadoEm": item["criadoEm"],
+    }
+
+    if tipo == "inclusao":
+        await db.inclusoes.insert_one({
+            **base,
+            "dataNascimento": payload.get("dataNascimento") or "",
+            "telefone": payload.get("telefone") or "",
+            "email": payload.get("email") or "",
+            "parentesco": payload.get("parentesco") or payload.get("estadoCivil") or "Titular",
+            "tipoInclusao": payload.get("tipoMovimentacao") or "",
+            "planos": payload.get("planos") or [],
+            "operadora": payload.get("operadora") or "",
+        })
+    elif tipo == "exclusao":
+        await db.exclusoes.insert_one({
+            **base,
+            "dataFim": payload.get("dataFim") or "",
+            "motivo": payload.get("motivo") or item.get("detalhes") or "Solicitação do titular",
+            "tipoExclusao": payload.get("tipoMovimentacao") or "",
+            "planos": payload.get("planos") or [],
+            "operadora": payload.get("operadora") or "",
+        })
+
+
 def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: Callable | None = None, _now_br_func: Callable | None = None) -> None:
     now_iso = _now_iso_func or _now_iso
     now_br = _now_br_func or _now_br
@@ -378,6 +462,115 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
     async def portal_doncor_resumo(documento: str = Query(...)):
         return await _portal_payload(db, documento)
 
+    @app.get("/api/portal-doncor/solicitacoes")
+    async def portal_doncor_solicitacoes(
+        documento: str = Query(...),
+        search: str = "",
+        tipo: str = "todos",
+        status: str = "todos",
+        limit: int = Query(default=200, ge=1, le=1000),
+    ):
+        context = await _find_partner_context(db, documento)
+        doc = _digits(documento)
+        contrato_numeros = set(context.get("contratoNumeros") or [])
+        empresa_norm = str(context.get("empresa") or "").strip().lower()
+
+        items = await _all(db.portal_solicitacoes, "createdAt", limit)
+        filtered = [
+            item for item in items
+            if _digits(item.get("documento")) == doc
+            or (item.get("contrato") and item.get("contrato") in contrato_numeros)
+            or (empresa_norm and str(item.get("empresa") or "").strip().lower() == empresa_norm)
+        ]
+
+        if tipo and tipo != "todos":
+            tipo_norm = tipo.strip().lower()
+            filtered = [item for item in filtered if str(item.get("tipo") or item.get("tipoLabel") or "").strip().lower() == tipo_norm]
+        if status and status != "todos":
+            status_norm = status.strip().lower()
+            filtered = [item for item in filtered if str(item.get("status") or "").strip().lower() == status_norm]
+
+        term = str(search or "").strip().lower()
+        if term:
+            term_digits = _digits(term)
+            filtered = [
+                item for item in filtered
+                if term in " ".join(str(item.get(key) or "").lower() for key in ["protocolo", "tipoLabel", "beneficiario", "cpf", "contrato", "status", "detalhes"])
+                or (term_digits and term_digits in _digits(item.get("cpf")))
+            ]
+
+        return sorted(filtered, key=lambda item: item.get("createdAt") or "", reverse=True)
+
+    @app.post("/api/portal-doncor/movimentacoes")
+    async def portal_doncor_movimentacao(payload: Dict[str, Any] = Body(...)):
+        documento = _digits(payload.get("documento"))
+        context = await _find_partner_context(db, documento)
+        tipo = str(payload.get("tipo") or "").strip().lower()
+        tipo_labels = {"inclusao": "Inclusão", "exclusao": "Exclusão", "alteracao": "Alteração"}
+        if tipo not in tipo_labels:
+            raise HTTPException(status_code=400, detail="Tipo de movimentação inválido.")
+
+        contrato = str(payload.get("contrato") or "").strip()
+        if not contrato:
+            contrato = next((item for item in context.get("contratoNumeros") or [] if item), "")
+
+        beneficiario = str(payload.get("beneficiario") or payload.get("nome") or "").strip()
+        detalhes = str(payload.get("detalhes") or payload.get("descricao") or "").strip()
+        if tipo in {"inclusao", "exclusao"} and not beneficiario:
+            raise HTTPException(status_code=400, detail="Informe o nome do beneficiário.")
+        if not detalhes:
+            raise HTTPException(status_code=400, detail="Informe os detalhes da solicitação.")
+
+        anexos = _attachment_list(payload.get("anexos") or payload.get("attachments"))
+        seq = await db.portal_solicitacoes.count_documents({}) + 1
+        item = {
+            "id": str(uuid.uuid4()),
+            "protocolo": _portal_protocol(seq),
+            "tipo": tipo,
+            "tipoLabel": tipo_labels[tipo],
+            "documento": context["documento"],
+            "empresa": context["empresa"],
+            "contrato": contrato,
+            "operadora": str(payload.get("operadora") or "").strip(),
+            "planos": payload.get("planos") or [],
+            "tipoMovimentacao": payload.get("tipoMovimentacao") or "",
+            "beneficiario": beneficiario,
+            "cpf": _digits(payload.get("cpf")),
+            "detalhes": detalhes,
+            "anexos": anexos,
+            "status": "Enviado",
+            "dataEnvio": now_br(),
+            "dataConclusao": "",
+            "origem": "portal_cliente",
+            "createdAt": now_iso(),
+            "criadoEm": now_br(),
+            "payload": payload,
+        }
+
+        await db.portal_solicitacoes.insert_one(item)
+        await _insert_operational_request(db, tipo, item, payload)
+
+        chat_item = {
+            "id": str(uuid.uuid4()),
+            "documento": context["documento"],
+            "empresa": context["empresa"],
+            "company": context["empresa"],
+            "text": _request_text(item),
+            "attachmentName": ", ".join(attachment["name"] for attachment in anexos),
+            "attachmentSize": sum(int(attachment.get("size") or 0) for attachment in anexos),
+            "attachments": anexos,
+            "sender": context["empresa"],
+            "senderRole": "portal",
+            "direction": "incoming",
+            "read": False,
+            "protocolo": item["protocolo"],
+            "createdAt": now_iso(),
+            "criadoEm": now_br(),
+        }
+        await db.portal_chat.insert_one(chat_item)
+
+        return item
+
     @app.get("/api/portal-doncor/chat")
     async def portal_doncor_chat(documento: str = "", empresa: str = "", limit: int = Query(default=100, ge=1, le=300)):
         items = await _all(db.portal_chat, "createdAt", limit)
@@ -395,7 +588,10 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
         empresa = str(payload.get("empresa") or payload.get("company") or "Parceiro").strip()
         text = str(payload.get("text") or payload.get("mensagem") or "").strip()
         attachment_name = str(payload.get("attachmentName") or payload.get("anexoNome") or "").strip()
-        if not text and not attachment_name:
+        attachments = _attachment_list(payload.get("attachments") or payload.get("anexos"))
+        if not attachment_name and attachments:
+            attachment_name = ", ".join(attachment["name"] for attachment in attachments)
+        if not text and not attachment_name and not attachments:
             raise HTTPException(status_code=400, detail="Digite uma mensagem ou anexe um documento.")
 
         sender_role = str(payload.get("senderRole") or payload.get("origem") or "portal").lower()
@@ -408,6 +604,7 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
             "text": text,
             "attachmentName": attachment_name,
             "attachmentSize": payload.get("attachmentSize") or 0,
+            "attachments": attachments,
             "sender": payload.get("sender") or empresa,
             "senderRole": sender_role,
             "direction": direction,
@@ -417,3 +614,17 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
         }
         await db.portal_chat.insert_one(item)
         return item
+
+    @app.patch("/api/portal-doncor/chat/read")
+    async def portal_doncor_chat_read(payload: Dict[str, Any] = Body(...)):
+        documento = _digits(payload.get("documento"))
+        empresa_norm = str(payload.get("empresa") or payload.get("company") or "").strip().lower()
+        items = await _all(db.portal_chat, "createdAt", 1000)
+        matched = 0
+        for item in items:
+            same_doc = documento and _digits(item.get("documento")) == documento
+            same_company = empresa_norm and str(item.get("empresa") or item.get("company") or "").strip().lower() == empresa_norm
+            if same_doc or same_company:
+                await db.portal_chat.update_one({"id": item.get("id")}, {"$set": {"read": True}})
+                matched += 1
+        return {"ok": True, "updated": matched}

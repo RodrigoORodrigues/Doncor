@@ -147,6 +147,24 @@ class SupabaseCollection:
             self._table().upsert(payload).execute()
         return UpdateResult(1 if current else 0)
 
+    async def replace_one(self, query: dict[str, Any], document: dict[str, Any], upsert: bool = False):
+        current = await self.find_one(query)
+        if not current and not upsert:
+            return UpdateResult(0)
+
+        payload = copy.deepcopy(document)
+        item_id = str(payload.get("id") or query.get("id") or query.get("_id") or uuid.uuid4())
+        payload["id"] = item_id
+        payload.pop("_id", None)
+
+        if self.client is None:
+            self._memory_table()[item_id] = payload
+        elif self._uses_payload_layout():
+            self._table().upsert({"id": item_id, "payload": payload}).execute()
+        else:
+            self._table().upsert(payload).execute()
+        return UpdateResult(1 if current else 0)
+
     async def delete_one(self, query: dict[str, Any]):
         current = await self.find_one(query)
         if not current:
@@ -228,6 +246,9 @@ def _matches_query(item: dict[str, Any], query: dict[str, Any]) -> bool:
                     return False
             elif "$in" in expected:
                 if value not in expected["$in"]:
+                    return False
+            elif "$ne" in expected:
+                if value == expected["$ne"]:
                     return False
             else:
                 return False

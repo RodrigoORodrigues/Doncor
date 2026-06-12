@@ -269,8 +269,12 @@ export const deletePortalParceiro = (id) => api.delete(`/portal-parceiros/${id}`
 export const loginPortalDonCor = ({ documento, senha }) => api.post("/portal-doncor/login", { documento, senha }).then((r) => r.data);
 export const alterarSenhaPortalDonCor = (data) => api.post("/portal-doncor/alterar-senha", data).then((r) => r.data);
 export const fetchPortalDonCorResumo = (documento) => getObject("/portal-doncor/resumo", {}, { params: { documento } });
+export const fetchPortalDonCorSolicitacoes = ({ documento = "", search = "", tipo = "todos", status = "todos" } = {}) =>
+  getArray("/portal-doncor/solicitacoes", { params: { documento, search, tipo, status } });
+export const createPortalDonCorMovimentacao = (data) => api.post("/portal-doncor/movimentacoes", data).then((r) => r.data);
 export const fetchPortalDonCorChat = ({ documento = "", empresa = "" } = {}) =>
   getArray("/portal-doncor/chat", { params: { documento, empresa } });
 export const sendPortalDonCorChat = (data) => api.post("/portal-doncor/chat", data).then((r) => r.data);
+export const markPortalDonCorChatRead = (data) => api.patch("/portal-doncor/chat/read", data).then((r) => r.data);
 
 export default api;
