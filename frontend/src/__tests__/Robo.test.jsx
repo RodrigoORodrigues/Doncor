@@ -59,5 +59,7 @@ test('aciona iniciar e atualiza status', async () => {
   await userEvent.click(btn);
 
   await waitFor(() => expect(startRobo).toHaveBeenCalledTimes(1));
-  expect(await screen.findByText('Em execução')).toBeInTheDocument();
+  await waitFor(() => {
+    expect(screen.getAllByText('Em execução').length).toBeGreaterThan(1);
+  });
 });
