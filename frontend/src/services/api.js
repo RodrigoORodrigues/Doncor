@@ -1,10 +1,28 @@
 import axios from "axios";
 
-const RAW_BACKEND_URL = (
+const PRODUCTION_BACKEND_URL = "https://doncor.up.railway.app";
+
+const isHostedFrontend = () => {
+  if (typeof window === "undefined") return false;
+  return /(^|\.)doncor\.site$/i.test(window.location.hostname) || /\.vercel\.app$/i.test(window.location.hostname);
+};
+
+const normalizeBackendUrl = (value) => {
+  const raw = String(value || "").trim().replace(/\/$/, "");
+  const isPlaceholder = !raw || raw.includes("REACT_APP_BACKEND_URL") || raw.includes("REACT_APP_API_URL");
+
+  if (isPlaceholder) {
+    return isHostedFrontend() ? PRODUCTION_BACKEND_URL : "";
+  }
+
+  return raw;
+};
+
+const RAW_BACKEND_URL = normalizeBackendUrl(
   process.env.REACT_APP_BACKEND_URL ||
   process.env.REACT_APP_API_URL ||
   ""
-).replace(/\/$/, "");
+);
 
 const API = RAW_BACKEND_URL
   ? RAW_BACKEND_URL.endsWith("/api")
