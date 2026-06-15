@@ -14,7 +14,41 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
-from fastapi import Body, HTTPException, Query
+from fastapi import Body, HTTPException, Query, Response
+
+
+FORMULARIO_CATEGORIAS = {
+    "movimentacao": {
+        "label": "Formulários de Movimentação",
+        "icon": "📋",
+        "description": "Documentos necessários para atendimento.",
+    },
+    "reembolso": {
+        "label": "Tabelas de Reembolso",
+        "icon": "📊",
+        "description": "Documentos necessários para atendimento.",
+    },
+    "carencia": {
+        "label": "Informações de Carência",
+        "icon": "⏱️",
+        "description": "Documentos necessários para atendimento.",
+    },
+    "coparticipacao": {
+        "label": "Regras de Coparticipação",
+        "icon": "⚖️",
+        "description": "Documentos necessários para atendimento.",
+    },
+    "coberturas": {
+        "label": "Coberturas e Exclusões",
+        "icon": "📄",
+        "description": "Documentos necessários para atendimento.",
+    },
+    "manuais": {
+        "label": "Manuais Operacionais",
+        "icon": "📘",
+        "description": "Documentos necessários para atendimento.",
+    },
+}
 
 
 def _digits(value: Any) -> str:
@@ -88,6 +122,85 @@ def _public_partner(item: Dict[str, Any]) -> Dict[str, Any]:
     public.pop("accessSalt", None)
     public["senhaDefinida"] = bool(item.get("accessDigest") and item.get("accessSalt"))
     return public
+
+
+def _category_key(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    raw = re.sub(r"[^a-z0-9_-]+", "-", raw)
+    return raw if raw in FORMULARIO_CATEGORIAS else "movimentacao"
+
+
+def _public_formulario(item: Dict[str, Any]) -> Dict[str, Any]:
+    public = dict(item or {})
+    public.pop("arquivoBase64", None)
+    public["temArquivo"] = bool(item.get("arquivoBase64") or item.get("arquivoUrl"))
+    return public
+
+
+def _decode_file_base64(value: Any) -> bytes:
+    raw = str(value or "").strip()
+    if not raw:
+        return b""
+    if "," in raw and raw.startswith("data:"):
+        raw = raw.split(",", 1)[1]
+    try:
+        return base64.b64decode(raw.encode("utf-8"), validate=True)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Arquivo em base64 inválido.")
+
+
+def _normalize_formulario_payload(payload: Dict[str, Any], now_iso: Callable, now_br: Callable, existing: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    categoria = _category_key(payload.get("categoria") or payload.get("category"))
+    category_info = FORMULARIO_CATEGORIAS[categoria]
+    titulo = str(payload.get("titulo") or payload.get("title") or payload.get("nome") or "").strip()
+    if not titulo:
+        raise HTTPException(status_code=400, detail="Informe o nome do documento.")
+
+    arquivo_url = str(payload.get("arquivoUrl") or payload.get("url") or "").strip()
+    arquivo_base64 = payload.get("arquivoBase64") or payload.get("fileBase64")
+    existing_base64 = existing.get("arquivoBase64") if existing else ""
+    existing_url = existing.get("arquivoUrl") if existing else ""
+    if not arquivo_url and not arquivo_base64 and not existing_base64 and not existing_url:
+        raise HTTPException(status_code=400, detail="Anexe um arquivo ou informe um link do documento.")
+
+    try:
+        ordem = int(payload.get("ordem") or payload.get("order") or (existing or {}).get("ordem") or 0)
+    except Exception:
+        ordem = 0
+
+    item = {
+        "id": (existing or {}).get("id") or str(uuid.uuid4()),
+        "categoria": categoria,
+        "categoriaLabel": category_info["label"],
+        "categoriaIcone": category_info["icon"],
+        "categoriaDescricao": category_info["description"],
+        "titulo": titulo,
+        "descricao": str(payload.get("descricao") or payload.get("description") or "").strip(),
+        "arquivoNome": str(payload.get("arquivoNome") or payload.get("fileName") or payload.get("name") or titulo).strip(),
+        "arquivoUrl": arquivo_url or existing_url or "",
+        "contentType": str(payload.get("contentType") or payload.get("type") or (existing or {}).get("contentType") or "application/octet-stream").strip(),
+        "tamanhoBytes": int(payload.get("tamanhoBytes") or payload.get("size") or (existing or {}).get("tamanhoBytes") or 0),
+        "status": str(payload.get("status") or (existing or {}).get("status") or "Ativo").strip() or "Ativo",
+        "ordem": ordem,
+        "observacoes": str(payload.get("observacoes") or payload.get("observations") or "").strip(),
+        "updatedAt": now_iso(),
+        "atualizadoEm": now_br(),
+    }
+
+    if arquivo_base64:
+        _decode_file_base64(arquivo_base64)
+        item["arquivoBase64"] = str(arquivo_base64).split(",", 1)[-1] if str(arquivo_base64).startswith("data:") else str(arquivo_base64)
+    elif existing_base64:
+        item["arquivoBase64"] = existing_base64
+
+    if existing:
+        item["createdAt"] = existing.get("createdAt") or now_iso()
+        item["criadoEm"] = existing.get("criadoEm") or now_br()
+    else:
+        item["createdAt"] = now_iso()
+        item["criadoEm"] = now_br()
+
+    return item
 
 
 def _normalize_partner_payload(payload: Dict[str, Any], now_iso: Callable, now_br: Callable, existing: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -395,6 +508,77 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Cadastro do portal não encontrado.")
         return {"ok": True, "deleted": partner_id}
+
+    @app.get("/api/portal-formularios")
+    async def portal_formularios_list(
+        search: str = "",
+        status: str = "todos",
+        categoria: str = "todos",
+        limit: int = Query(default=300, ge=1, le=1000),
+    ):
+        items = await _all(db.portal_formularios, "createdAt", limit)
+        if status and status != "todos":
+            items = [item for item in items if str(item.get("status", "")).lower() == status.lower()]
+        if categoria and categoria != "todos":
+            category_key = _category_key(categoria)
+            items = [item for item in items if item.get("categoria") == category_key]
+
+        term = str(search or "").strip().lower()
+        if term:
+            items = [
+                item for item in items
+                if term in " ".join(str(item.get(key) or "").lower() for key in ["titulo", "descricao", "categoriaLabel", "arquivoNome", "status", "observacoes"])
+            ]
+
+        ordered = sorted(items, key=lambda item: (item.get("ordem") or 0, item.get("categoriaLabel") or "", item.get("titulo") or ""))
+        return [_public_formulario(item) for item in ordered]
+
+    @app.post("/api/portal-formularios")
+    async def portal_formularios_create(payload: Dict[str, Any] = Body(...)):
+        item = _normalize_formulario_payload(payload, now_iso, now_br)
+        await db.portal_formularios.insert_one(item)
+        return _public_formulario(item)
+
+    @app.put("/api/portal-formularios/{formulario_id}")
+    async def portal_formularios_update(formulario_id: str, payload: Dict[str, Any] = Body(...)):
+        existing = await db.portal_formularios.find_one({"id": formulario_id}, projection)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Documento não encontrado.")
+        item = _normalize_formulario_payload(payload, now_iso, now_br, existing)
+        await db.portal_formularios.replace_one({"id": formulario_id}, item)
+        return _public_formulario(item)
+
+    @app.delete("/api/portal-formularios/{formulario_id}")
+    async def portal_formularios_delete(formulario_id: str):
+        result = await db.portal_formularios.delete_one({"id": formulario_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Documento não encontrado.")
+        return {"ok": True, "deleted": formulario_id}
+
+    @app.get("/api/portal-formularios/{formulario_id}/arquivo")
+    async def portal_formularios_file(formulario_id: str):
+        item = await db.portal_formularios.find_one({"id": formulario_id}, projection)
+        if not item:
+            raise HTTPException(status_code=404, detail="Documento não encontrado.")
+        content = _decode_file_base64(item.get("arquivoBase64"))
+        if not content:
+            raise HTTPException(status_code=404, detail="Este documento não possui arquivo anexado.")
+        filename = (item.get("arquivoNome") or item.get("titulo") or "documento").replace('"', "")
+        return Response(
+            content=content,
+            media_type=item.get("contentType") or "application/octet-stream",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    @app.get("/api/portal-doncor/formularios")
+    async def portal_doncor_formularios(categoria: str = "todos", limit: int = Query(default=300, ge=1, le=1000)):
+        items = await _all(db.portal_formularios, "createdAt", limit)
+        items = [item for item in items if str(item.get("status", "Ativo")).lower() == "ativo"]
+        if categoria and categoria != "todos":
+            category_key = _category_key(categoria)
+            items = [item for item in items if item.get("categoria") == category_key]
+        ordered = sorted(items, key=lambda item: (item.get("ordem") or 0, item.get("categoriaLabel") or "", item.get("titulo") or ""))
+        return [_public_formulario(item) for item in ordered]
 
     @app.post("/api/portal-doncor/login")
     async def portal_doncor_login(payload: Dict[str, Any] = Body(...)):

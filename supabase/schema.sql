@@ -119,6 +119,13 @@ create table if not exists public.portal_solicitacoes (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.portal_formularios (
+  id text primary key,
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.robo_config (
   id text primary key default 'default',
   payload jsonb not null default '{}'::jsonb,
@@ -176,6 +183,7 @@ create index if not exists robo_execucoes_payload_gin on public.robo_execucoes_l
 create index if not exists portal_parceiros_payload_gin on public.portal_parceiros using gin (payload);
 create index if not exists portal_chat_payload_gin on public.portal_chat using gin (payload);
 create index if not exists portal_solicitacoes_payload_gin on public.portal_solicitacoes using gin (payload);
+create index if not exists portal_formularios_payload_gin on public.portal_formularios using gin (payload);
 create index if not exists boletos_baixados_payload_gin on public.boletos_baixados using gin (payload);
 create index if not exists robo_arquivos_payload_gin on public.robo_arquivos using gin (payload);
 create index if not exists robo_diagnosticos_payload_gin on public.robo_diagnosticos using gin (payload);
@@ -188,7 +196,7 @@ begin
   foreach t in array array[
     'contratos_adesao', 'contratos_empresarial', 'inclusoes', 'exclusoes', 'transferencias',
     'faturas', 'comissoes', 'seguradoras', 'produtos', 'colaboradores', 'tarefas_pendentes',
-    'movimentacoes_recentes', 'portal_parceiros', 'portal_chat', 'portal_solicitacoes',
+    'movimentacoes_recentes', 'portal_parceiros', 'portal_chat', 'portal_solicitacoes', 'portal_formularios',
     'robo_config', 'robo_estado', 'robo_execucoes_log', 'boletos_baixados', 'robo_arquivos', 'robo_diagnosticos'
   ]
   loop
@@ -214,6 +222,7 @@ alter table public.movimentacoes_recentes disable row level security;
 alter table public.portal_parceiros disable row level security;
 alter table public.portal_chat disable row level security;
 alter table public.portal_solicitacoes disable row level security;
+alter table public.portal_formularios disable row level security;
 alter table public.robo_config disable row level security;
 alter table public.robo_estado disable row level security;
 alter table public.robo_execucoes_log disable row level security;

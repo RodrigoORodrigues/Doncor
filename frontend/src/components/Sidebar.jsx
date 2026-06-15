@@ -4,13 +4,13 @@ import {
   Users, Handshake, UserPlus, UserMinus, ArrowLeftRight,
   Receipt, DollarSign, Building2, Package, UserCog,
   BarChart3, Download, LayoutDashboard,
-  Menu, Bot, Settings, User, HelpCircle, MessageCircle, UserCheck
+  Menu, Bot, Settings, User, HelpCircle, MessageCircle, UserCheck, FileText
 } from 'lucide-react';
 
 const iconMap = {
   Users, Handshake, UserPlus, UserMinus, ArrowLeftRight,
   Receipt, DollarSign, Building2, Package, UserCog,
-  BarChart3, Download, LayoutDashboard, Menu, Bot, Settings, User, HelpCircle, MessageCircle, UserCheck
+  BarChart3, Download, LayoutDashboard, Menu, Bot, Settings, User, HelpCircle, MessageCircle, UserCheck, FileText
 };
 
 const buildStrictMenuItems = () => {
@@ -37,6 +37,7 @@ const buildStrictMenuItems = () => {
         items: [
           ...section.items,
           { id: 'portal-parceiros', label: 'Portal DonCor', icon: 'UserCheck', page: 'portal-parceiros' },
+          { id: 'portal-formularios', label: 'Formulários e Manuais', icon: 'FileText', page: 'portal-formularios' },
         ],
       });
       return;

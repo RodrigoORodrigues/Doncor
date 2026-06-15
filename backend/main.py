@@ -276,7 +276,7 @@ async def diagnostics_response():
     tables = {}
     for table in [
         "contratos_adesao", "contratos_empresarial", "faturas", "comissoes", "seguradoras", "produtos", "colaboradores",
-        "robo_config", "robo_estado", "robo_execucoes_log", "boletos_baixados", "robo_arquivos", "robo_diagnosticos", "portal_chat", "portal_parceiros", "portal_solicitacoes",
+        "robo_config", "robo_estado", "robo_execucoes_log", "boletos_baixados", "robo_arquivos", "robo_diagnosticos", "portal_chat", "portal_parceiros", "portal_solicitacoes", "portal_formularios",
     ]:
         tables[table] = await _count_table(table)
 

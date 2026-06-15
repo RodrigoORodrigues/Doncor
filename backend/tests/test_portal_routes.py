@@ -40,6 +40,21 @@ class FakeCollection:
         if item and "$set" in update:
             item.update(update["$set"])
 
+    async def replace_one(self, query, document):
+        item = await self.find_one(query)
+        if item:
+            item.clear()
+            item.update(dict(document))
+
+    async def delete_one(self, query):
+        item = await self.find_one(query)
+        class R:
+            deleted_count = 0
+        if item:
+            self.items.remove(item)
+            R.deleted_count = 1
+        return R()
+
     async def count_documents(self, *_args, **_kwargs):
         return len(self.items)
 
@@ -70,6 +85,7 @@ class FakeDb:
         ])
         self.portal_solicitacoes = FakeCollection()
         self.portal_chat = FakeCollection()
+        self.portal_formularios = FakeCollection()
         self.contratos_empresarial = FakeCollection([
             {"id": "contract-1", "numero": "EMP-001", "empresa": "Empresa Cliente", "cnpj": "12.345.678/0001-90"}
         ])
@@ -158,3 +174,39 @@ def test_chat_aceita_anexo_sem_texto_e_marca_como_lido():
     assert read_response.status_code == 200
     assert read_response.json()["updated"] == 2
     assert all(item["read"] for item in db.portal_chat.items)
+
+
+def test_formularios_alimentam_portal_cliente_e_download():
+    client, db = make_client()
+
+    response = client.post(
+        "/api/portal-formularios",
+        json={
+            "categoria": "movimentacao",
+            "titulo": "Guia de Inclusão - Tabela A",
+            "descricao": "Tabela de inclusão vigente.",
+            "arquivoNome": "guia-inclusao.pdf",
+            "contentType": "application/pdf",
+            "arquivoBase64": "ZmFrZS1wZGY=",
+            "status": "Ativo",
+            "ordem": 1,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["categoriaLabel"] == "Formulários de Movimentação"
+    assert body["temArquivo"] is True
+    assert "arquivoBase64" not in body
+
+    admin_list = client.get("/api/portal-formularios")
+    assert admin_list.status_code == 200
+    assert admin_list.json()[0]["titulo"] == "Guia de Inclusão - Tabela A"
+
+    portal_list = client.get("/api/portal-doncor/formularios")
+    assert portal_list.status_code == 200
+    assert portal_list.json()[0]["titulo"] == "Guia de Inclusão - Tabela A"
+
+    file_response = client.get(f"/api/portal-formularios/{body['id']}/arquivo")
+    assert file_response.status_code == 200
+    assert file_response.content == b"fake-pdf"

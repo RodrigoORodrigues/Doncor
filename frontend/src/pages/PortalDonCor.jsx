@@ -5,9 +5,11 @@ import { Input } from '../components/ui/input';
 import {
   loginPortalDonCor,
   fetchPortalDonCorResumo,
+  fetchPortalDonCorFormularios,
   fetchPortalDonCorSolicitacoes,
   createPortalDonCorMovimentacao,
   fetchPortalDonCorChat,
+  getPortalFormularioDownloadUrl,
   sendPortalDonCorChat,
   alterarSenhaPortalDonCor
 } from '../services/api';
@@ -43,6 +45,15 @@ const movementSubItems = [
   { id: 'inclusao', label: 'Inclusão' },
   { id: 'exclusao', label: 'Exclusão' },
   { id: 'alteracao', label: 'Alteração' },
+];
+
+const formularioCategories = [
+  { id: 'movimentacao', title: 'Formulários de Movimentação', icon: '📋', description: 'Documentos necessários para atendimento.' },
+  { id: 'reembolso', title: 'Tabelas de Reembolso', icon: '📊', description: 'Documentos necessários para atendimento.' },
+  { id: 'carencia', title: 'Informações de Carência', icon: '⏱️', description: 'Documentos necessários para atendimento.' },
+  { id: 'coparticipacao', title: 'Regras de Coparticipação', icon: '⚖️', description: 'Documentos necessários para atendimento.' },
+  { id: 'coberturas', title: 'Coberturas e Exclusões', icon: '📄', description: 'Documentos necessários para atendimento.' },
+  { id: 'manuais', title: 'Manuais Operacionais', icon: '📘', description: 'Documentos necessários para atendimento.' },
 ];
 
 const defaultMovementForms = {
@@ -143,6 +154,7 @@ const PortalDonCor = () => {
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState('');
   const [attachment, setAttachment] = useState(null);
+  const [formularios, setFormularios] = useState([]);
   const [solicitacoes, setSolicitacoes] = useState([]);
   const [solicitacoesSearch, setSolicitacoesSearch] = useState('');
   const [solicitacoesTipo, setSolicitacoesTipo] = useState('todos');
@@ -158,14 +170,16 @@ const PortalDonCor = () => {
     if (!currentSession?.documento) return;
     setLoading(true);
     try {
-      const [resumo, chat, solicitacoesData] = await Promise.all([
+      const [resumo, chat, solicitacoesData, formulariosData] = await Promise.all([
         fetchPortalDonCorResumo(currentSession.documento),
         fetchPortalDonCorChat({ documento: currentSession.documento, empresa: currentSession.empresa }),
         fetchPortalDonCorSolicitacoes({ documento: currentSession.documento }),
+        fetchPortalDonCorFormularios(),
       ]);
       setPayload(resumo);
       setMessages(chat || []);
       setSolicitacoes(solicitacoesData || []);
+      setFormularios(formulariosData || []);
     } catch (err) {
       setError(err?.response?.data?.detail || 'Não foi possível carregar o Portal do Cliente.');
     }
@@ -199,6 +213,7 @@ const PortalDonCor = () => {
     setSession(null);
     setPayload(null);
     setMessages([]);
+    setFormularios([]);
     setDocumento('');
     setSenha('');
     setShowPassBox(false);
@@ -368,6 +383,33 @@ const PortalDonCor = () => {
   const maxSolicitacoesStatus = useMemo(() => Math.max(...solicitacoesPorStatus.map((item) => item.value), 1), [solicitacoesPorStatus]);
   const maxSolicitacoesTipo = useMemo(() => Math.max(...solicitacoesPorTipo.map((item) => item.value), 1), [solicitacoesPorTipo]);
   const ultimasSolicitacoes = useMemo(() => solicitacoes.slice(0, 4), [solicitacoes]);
+  const formulariosPorCategoria = useMemo(() => {
+    const grouped = formularioCategories.map((category) => ({
+      ...category,
+      docs: formularios.filter((item) => item.categoria === category.id),
+    }));
+    const customCategories = formularios
+      .filter((item) => !formularioCategories.some((category) => category.id === item.categoria))
+      .reduce((acc, item) => {
+        const key = item.categoria || 'outros';
+        const current = acc.get(key) || {
+          id: key,
+          title: item.categoriaLabel || 'Outros documentos',
+          icon: item.categoriaIcone || '📄',
+          description: item.categoriaDescricao || 'Documentos necessários para atendimento.',
+          docs: [],
+        };
+        current.docs.push(item);
+        acc.set(key, current);
+        return acc;
+      }, new Map());
+    return [...grouped, ...Array.from(customCategories.values())];
+  }, [formularios]);
+
+  const openFormulario = (item) => {
+    const url = getPortalFormularioDownloadUrl(item);
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  };
 
   const renderDashboardBars = (items, maxValue) => (
     <div style={{ display: 'grid', gap: 14 }}>
@@ -1106,25 +1148,25 @@ const PortalDonCor = () => {
         subtitle="Documentos operacionais, regras e materiais de apoio para gestão do seu plano."
       />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, marginBottom: 24 }}>
-        {[
-          { title: 'Formulários de Movimentação', icon: '📋', docs: ['Guia de Inclusão - Tabela A', 'Guia de Inclusão - Tabela B'] },
-          { title: 'Tabelas de Reembolso', icon: '📊', docs: ['Tabela de Reembolso', 'Valores de Carência'] },
-          { title: 'Informações de Carência', icon: '⏱️', docs: ['Tabela de Carência 2024', 'Aviso Carencial']},
-          { title: 'Regras de Coparticipação', icon: '⚖️', docs: ['Comunicado Regras', 'Tabela Atualizada'] },
-          { title: 'Coberturas e Exclusões', icon: '📄', docs: ['Cobertura Completa', 'Itens Excluídos'] },
-          { title: 'Manuais Operacionais', icon: '📘', docs: ['Manual do Participante', 'Guia Prático'] }
-        ].map((section, idx) => (
-          <section key={idx} style={{ ...card, padding: 18 }}>
+        {formulariosPorCategoria.map((section) => (
+          <section key={section.id} style={{ ...card, padding: 18 }}>
             <div style={{ fontSize: '2rem', marginBottom: 8 }}>{section.icon}</div>
             <h3 style={{ margin: '0 0 12px', color: theme.text, fontWeight: 700, fontSize: '0.95rem' }}>{section.title}</h3>
-            <p style={{ margin: '0 0 12px', color: theme.muted, fontSize: '0.75rem' }}>Documentos necessários para atendimento.</p>
+            <p style={{ margin: '0 0 12px', color: theme.muted, fontSize: '0.75rem' }}>{section.description}</p>
             <div style={{ display: 'grid', gap: 8 }}>
+              {section.docs.length === 0 && (
+                <div style={{ color: theme.muted, fontSize: '0.76rem', borderTop: `1px solid ${theme.border}`, paddingTop: 10 }}>
+                  Nenhum documento disponível.
+                </div>
+              )}
               {section.docs.map((doc, docIdx) => (
                 <div key={docIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: docIdx === 0 ? `1px solid ${theme.border}` : 'none', paddingTop: docIdx === 0 ? 8 : 0 }}>
                   <span style={{ color: theme.text, fontSize: '0.8rem', fontWeight: 600 }}>
-                    <FileText size={12} style={{ display: 'inline', marginRight: 6 }} /> {doc}
+                    <FileText size={12} style={{ display: 'inline', marginRight: 6 }} /> {doc.titulo}
                   </span>
-                  <Download size={14} color={theme.blue} style={{ cursor: 'pointer' }} />
+                  <button onClick={() => openFormulario(doc)} style={{ border: 0, background: 'transparent', padding: 4, cursor: 'pointer', color: theme.blue }} title="Baixar documento">
+                    <Download size={14} />
+                  </button>
                 </div>
               ))}
             </div>

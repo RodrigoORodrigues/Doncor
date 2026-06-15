@@ -8,7 +8,7 @@ import Pagination from '../components/Pagination';
 
 const PAGE_SIZE = 8;
 const FIXED_ROLES = ['Diretoria', 'Gerencia', 'Analista'];
-const AVAILABLE_PAGES = ['dashboard','adesao','empresarial','inclusao','exclusao','transferencia','faturas','comissoes','seguradoras','produtos','colaboradores','relatorios','robo','robo-config','perfil','configuracoes','suporte'];
+const AVAILABLE_PAGES = ['dashboard','adesao','empresarial','inclusao','exclusao','transferencia','faturas','comissoes','seguradoras','produtos','colaboradores','portal-parceiros','portal-formularios','relatorios','robo','robo-config','perfil','configuracoes','suporte'];
 
 const Colaboradores = ({ session, accessByRole, onAccessChange }) => {
   const [data, setData] = useState([]);

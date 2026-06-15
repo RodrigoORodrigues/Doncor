@@ -22,6 +22,7 @@ import RoboConfig from "./pages/RoboConfig";
 import Chat from "./pages/Chat";
 import PortalDonCor from "./pages/PortalDonCor";
 import PortalParceiros from "./pages/PortalParceiros";
+import PortalFormularios from "./pages/PortalFormularios";
 import { Loader2 } from "lucide-react";
 
 const DEFAULT_ACCESS = "dashboard";
@@ -40,6 +41,7 @@ const ALL_PAGES = [
   "produtos",
   "colaboradores",
   "portal-parceiros",
+  "portal-formularios",
   "relatorios",
   "robo",
   "robo-config",
@@ -65,6 +67,7 @@ const DEFAULT_ACCESS_BY_ROLE = {
     "seguradoras",
     "produtos",
     "portal-parceiros",
+    "portal-formularios",
     "relatorios",
     "perfil",
     "suporte",
@@ -84,6 +87,8 @@ const DEFAULT_ACCESS_BY_ROLE = {
   ],
 };
 
+const ACCESS_MIGRATION_PAGES = ["portal-formularios"];
+
 const safeParseJSON = (value, fallback) => {
   try {
     return value ? JSON.parse(value) : fallback;
@@ -97,10 +102,18 @@ const normalizeAccessConfig = (value) => {
     return DEFAULT_ACCESS_BY_ROLE;
   }
 
-  return {
+  const normalized = {
     ...DEFAULT_ACCESS_BY_ROLE,
     ...value,
   };
+
+  Object.keys(DEFAULT_ACCESS_BY_ROLE).forEach((role) => {
+    if (!Array.isArray(value[role])) return;
+    const migrationPages = DEFAULT_ACCESS_BY_ROLE[role].filter((page) => ACCESS_MIGRATION_PAGES.includes(page));
+    normalized[role] = Array.from(new Set([...value[role], ...migrationPages]));
+  });
+
+  return normalized;
 };
 
 const LoginScreen = ({ onLogin, error }) => {
@@ -228,6 +241,7 @@ const pageComponents = {
   produtos: Produtos,
   colaboradores: Colaboradores,
   "portal-parceiros": PortalParceiros,
+  "portal-formularios": PortalFormularios,
   relatorios: Relatorios,
   robo: Robo,
   "robo-config": RoboConfig,

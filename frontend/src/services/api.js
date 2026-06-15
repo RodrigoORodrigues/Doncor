@@ -266,9 +266,21 @@ export const fetchPortalParceiros = (search = "", status = "todos") =>
 export const createPortalParceiro = (data) => api.post("/portal-parceiros", data).then((r) => r.data);
 export const updatePortalParceiro = (id, data) => api.put(`/portal-parceiros/${id}`, data).then((r) => r.data);
 export const deletePortalParceiro = (id) => api.delete(`/portal-parceiros/${id}`).then((r) => r.data);
+export const fetchPortalFormularios = (search = "", status = "todos", categoria = "todos") =>
+  getArray("/portal-formularios", { params: { search, status, categoria } });
+export const createPortalFormulario = (data) => api.post("/portal-formularios", data).then((r) => r.data);
+export const updatePortalFormulario = (id, data) => api.put(`/portal-formularios/${id}`, data).then((r) => r.data);
+export const deletePortalFormulario = (id) => api.delete(`/portal-formularios/${id}`).then((r) => r.data);
+export const getPortalFormularioDownloadUrl = (item) => {
+  if (item?.arquivoUrl) return item.arquivoUrl;
+  if (!item?.id) return "";
+  return `${API}/portal-formularios/${item.id}/arquivo`;
+};
 export const loginPortalDonCor = ({ documento, senha }) => api.post("/portal-doncor/login", { documento, senha }).then((r) => r.data);
 export const alterarSenhaPortalDonCor = (data) => api.post("/portal-doncor/alterar-senha", data).then((r) => r.data);
 export const fetchPortalDonCorResumo = (documento) => getObject("/portal-doncor/resumo", {}, { params: { documento } });
+export const fetchPortalDonCorFormularios = ({ categoria = "todos" } = {}) =>
+  getArray("/portal-doncor/formularios", { params: { categoria } });
 export const fetchPortalDonCorSolicitacoes = ({ documento = "", search = "", tipo = "todos", status = "todos" } = {}) =>
   getArray("/portal-doncor/solicitacoes", { params: { documento, search, tipo, status } });
 export const createPortalDonCorMovimentacao = (data) => api.post("/portal-doncor/movimentacoes", data).then((r) => r.data);
