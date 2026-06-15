@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, BarChart3, Bell, Building2, Download, Eye, FileText, FolderOpen, HelpCircle, Home, LifeBuoy, LogOut, MessageCircle, Paperclip, Receipt, RefreshCw, Search, Send, Shield, UploadCloud, UserMinus, UserPlus } from 'lucide-react';
+import { Activity, BarChart3, Bell, Building2, Download, Eye, FileText, FolderOpen, HelpCircle, Home, LogOut, MessageCircle, Paperclip, Receipt, RefreshCw, Search, Send, Shield, UploadCloud, UserMinus, UserPlus } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import {
@@ -87,7 +87,7 @@ const attachmentMeta = (file, category = '') => ({
 });
 
 const card = { background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 18, boxShadow: '0 10px 28px rgba(15,23,42,0.05)' };
-const money = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+const plain = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
 const StatusPill = ({ status }) => {
   const normalized = String(status || '').toLowerCase();
@@ -313,9 +313,6 @@ const PortalDonCor = () => {
 
   const faturas = useMemo(() => payload?.faturas || [], [payload]);
   const boletos = useMemo(() => payload?.boletos || [], [payload]);
-  const analitico = useMemo(() => payload?.analitico || [], [payload]);
-  const totalAnalitico = useMemo(() => analitico.reduce((sum, item) => sum + (Number(item.valorNumerico) || 0), 0), [analitico]);
-  const maxAnalitico = useMemo(() => Math.max(...analitico.map((item) => Number(item.valorNumerico) || 0), 1), [analitico]);
   const contratos = useMemo(() => {
     const map = new Map();
     faturas.forEach((item) => {
@@ -336,6 +333,57 @@ const PortalDonCor = () => {
         .some((key) => String(item[key] || '').toLowerCase().includes(term));
     });
   }, [solicitacoes, solicitacoesSearch, solicitacoesTipo, solicitacoesStatus]);
+  const solicitacoesAbertas = useMemo(
+    () => solicitacoes.filter((item) => !String(item.status || '').toLowerCase().includes('concl')).length,
+    [solicitacoes]
+  );
+  const mensagensAtendimento = useMemo(() => messages.length, [messages]);
+  const solicitacoesPorStatus = useMemo(() => {
+    const base = [
+      { key: 'enviado', label: 'Enviado', value: 0, color: theme.muted },
+      { key: 'pendente', label: 'Pendente', value: 0, color: '#DC2626' },
+      { key: 'em andamento', label: 'Em andamento', value: 0, color: theme.warning },
+      { key: 'concluido', label: 'Concluído', value: 0, color: theme.ok },
+    ];
+    solicitacoes.forEach((item) => {
+      const status = plain(item.status);
+      const target = base.find((entry) => status.includes(entry.key)) || base[0];
+      target.value += 1;
+    });
+    return base;
+  }, [solicitacoes]);
+  const solicitacoesPorTipo = useMemo(() => {
+    const base = [
+      { key: 'inclusao', label: 'Inclusão', value: 0, color: theme.blue },
+      { key: 'exclusao', label: 'Exclusão', value: 0, color: '#DC2626' },
+      { key: 'alteracao', label: 'Alteração', value: 0, color: theme.primary },
+    ];
+    solicitacoes.forEach((item) => {
+      const tipo = plain(item.tipo || item.tipoLabel);
+      const target = base.find((entry) => tipo.includes(entry.key)) || base[2];
+      target.value += 1;
+    });
+    return base;
+  }, [solicitacoes]);
+  const maxSolicitacoesStatus = useMemo(() => Math.max(...solicitacoesPorStatus.map((item) => item.value), 1), [solicitacoesPorStatus]);
+  const maxSolicitacoesTipo = useMemo(() => Math.max(...solicitacoesPorTipo.map((item) => item.value), 1), [solicitacoesPorTipo]);
+  const ultimasSolicitacoes = useMemo(() => solicitacoes.slice(0, 4), [solicitacoes]);
+
+  const renderDashboardBars = (items, maxValue) => (
+    <div style={{ display: 'grid', gap: 14 }}>
+      {items.map((item) => (
+        <div key={item.label}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.84rem', color: theme.text, fontWeight: 800 }}>
+            <span>{item.label}</span>
+            <span>{item.value}</span>
+          </div>
+          <div style={{ height: 10, background: '#edf2f7', borderRadius: 999, overflow: 'hidden', marginTop: 7 }}>
+            <div style={{ width: `${item.value ? Math.max((item.value / maxValue) * 100, 8) : 0}%`, height: '100%', background: item.color }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 
   if (!session) {
     return (
@@ -365,9 +413,64 @@ const PortalDonCor = () => {
 
   const renderDashboard = () => (
     <>
-      <SectionTitle title={`Bem-vindo ao seu Portal, ${empresa}`} subtitle="Resumo das suas informações e operações ativas hoje." action={<Button onClick={() => { setActiveSection('movimentacao'); setActiveMovementTab('inclusao'); }} style={{ background: theme.blue, color: '#fff', display: 'flex', gap: 8 }}><FileText size={15}/>Novo chamado</Button>} />
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4, minmax(0, 1fr))', gap:14, marginBottom:16 }}><StatCard title="Contratos vigentes" value={payload?.resumo?.contratos || contratos.length || 0} subtitle="Ativos" icon={FolderOpen}/><StatCard title="Faturas em aberto" value={payload?.resumo?.faturas || faturas.length || 0} subtitle="Vencimentos próximos" icon={Receipt} tone={theme.warning}/><StatCard title="Boletos disponíveis" value={payload?.resumo?.boletos || boletos.length || 0} subtitle="PDFs no sistema" icon={Download} tone={theme.ok}/><StatCard title="Total faturado" value={payload?.resumo?.totalFaturado || money(totalAnalitico)} subtitle="Base analítica" icon={BarChart3} tone={theme.primary}/></div>
-      <div style={{ display:'grid', gridTemplateColumns:'1.35fr 0.65fr', gap:16 }}><section style={{ ...card, padding:18 }}><SectionTitle title="Resumo Operacional" subtitle="Evolução financeira por competência." />{analitico.length === 0 ? <EmptyState>Os dados analíticos serão exibidos assim que houver faturamento vinculado.</EmptyState> : analitico.map((item) => <div key={item.competencia} style={{ marginBottom:12 }}><div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.84rem', color:theme.text, fontWeight:800 }}><span>{item.competencia}</span><span>{item.valor}</span></div><div style={{ height:10, background:'#edf2f7', borderRadius:999, overflow:'hidden', marginTop:6 }}><div style={{ width:`${Math.max((item.valorNumerico / maxAnalitico) * 100, 4)}%`, height:'100%', background:`linear-gradient(90deg, ${theme.blue}, ${theme.primary})` }} /></div></div>)}</section><section style={{ ...card, padding:18 }}><SectionTitle title="Precisa de ajuda?" subtitle="Fale com um especialista da equipe." /><div style={{ display:'flex', alignItems:'center', gap:12, padding:14, borderRadius:14, background:'#eff6ff' }}><LifeBuoy color={theme.blue}/><div><strong style={{ color:theme.text }}>Atendimento online</strong><div style={{ color:theme.muted, fontSize:'0.8rem' }}>Envie mensagens e documentos pelo chat.</div></div></div><Button onClick={() => setActiveSection('chat')} style={{ width:'100%', marginTop:14, background:theme.primary, color:'#fff', display:'flex', gap:8 }}><MessageCircle size={15}/>Fale com seu especialista</Button></section></div>
+      <SectionTitle title={`Bem-vindo ao seu Portal, ${empresa}`} subtitle="Resumo das operações ativas por seção." action={<Button onClick={() => { setActiveSection('movimentacao'); setActiveMovementTab('inclusao'); }} style={{ background: theme.blue, color: '#fff', display: 'flex', gap: 8 }}><FileText size={15}/>Novo chamado</Button>} />
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4, minmax(0, 1fr))', gap:14, marginBottom:16 }}>
+        <StatCard title="Contratos vigentes" value={payload?.resumo?.contratos || contratos.length || 0} subtitle="Ativos" icon={FolderOpen}/>
+        <StatCard title="Boletos disponíveis" value={payload?.resumo?.boletos || boletos.length || 0} subtitle="PDFs no sistema" icon={Download} tone={theme.ok}/>
+        <StatCard title="Solicitações abertas" value={solicitacoesAbertas} subtitle="Aguardando conclusão" icon={FileText} tone={theme.warning}/>
+        <StatCard title="Mensagens no chat" value={mensagensAtendimento} subtitle="Atendimento registrado" icon={MessageCircle} tone={theme.primary}/>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:16 }}>
+        <section style={{ ...card, padding:18 }}>
+          <SectionTitle title="Status das Solicitações" subtitle="Distribuição das demandas enviadas." />
+          {solicitacoes.length === 0 ? <EmptyState>Nenhuma solicitação enviada.</EmptyState> : renderDashboardBars(solicitacoesPorStatus, maxSolicitacoesStatus)}
+        </section>
+        <section style={{ ...card, padding:18 }}>
+          <SectionTitle title="Movimentações por tipo" subtitle="Inclusões, exclusões e alterações solicitadas." />
+          {solicitacoes.length === 0 ? <EmptyState>Os gráficos serão exibidos após a primeira movimentação.</EmptyState> : renderDashboardBars(solicitacoesPorTipo, maxSolicitacoesTipo)}
+        </section>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'1.1fr 0.9fr', gap:16 }}>
+        <section style={{ ...card, padding:18 }}>
+          <SectionTitle title="Atalhos do portal" subtitle="Acesse rapidamente as seções mais usadas." />
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(2, minmax(0, 1fr))', gap:12 }}>
+            {[
+              { title: 'Contratos', description: `${payload?.resumo?.contratos || contratos.length || 0} contrato(s) ativo(s)`, icon: FolderOpen, section: 'contratos', tone: theme.blue },
+              { title: 'Movimentação', description: 'Incluir, excluir ou alterar beneficiários', icon: RefreshCw, section: 'movimentacao', tab: 'inclusao', tone: theme.warning },
+              { title: 'Solicitações', description: `${solicitacoesAbertas} demanda(s) em aberto`, icon: FileText, section: 'solicitacoes', tone: theme.primary },
+              { title: 'Formulários', description: 'Manuais e documentos de apoio', icon: Download, section: 'formularios', tone: theme.ok },
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <button key={item.title} onClick={() => { setActiveSection(item.section); if (item.tab) setActiveMovementTab(item.tab); }} style={{ border:`1px solid ${theme.border}`, borderRadius:14, padding:14, background:'#fff', textAlign:'left', cursor:'pointer', display:'flex', alignItems:'center', gap:12 }}>
+                  <span style={{ width:38, height:38, borderRadius:12, background:`${item.tone}18`, color:item.tone, display:'flex', alignItems:'center', justifyContent:'center', flex:'0 0 auto' }}><Icon size={18}/></span>
+                  <span>
+                    <strong style={{ display:'block', color:theme.text, fontSize:'0.88rem' }}>{item.title}</strong>
+                    <span style={{ display:'block', color:theme.muted, fontSize:'0.76rem', marginTop:3 }}>{item.description}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+        <section style={{ ...card, padding:18 }}>
+          <SectionTitle title="Últimas solicitações" subtitle="Acompanhamento rápido das demandas recentes." />
+          {ultimasSolicitacoes.length === 0 ? <EmptyState>Nenhuma solicitação recente.</EmptyState> : (
+            <div style={{ display:'grid', gap:10 }}>
+              {ultimasSolicitacoes.map((item) => (
+                <div key={item.id || item.protocolo} style={{ border:`1px solid ${theme.border}`, borderRadius:12, padding:12, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+                  <div>
+                    <div style={{ color:theme.text, fontWeight:900, fontSize:'0.84rem' }}>#{item.protocolo} - {item.tipoLabel || item.tipo}</div>
+                    <div style={{ color:theme.muted, fontSize:'0.76rem', marginTop:3 }}>{item.beneficiario || item.contrato || 'Solicitação do cliente'}</div>
+                  </div>
+                  <StatusPill status={item.status}/>
+                </div>
+              ))}
+            </div>
+          )}
+          <Button onClick={() => setActiveSection('chat')} style={{ width:'100%', marginTop:14, background:theme.primary, color:'#fff', display:'flex', gap:8 }}><MessageCircle size={15}/>Abrir atendimento</Button>
+        </section>
+      </div>
     </>
   );
 
