@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Download, FileText, Filter, Loader2, Pencil, Plus, Search, Trash2, UploadCloud } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import {
   createPortalFormulario,
   deletePortalFormulario,
@@ -244,7 +244,12 @@ const PortalFormularios = () => {
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent style={{ maxWidth:'780px' }}>
-          <DialogHeader><DialogTitle>{editing ? 'Editar Documento' : 'Novo Documento do Portal do Cliente'}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Editar Documento' : 'Novo Documento do Portal do Cliente'}</DialogTitle>
+            <DialogDescription>
+              Cadastre ou atualize os documentos exibidos em Formulários e Manuais no Portal do Cliente.
+            </DialogDescription>
+          </DialogHeader>
           <div style={{ display:'flex', flexDirection:'column', gap:'12px', padding:'8px 0' }}>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 160px 140px', gap:'12px' }}>
               <div>

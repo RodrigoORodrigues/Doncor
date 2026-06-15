@@ -19,6 +19,7 @@ os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/ms-playwright")
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from starlette.middleware.cors import CORSMiddleware
 
 from rpa_storage import upload_files_to_supabase
 
@@ -43,7 +44,40 @@ class RunRpaPayload(BaseModel):
     supabase: Dict[str, Any] = {}
 
 
+def _build_allowed_origins() -> List[str]:
+    default_origins = [
+        "https://www.doncor.site",
+        "https://doncor.site",
+        "https://doncor.up.railway.app",
+        "https://doncor-rpa.up.railway.app",
+        "http://localhost:3000",
+        "http://localhost:5173",
+    ]
+    env_values = [
+        os.getenv("FRONTEND_URL", ""),
+        os.getenv("CORS_ORIGINS", ""),
+        os.getenv("ALLOWED_ORIGINS", ""),
+    ]
+    origins = set(default_origins)
+    for value in env_values:
+        for origin in str(value or "").split(","):
+            origin = origin.strip().rstrip("/")
+            if origin:
+                origins.add(origin)
+    return sorted(origins)
+
+
 app = FastAPI(title="Doncor RPA Service")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=_build_allowed_origins(),
+    allow_origin_regex=r"https://.*\.vercel\.app|http://localhost:\d+",
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
 
 if async_playwright is None:
     logger.warning("Playwright não instalado. O serviço RPA funcionará em modo simulado.")
