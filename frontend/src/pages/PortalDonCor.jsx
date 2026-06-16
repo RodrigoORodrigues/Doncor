@@ -33,7 +33,7 @@ const theme = {
 const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: Home },
   { id: 'contratos', label: 'Contratos', icon: FolderOpen },
-  { id: 'faturas', label: 'Faturas e Boletos', icon: Receipt },
+  { id: 'faturas', label: 'Faturas', icon: Receipt },
   { id: 'bi', label: 'Sinistralidade e BI', icon: BarChart3 },
   { id: 'movimentacao', label: 'Movimentação', icon: RefreshCw },
   { id: 'solicitacoes', label: 'Solicitações', icon: FileText },
@@ -46,6 +46,12 @@ const movementSubItems = [
   { id: 'exclusao', label: 'Exclusão' },
   { id: 'alteracao', label: 'Alteração' },
 ];
+
+const movementPageContent = {
+  inclusao: { title: 'Inclusão', subtitle: 'Gerencie suas inclusões' },
+  exclusao: { title: 'Exclusão', subtitle: 'Gerencie suas exclusões' },
+  alteracao: { title: 'Alteração', subtitle: 'Gerencie suas alterações' },
+};
 
 const formularioCategories = [
   { id: 'movimentacao', title: 'Formulários de Movimentação', icon: '📋', description: 'Documentos necessários para atendimento.' },
@@ -1040,14 +1046,18 @@ const PortalDonCor = () => {
     );
   };
 
-  const renderMovimentacao = () => (
-    <div>
-      <SectionTitle title="Movimentação" subtitle="Gerencie inclusões, exclusões e alterações de beneficiários." />
-      {activeMovementTab === 'inclusao' && renderInclusao()}
-      {activeMovementTab === 'exclusao' && renderExclusao()}
-      {activeMovementTab === 'alteracao' && renderAlteracao()}
-    </div>
-  );
+  const renderMovimentacao = () => {
+    const movementContent = movementPageContent[activeMovementTab] || movementPageContent.inclusao;
+
+    return (
+      <div>
+        <SectionTitle title={movementContent.title} subtitle={movementContent.subtitle} />
+        {activeMovementTab === 'inclusao' && renderInclusao()}
+        {activeMovementTab === 'exclusao' && renderExclusao()}
+        {activeMovementTab === 'alteracao' && renderAlteracao()}
+      </div>
+    );
+  };
 
   const renderSolicitacoes = () => (
     <div>
