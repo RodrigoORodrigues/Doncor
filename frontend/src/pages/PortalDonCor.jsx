@@ -472,47 +472,23 @@ const PortalDonCor = () => {
           {solicitacoes.length === 0 ? <EmptyState>Os gráficos serão exibidos após a primeira movimentação.</EmptyState> : renderDashboardBars(solicitacoesPorTipo, maxSolicitacoesTipo)}
         </section>
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'1.1fr 0.9fr', gap:16 }}>
-        <section style={{ ...card, padding:18 }}>
-          <SectionTitle title="Atalhos do portal" subtitle="Acesse rapidamente as seções mais usadas." />
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(2, minmax(0, 1fr))', gap:12 }}>
-            {[
-              { title: 'Contratos', description: `${payload?.resumo?.contratos || contratos.length || 0} contrato(s) ativo(s)`, icon: FolderOpen, section: 'contratos', tone: theme.blue },
-              { title: 'Movimentação', description: 'Incluir, excluir ou alterar beneficiários', icon: RefreshCw, section: 'movimentacao', tab: 'inclusao', tone: theme.warning },
-              { title: 'Solicitações', description: `${solicitacoesAbertas} demanda(s) em aberto`, icon: FileText, section: 'solicitacoes', tone: theme.primary },
-              { title: 'Formulários', description: 'Manuais e documentos de apoio', icon: Download, section: 'formularios', tone: theme.ok },
-            ].map((item) => {
-              const Icon = item.icon;
-              return (
-                <button key={item.title} onClick={() => { setActiveSection(item.section); if (item.tab) setActiveMovementTab(item.tab); }} style={{ border:`1px solid ${theme.border}`, borderRadius:14, padding:14, background:'#fff', textAlign:'left', cursor:'pointer', display:'flex', alignItems:'center', gap:12 }}>
-                  <span style={{ width:38, height:38, borderRadius:12, background:`${item.tone}18`, color:item.tone, display:'flex', alignItems:'center', justifyContent:'center', flex:'0 0 auto' }}><Icon size={18}/></span>
-                  <span>
-                    <strong style={{ display:'block', color:theme.text, fontSize:'0.88rem' }}>{item.title}</strong>
-                    <span style={{ display:'block', color:theme.muted, fontSize:'0.76rem', marginTop:3 }}>{item.description}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-        <section style={{ ...card, padding:18 }}>
-          <SectionTitle title="Últimas solicitações" subtitle="Acompanhamento rápido das demandas recentes." />
-          {ultimasSolicitacoes.length === 0 ? <EmptyState>Nenhuma solicitação recente.</EmptyState> : (
-            <div style={{ display:'grid', gap:10 }}>
-              {ultimasSolicitacoes.map((item) => (
-                <div key={item.id || item.protocolo} style={{ border:`1px solid ${theme.border}`, borderRadius:12, padding:12, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
-                  <div>
-                    <div style={{ color:theme.text, fontWeight:900, fontSize:'0.84rem' }}>#{item.protocolo} - {item.tipoLabel || item.tipo}</div>
-                    <div style={{ color:theme.muted, fontSize:'0.76rem', marginTop:3 }}>{item.beneficiario || item.contrato || 'Solicitação do cliente'}</div>
-                  </div>
-                  <StatusPill status={item.status}/>
+      <section style={{ ...card, padding:18 }}>
+        <SectionTitle title="Últimas solicitações" subtitle="Acompanhamento rápido das demandas recentes." />
+        {ultimasSolicitacoes.length === 0 ? <EmptyState>Nenhuma solicitação recente.</EmptyState> : (
+          <div style={{ display:'grid', gap:10 }}>
+            {ultimasSolicitacoes.map((item) => (
+              <div key={item.id || item.protocolo} style={{ border:`1px solid ${theme.border}`, borderRadius:12, padding:12, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+                <div>
+                  <div style={{ color:theme.text, fontWeight:900, fontSize:'0.84rem' }}>#{item.protocolo} - {item.tipoLabel || item.tipo}</div>
+                  <div style={{ color:theme.muted, fontSize:'0.76rem', marginTop:3 }}>{item.beneficiario || item.contrato || 'Solicitação do cliente'}</div>
                 </div>
-              ))}
-            </div>
-          )}
-          <Button onClick={() => setActiveSection('chat')} style={{ width:'100%', marginTop:14, background:theme.primary, color:'#fff', display:'flex', gap:8 }}><MessageCircle size={15}/>Abrir atendimento</Button>
-        </section>
-      </div>
+                <StatusPill status={item.status}/>
+              </div>
+            ))}
+          </div>
+        )}
+        <Button onClick={() => setActiveSection('chat')} style={{ width:'100%', marginTop:14, background:theme.primary, color:'#fff', display:'flex', gap:8 }}><MessageCircle size={15}/>Abrir atendimento</Button>
+      </section>
     </>
   );
 
