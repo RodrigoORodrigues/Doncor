@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 
 const STORAGE_UNREAD = 'doncor_chat_unread';
+const CHAT_REFRESH_MS = 30000;
 
 const defaultCompanies = ['Tech Solutions Ltda', 'Global Commerce SA', 'Indústria ABC ME'];
 
@@ -58,7 +59,11 @@ const Chat = ({ session }) => {
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadChatData(); }, [loadChatData]);
+  useEffect(() => {
+    loadChatData();
+    const timer = setInterval(loadChatData, CHAT_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [loadChatData]);
 
   useEffect(() => {
     const unread = messages.filter((item) => item.direction === 'incoming' && !item.read).length;

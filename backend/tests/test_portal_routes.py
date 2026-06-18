@@ -6,6 +6,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
+import portal_routes
+from email_notifications import build_chat_notification_body, send_chat_notification_email
 from portal_routes import attach_portal_routes
 
 
@@ -79,6 +81,7 @@ class FakeDb:
                 "tipo": "CNPJ",
                 "empresa": "Empresa Cliente",
                 "nome": "Empresa Cliente",
+                "email": "cliente@example.com",
                 "contratos": ["EMP-001"],
                 "status": "Ativo",
             }
@@ -110,7 +113,8 @@ def make_client():
     return TestClient(app), db
 
 
-def test_movimentacao_inclusao_cria_solicitacao_operacional_e_chat():
+def test_movimentacao_inclusao_cria_solicitacao_operacional_e_chat(monkeypatch):
+    monkeypatch.setenv("EMAIL_NOTIFICATIONS_ENABLED", "false")
     client, db = make_client()
 
     response = client.post(
@@ -145,7 +149,8 @@ def test_movimentacao_inclusao_cria_solicitacao_operacional_e_chat():
     assert list_response.json()[0]["protocolo"] == "CLI-0001"
 
 
-def test_chat_aceita_anexo_sem_texto_e_marca_como_lido():
+def test_chat_aceita_anexo_sem_texto_e_marca_como_lido(monkeypatch):
+    monkeypatch.setenv("EMAIL_NOTIFICATIONS_ENABLED", "false")
     client, db = make_client()
 
     response = client.post(
@@ -174,6 +179,90 @@ def test_chat_aceita_anexo_sem_texto_e_marca_como_lido():
     assert read_response.status_code == 200
     assert read_response.json()["updated"] == 2
     assert all(item["read"] for item in db.portal_chat.items)
+
+
+def test_chat_cliente_agenda_email_para_cliente_e_corretor(monkeypatch):
+    sent = []
+    monkeypatch.setenv("CORRETOR_NOTIFICATION_EMAIL", "corretor@example.com,cliente@example.com")
+    monkeypatch.setattr(
+        portal_routes,
+        "send_chat_notification_email",
+        lambda recipients, chat_item: sent.append((recipients, chat_item)) or {"sent": True},
+    )
+    client, db = make_client()
+
+    response = client.post(
+        "/api/portal-doncor/chat",
+        json={
+            "documento": "12.345.678/0001-90",
+            "empresa": "Empresa Cliente",
+            "senderRole": "portal",
+            "text": "Preciso de ajuda com o boleto.",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["direction"] == "incoming"
+    assert response.json()["read"] is False
+    assert len(db.portal_chat.items) == 1
+    assert sent
+    recipients, chat_item = sent[0]
+    assert recipients == ["cliente@example.com", "corretor@example.com"]
+    assert chat_item["text"] == "Preciso de ajuda com o boleto."
+
+
+def test_chat_corretor_agenda_email_para_cliente_e_corretor(monkeypatch):
+    sent = []
+    monkeypatch.setenv("CORRETOR_NOTIFICATION_EMAIL", "corretor@example.com")
+    monkeypatch.setattr(
+        portal_routes,
+        "send_chat_notification_email",
+        lambda recipients, chat_item: sent.append((recipients, chat_item)) or {"sent": True},
+    )
+    client, _db = make_client()
+
+    response = client.post(
+        "/api/portal-doncor/chat",
+        json={
+            "documento": "12.345.678/0001-90",
+            "empresa": "Empresa Cliente",
+            "senderRole": "corretor",
+            "text": "Resposta enviada.",
+            "attachments": [{"name": "resposta.pdf", "size": 300, "type": "application/pdf"}],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["direction"] == "outgoing"
+    assert sent[0][0] == ["cliente@example.com", "corretor@example.com"]
+
+
+def test_email_desabilitado_nao_bloqueia_chat(monkeypatch):
+    monkeypatch.setenv("EMAIL_NOTIFICATIONS_ENABLED", "false")
+
+    result = send_chat_notification_email(["cliente@example.com"], {"empresa": "Empresa Cliente", "text": "Oi"})
+
+    assert result == {"sent": False, "reason": "disabled"}
+
+
+def test_email_body_lista_anexos_sem_payload_real():
+    plain, html = build_chat_notification_body({
+        "empresa": "Empresa Cliente",
+        "documento": "12345678000190",
+        "sender": "Corretor",
+        "text": "",
+        "attachments": [
+            {"name": "rg.pdf", "size": 1200, "type": "application/pdf", "content": "base64-real"},
+            {"name": "formulario.pdf", "arquivoBase64": "payload-real"},
+        ],
+    })
+
+    assert "rg.pdf" in plain
+    assert "formulario.pdf" in plain
+    assert "base64-real" not in plain
+    assert "payload-real" not in plain
+    assert "base64-real" not in html
+    assert "payload-real" not in html
 
 
 def test_formularios_alimentam_portal_cliente_e_download():

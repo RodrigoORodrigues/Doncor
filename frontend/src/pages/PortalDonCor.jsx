@@ -15,6 +15,7 @@ import {
 } from '../services/api';
 
 const STORAGE_KEY = 'doncor_portal_cliente_session';
+const PORTAL_REFRESH_MS = 30000;
 const readSession = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch { return null; } };
 
 const theme = {
@@ -192,7 +193,12 @@ const PortalDonCor = () => {
     setLoading(false);
   }, [session]);
 
-  useEffect(() => { loadPortal(); }, [loadPortal]);
+  useEffect(() => {
+    if (!session) return undefined;
+    loadPortal(session);
+    const timer = setInterval(() => loadPortal(session), PORTAL_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [session, loadPortal]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -1162,7 +1168,7 @@ const PortalDonCor = () => {
     </div>
   );
 
-  const renderChat = () => <section style={{ ...card, minHeight:560, display:'flex', flexDirection:'column', overflow:'hidden' }}><div style={{ padding:'16px 18px', borderBottom:`1px solid ${theme.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}><div style={{ display:'flex', alignItems:'center', gap:10, color:theme.text, fontWeight:900 }}><MessageCircle size={18}/>Atendimento ao Cliente</div><StatusPill status="Online agora" /></div><div style={{ flex:1, padding:18, background:'#f8fafc', overflowY:'auto' }}>{messages.length === 0 ? <EmptyState>Nenhuma mensagem ainda. Envie sua primeira solicitação para a equipe.</EmptyState> : messages.map((item) => <div key={item.id} style={{ display:'flex', justifyContent:item.direction === 'incoming' ? 'flex-end' : 'flex-start', marginBottom:10 }}><div style={{ maxWidth:'72%', background:item.direction === 'incoming' ? theme.blue : '#fff', color:item.direction === 'incoming' ? '#fff' : theme.text, border:`1px solid ${theme.border}`, borderRadius:14, padding:'10px 12px' }}><div style={{ fontSize:'0.68rem', opacity:0.82, marginBottom:4 }}>{item.sender}</div>{item.text && <div style={{ fontSize:'0.88rem' }}>{item.text}</div>}{item.attachmentName && <div style={{ marginTop:8, display:'flex', alignItems:'center', gap:6, fontSize:'0.78rem', fontWeight:800 }}><Paperclip size={13}/>{item.attachmentName}</div>}</div></div>)}</div><div style={{ padding:16, borderTop:`1px solid ${theme.border}` }}><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Digite sua mensagem para o atendimento..." style={{ width:'100%', minHeight:86, border:`1px solid ${theme.border}`, borderRadius:12, padding:'10px 12px', resize:'vertical', fontFamily:'inherit', fontSize:'0.86rem' }} /><div style={{ display:'flex', justifyContent:'space-between', gap:10, marginTop:10 }}><label style={{ border:`1px solid ${theme.border}`, borderRadius:10, padding:'8px 12px', cursor:'pointer', display:'flex', alignItems:'center', gap:6, color:theme.text, fontSize:'0.8rem' }}><Paperclip size={14}/> {attachment ? attachment.name : 'Anexar documento'}<Input type="file" onChange={(event) => setAttachment(event.target.files?.[0] || null)} style={{ display:'none' }} /></label><Button onClick={sendMessage} style={{ background:theme.blue, color:'#fff', display:'flex', gap:6 }}><Send size={14}/>Enviar</Button></div></div></section>;
+  const renderChat = () => <section style={{ ...card, minHeight:560, display:'flex', flexDirection:'column', overflow:'hidden' }}><div style={{ padding:'16px 18px', borderBottom:`1px solid ${theme.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}><div style={{ display:'flex', alignItems:'center', gap:10, color:theme.text, fontWeight:900 }}><MessageCircle size={18}/>Atendimento ao Cliente</div><div style={{ display:'flex', alignItems:'center', gap:8 }}><Button onClick={() => loadPortal(session)} variant="outline" style={{ fontSize:'0.75rem', display:'flex', gap:6 }}><RefreshCw size={13}/>Atualizar</Button><StatusPill status="Online agora" /></div></div><div style={{ flex:1, padding:18, background:'#f8fafc', overflowY:'auto' }}>{messages.length === 0 ? <EmptyState>Nenhuma mensagem ainda. Envie sua primeira solicitação para a equipe.</EmptyState> : messages.map((item) => <div key={item.id} style={{ display:'flex', justifyContent:item.direction === 'incoming' ? 'flex-end' : 'flex-start', marginBottom:10 }}><div style={{ maxWidth:'72%', background:item.direction === 'incoming' ? theme.blue : '#fff', color:item.direction === 'incoming' ? '#fff' : theme.text, border:`1px solid ${theme.border}`, borderRadius:14, padding:'10px 12px' }}><div style={{ fontSize:'0.68rem', opacity:0.82, marginBottom:4 }}>{item.sender}</div>{item.text && <div style={{ fontSize:'0.88rem' }}>{item.text}</div>}{item.attachmentName && <div style={{ marginTop:8, display:'flex', alignItems:'center', gap:6, fontSize:'0.78rem', fontWeight:800 }}><Paperclip size={13}/>{item.attachmentName}</div>}</div></div>)}</div><div style={{ padding:16, borderTop:`1px solid ${theme.border}` }}><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Digite sua mensagem para o atendimento..." style={{ width:'100%', minHeight:86, border:`1px solid ${theme.border}`, borderRadius:12, padding:'10px 12px', resize:'vertical', fontFamily:'inherit', fontSize:'0.86rem' }} /><div style={{ display:'flex', justifyContent:'space-between', gap:10, marginTop:10 }}><label style={{ border:`1px solid ${theme.border}`, borderRadius:10, padding:'8px 12px', cursor:'pointer', display:'flex', alignItems:'center', gap:6, color:theme.text, fontSize:'0.8rem' }}><Paperclip size={14}/> {attachment ? attachment.name : 'Anexar documento'}<Input type="file" onChange={(event) => setAttachment(event.target.files?.[0] || null)} style={{ display:'none' }} /></label><Button onClick={sendMessage} style={{ background:theme.blue, color:'#fff', display:'flex', gap:6 }}><Send size={14}/>Enviar</Button></div></div></section>;
 
   const renderActiveSection = () => {
     switch (activeSection) {

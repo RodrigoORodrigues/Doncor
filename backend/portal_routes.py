@@ -8,13 +8,23 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import logging
 import os
 import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
-from fastapi import Body, HTTPException, Query, Response
+from fastapi import BackgroundTasks, Body, HTTPException, Query, Response
+
+from email_notifications import (
+    get_corretor_notification_recipients,
+    normalize_recipients,
+    send_chat_notification_email,
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 FORMULARIO_CATEGORIAS = {
@@ -420,6 +430,50 @@ def _request_text(item: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+async def _find_chat_partner(db, documento: str, empresa: str) -> Optional[Dict[str, Any]]:
+    doc = _digits(documento)
+    if doc:
+        partner = await db.portal_parceiros.find_one({"documento": doc}, {"_id": 0})
+        if partner:
+            return partner
+
+    empresa_norm = str(empresa or "").strip().lower()
+    if not empresa_norm:
+        return None
+
+    partners = await _all(db.portal_parceiros, "createdAt", 300)
+    return next(
+        (
+            item for item in partners
+            if empresa_norm in {
+                str(item.get("empresa") or "").strip().lower(),
+                str(item.get("nome") or "").strip().lower(),
+            }
+        ),
+        None,
+    )
+
+
+async def _chat_notification_recipients(db, chat_item: Dict[str, Any]) -> List[str]:
+    partner = await _find_chat_partner(
+        db,
+        str(chat_item.get("documento") or ""),
+        str(chat_item.get("empresa") or chat_item.get("company") or ""),
+    )
+    client_email = (partner or {}).get("email") or ""
+    return normalize_recipients([client_email, *get_corretor_notification_recipients()])
+
+
+async def _schedule_chat_notification(db, background_tasks: BackgroundTasks, chat_item: Dict[str, Any]) -> None:
+    try:
+        recipients = await _chat_notification_recipients(db, chat_item)
+        if not recipients:
+            return
+        background_tasks.add_task(send_chat_notification_email, recipients, dict(chat_item))
+    except Exception as exc:
+        logger.exception("Failed to schedule chat notification email: %s", exc.__class__.__name__)
+
+
 async def _insert_operational_request(db, tipo: str, item: Dict[str, Any], payload: Dict[str, Any]) -> None:
     base = {
         "id": str(uuid.uuid4()),
@@ -686,7 +740,7 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
         return sorted(filtered, key=lambda item: item.get("createdAt") or "", reverse=True)
 
     @app.post("/api/portal-doncor/movimentacoes")
-    async def portal_doncor_movimentacao(payload: Dict[str, Any] = Body(...)):
+    async def portal_doncor_movimentacao(background_tasks: BackgroundTasks, payload: Dict[str, Any] = Body(...)):
         documento = _digits(payload.get("documento"))
         context = await _find_partner_context(db, documento)
         tipo = str(payload.get("tipo") or "").strip().lower()
@@ -752,6 +806,7 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
             "criadoEm": now_br(),
         }
         await db.portal_chat.insert_one(chat_item)
+        await _schedule_chat_notification(db, background_tasks, chat_item)
 
         return item
 
@@ -767,7 +822,7 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
         return sorted(items, key=lambda item: item.get("createdAt") or "")
 
     @app.post("/api/portal-doncor/chat")
-    async def portal_doncor_chat_send(payload: Dict[str, Any] = Body(...)):
+    async def portal_doncor_chat_send(background_tasks: BackgroundTasks, payload: Dict[str, Any] = Body(...)):
         documento = _digits(payload.get("documento"))
         empresa = str(payload.get("empresa") or payload.get("company") or "Parceiro").strip()
         text = str(payload.get("text") or payload.get("mensagem") or "").strip()
@@ -797,6 +852,7 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
             "criadoEm": now_br(),
         }
         await db.portal_chat.insert_one(item)
+        await _schedule_chat_notification(db, background_tasks, item)
         return item
 
     @app.patch("/api/portal-doncor/chat/read")
