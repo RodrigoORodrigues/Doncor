@@ -99,3 +99,9 @@ credentials.json
 *.pem
 *.key
 .credentials
+
+# RPA Worker local
+rpa_worker/.venv/
+rpa_worker/browsers/
+rpa_worker/downloads/
+rpa_worker/*.log

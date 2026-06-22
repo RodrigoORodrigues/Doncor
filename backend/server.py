@@ -1,11 +1,12 @@
-from fastapi import FastAPI, APIRouter, Query, HTTPException, Header, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import secrets
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 import uuid
 from datetime import datetime, timezone
 import asyncio
@@ -732,6 +733,194 @@ async def robo_execucoes(_: None = Depends(_require_robo_role)):
 
 
 # ═══════════════════════════════════════════════════════════════
+#  FILA DE JOBS RPA  (worker local consome aqui)
+# ═══════════════════════════════════════════════════════════════
+
+def _require_worker_token(x_worker_token: Optional[str] = Header(default=None)) -> None:
+    """Valida o token do worker local via header X-Worker-Token."""
+    expected = os.getenv("WORKER_TOKEN", "")
+    if not expected:
+        raise HTTPException(status_code=500, detail="WORKER_TOKEN não configurado no servidor")
+    if not x_worker_token or not secrets.compare_digest(x_worker_token.strip(), expected.strip()):
+        raise HTTPException(status_code=401, detail="Token de worker inválido")
+
+
+def _now_iso_srv() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _now_br_srv() -> str:
+    return datetime.now().strftime("%d/%m/%Y %H:%M")
+
+
+@api_router.post("/robo/jobs")
+async def criar_job_rpa(
+    payload: Dict[str, Any],
+    _: None = Depends(_require_robo_role),
+):
+    """Cria um job de RPA com status 'pending' e retorna job_id imediatamente.
+    O worker local faz polling neste endpoint para buscar jobs pendentes.
+    """
+    cfg = await _get_robo_config_latest()
+    operadoras = cfg.get("operadoras", [])
+    if not operadoras:
+        raise HTTPException(status_code=400, detail="Nenhuma operadora configurada no RoboConfig")
+
+    operadora_nome = payload.get("operadora_nome", "")
+    selected = operadoras[0]
+    if operadora_nome:
+        for op in operadoras:
+            if (op.get("nome") or "").lower() == operadora_nome.lower():
+                selected = op
+                break
+
+    job_id = str(uuid.uuid4())
+    job = {
+        "id": job_id,
+        "status": "pending",
+        "user_id": payload.get("user_id", ""),
+        "unique_login_code": payload.get("unique_login_code", ""),
+        "apolice_id": payload.get("apolice_id", ""),
+        "operadora": selected,
+        "supabase": {
+            "url": cfg.get("supabaseUrl") or os.getenv("SUPABASE_URL"),
+            "serviceRoleKey": cfg.get("supabaseServiceRoleKey") or os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_KEY"),
+            "bucket": cfg.get("supabaseBucketBoletos") or os.getenv("SUPABASE_BUCKET_BOLETOS") or "boletos",
+        },
+        "createdAt": _now_iso_srv(),
+        "criadoEm": _now_br_srv(),
+        "updatedAt": _now_iso_srv(),
+        "result": None,
+        "error": None,
+        "startedAt": None,
+        "completedAt": None,
+    }
+    await db.robo_jobs.insert_one(job)
+    logger.info("Job RPA criado: %s (operadora=%s)", job_id, selected.get("nome"))
+    return {"job_id": job_id, "status": "pending", "message": "Job criado. Worker local irá processar em breve."}
+
+
+@api_router.get("/robo/jobs/{job_id}")
+async def status_job_rpa(job_id: str, _: None = Depends(_require_robo_role)):
+    """Retorna status e resultado de um job de RPA."""
+    job = await db.robo_jobs.find_one({"id": job_id}, _proj())
+    if not job:
+        raise HTTPException(status_code=404, detail="Job não encontrado")
+    return job
+
+
+@api_router.get("/worker/jobs/next")
+async def worker_proximo_job(_: None = Depends(_require_worker_token)):
+    """Endpoint exclusivo para o worker local.
+    Retorna o próximo job com status 'pending' e o marca como 'running'.
+    Retorna {} se não houver jobs pendentes.
+    """
+    # Motor não aceita sort como argumento posicional em find_one;
+    # usamos find().sort().limit(1) e pegamos o primeiro resultado.
+    docs = await db.robo_jobs.find(
+        {"status": "pending"}, _proj()
+    ).sort("createdAt", 1).limit(1).to_list(1)
+    if not docs:
+        return {}
+    job = docs[0]
+    now = _now_iso_srv()
+    await db.robo_jobs.update_one(
+        {"id": job["id"], "status": "pending"},
+        {"$set": {"status": "running", "startedAt": now, "updatedAt": now}},
+    )
+    job["status"] = "running"
+    job["startedAt"] = now
+    logger.info("Job %s enviado para o worker local", job["id"])
+    return job
+
+
+@api_router.post("/worker/jobs/{job_id}/result")
+async def worker_resultado_job(
+    job_id: str,
+    body: Dict[str, Any],
+    _: None = Depends(_require_worker_token),
+):
+    """Worker envia o resultado (sucesso ou falha) de um job de RPA.
+    Persiste os boletos baixados e atualiza o log de execuções.
+    """
+    job = await db.robo_jobs.find_one({"id": job_id}, _proj())
+    if not job:
+        raise HTTPException(status_code=404, detail="Job não encontrado")
+
+    success: bool = bool(body.get("success", False))
+    result: Dict[str, Any] = body.get("result") or {}
+    error_msg: str = body.get("error") or ""
+    now = _now_iso_srv()
+
+    update_fields = {
+        "status": "completed" if success else "failed",
+        "result": result,
+        "error": error_msg if not success else None,
+        "completedAt": now,
+        "updatedAt": now,
+    }
+    await db.robo_jobs.update_one({"id": job_id}, {"$set": update_fields})
+
+    # Persistir boletos e arquivos no histórico (igual ao fluxo síncrono)
+    inserted_boletos = 0
+    if success:
+        uploaded_files: List[Dict[str, Any]] = result.get("uploaded_files") or []
+        operadora_info: Dict[str, Any] = job.get("operadora") or {}
+        for idx, item in enumerate(uploaded_files):
+            url = item.get("arquivo_url") or item.get("public_url") or item.get("signed_url") or item.get("url")
+            storage_path = item.get("storage_path") or item.get("path") or ""
+            filename = item.get("nome_arquivo") or item.get("filename") or f"boleto_{idx + 1}.pdf"
+            bucket = item.get("storage_bucket") or item.get("bucket") or "boletos"
+            status_b = "baixado" if url else "gerado_sem_url"
+            common = {
+                "user_id": job.get("user_id", ""),
+                "apolice_id": job.get("apolice_id", ""),
+                "job_id": job_id,
+                "operadora": item.get("operadora") or operadora_info.get("nome") or result.get("operadora") or "Operadora",
+                "competencia": item.get("competencia") or "",
+                "vencimento": item.get("vencimento") or "",
+                "arquivo_nome": filename,
+                "nome_arquivo": filename,
+                "arquivo_path": storage_path,
+                "storage_path": storage_path,
+                "storage_bucket": bucket,
+                "bucket": bucket,
+                "arquivo_url": url,
+                "public_url": url,
+                "signed_url": item.get("signed_url"),
+                "raw_public_url": item.get("raw_public_url"),
+                "tamanho_bytes": item.get("tamanho_bytes") or item.get("size") or 0,
+                "content_type": item.get("content_type") or "application/pdf",
+                "createdAt": now,
+                "criadoEm": _now_br_srv(),
+                "origem": "rpa_worker_local",
+            }
+            await db.boletos_baixados.insert_one({"id": str(uuid.uuid4()), "status": status_b, **common})
+            await db.robo_arquivos.insert_one({"id": str(uuid.uuid4()), "tipo": "boleto", "status": status_b, **common})
+            inserted_boletos += 1
+
+    # Log de execução
+    exec_item = {
+        "id": str(uuid.uuid4()),
+        "job_id": job_id,
+        "processo": "Extração de boletos RPA (worker local)",
+        "inicio": job.get("criadoEm") or _now_br_srv(),
+        "duracao": f"{result.get('duration_seconds', '--')}s",
+        "status": "Concluído" if success else "Falhou",
+        "resultado": result,
+        "error": error_msg,
+        "createdAt": now,
+    }
+    await db.robo_execucoes_log.insert_one(exec_item)
+
+    logger.info(
+        "Job %s finalizado: success=%s boletos_persistidos=%d",
+        job_id, success, inserted_boletos,
+    )
+    return {"message": "Resultado recebido", "job_id": job_id, "status": update_fields["status"], "boletos_persistidos": inserted_boletos}
+
+
+# ═══════════════════════════════════════════════════════════════
 #  RELATÓRIOS
 # ═══════════════════════════════════════════════════════════════
 @api_router.get("/relatorios/resumo-geral")
@@ -779,9 +968,12 @@ async def relatorio_resumo_geral():
 # ─── Include router & middleware ──────────────────────────────
 app.include_router(api_router)
 
+# Nota: allow_credentials=True exige origens explícitas (não wildcard).
+# Este middleware aplica CORS permissivo apenas para ambientes locais/dev;
+# o middleware do main.py cobre as origens de produção com credentials.
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
