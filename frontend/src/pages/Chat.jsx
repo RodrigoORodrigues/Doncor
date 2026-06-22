@@ -83,21 +83,39 @@ const Chat = ({ session }) => {
     }, {});
   }, [messages]);
 
+  const fileToBase64 = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = (error) => reject(error);
+    });
+
   const sendMessage = async () => {
     if (!selectedCompany || (!message.trim() && !attachment)) return;
-    const saved = await sendPortalDonCorChat({
-      documento: companyDocuments[selectedCompany] || '',
-      empresa: selectedCompany,
-      text: message.trim(),
-      attachmentName: attachment?.name || '',
-      attachmentSize: attachment?.size || 0,
-      attachments: attachment ? [{ name: attachment.name, size: attachment.size, type: attachment.type, category: 'Chat' }] : [],
-      sender: `${userName} (${userRole})`,
-      senderRole: 'corretor',
-    });
-    setMessages((items) => [...items, saved]);
-    setMessage('');
-    setAttachment(null);
+    try {
+      let attachmentData = null;
+      if (attachment) {
+        attachmentData = { name: attachment.name, size: attachment.size, type: attachment.type, category: 'Chat', base64: await fileToBase64(attachment) };
+      }
+      
+      const saved = await sendPortalDonCorChat({
+        documento: companyDocuments[selectedCompany] || '',
+        empresa: selectedCompany,
+        text: message.trim(),
+        attachmentName: attachment?.name || '',
+        attachmentSize: attachment?.size || 0,
+        attachments: attachmentData ? [attachmentData] : [],
+        sender: `${userName} (${userRole})`,
+        senderRole: 'corretor',
+      });
+      setMessages((items) => [...items, saved]);
+      setMessage('');
+      setAttachment(null);
+    } catch(e) {
+      console.error(e);
+      alert('Erro ao enviar mensagem');
+    }
   };
 
   const markSelectedAsRead = async () => {
@@ -167,7 +185,15 @@ const Chat = ({ session }) => {
                   {item.text && <div style={{ fontSize:'0.88rem', lineHeight:1.35 }}>{item.text}</div>}
                   {item.attachmentName && (
                     <div style={{ marginTop:'8px', display:'flex', alignItems:'center', gap:'6px', fontSize:'0.78rem', fontWeight:600 }}>
-                      <Paperclip size={13}/>{item.attachmentName} {formatSize(item.attachmentSize)}
+                      <Paperclip size={13}/>
+                      {item.attachments?.[0]?.base64 ? (
+                        <a href={item.attachments[0].base64} download={item.attachmentName} style={{ color: 'inherit', textDecoration: 'underline' }}>
+                          {item.attachmentName}
+                        </a>
+                      ) : (
+                        <span>{item.attachmentName}</span>
+                      )}
+                      {formatSize(item.attachmentSize)}
                     </div>
                   )}
                 </div>

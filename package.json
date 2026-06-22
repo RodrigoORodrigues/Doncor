@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "dev": "cd frontend && PORT=3000 HOST=0.0.0.0 npm start",
     "install:frontend": "cd frontend && npm install --legacy-peer-deps",
     "build": "cd frontend && npm run build",
     "start": "cd frontend && npm start",

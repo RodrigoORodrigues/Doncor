@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, BarChart3, Bell, Building2, Download, Eye, FileText, FolderOpen, HelpCircle, Home, LogOut, MessageCircle, Paperclip, Receipt, RefreshCw, Search, Send, Shield, UploadCloud, UserMinus, UserPlus } from 'lucide-react';
+import { Activity, BarChart3, Bell, Building2, Download, Eye, FileText, FolderOpen, HelpCircle, Home, LogOut, MessageCircle, Paperclip, Receipt, RefreshCw, Search, Send, Shield, UploadCloud, UserMinus, UserPlus, User } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import {
@@ -75,6 +75,7 @@ const defaultMovementForms = {
     telefone: '',
     detalhes: '',
     tipoMovimentacao: 'No vencimento',
+    outrosDescricao: '',
   },
   exclusao: {
     operadora: '',
@@ -83,11 +84,15 @@ const defaultMovementForms = {
     cpf: '',
     detalhes: '',
     tipoMovimentacao: 'No vencimento',
+    outrosDescricao: '',
   },
   alteracao: {
     planos: ['Saúde'],
+    beneficiario: '',
+    cpf: '',
     detalhes: '',
     tipoMovimentacao: ['Alteração Cadastral'],
+    outrosDescricao: '',
   },
 };
 
@@ -103,6 +108,14 @@ const attachmentMeta = (file, category = '') => ({
   type: file?.type || '',
   category,
 });
+
+const fileToBase64 = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = (error) => reject(error);
+  });
 
 const card = { background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 18, boxShadow: '0 10px 28px rgba(15,23,42,0.05)' };
 const plain = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -149,7 +162,13 @@ const PortalDonCor = () => {
   const [senha, setSenha] = useState('');
   const [activeSection, setActiveSection] = useState('dashboard');
   const [activeMovementTab, setActiveMovementTab] = useState('inclusao');
+  const [confirmMovement, setConfirmMovement] = useState(null);
   const [showForgot, setShowForgot] = useState(false);
+  const [esqueciEmail, setEsqueciEmail] = useState('');
+  const [esqueciSenha, setEsqueciSenha] = useState('');
+  const [esqueciError, setEsqueciError] = useState('');
+  const [esqueciSuccess, setEsqueciSuccess] = useState('');
+
   const [showPassBox, setShowPassBox] = useState(false);
   const [senhaAtual, setSenhaAtual] = useState('');
   const [novaSenha, setNovaSenha] = useState('');
@@ -220,6 +239,30 @@ const PortalDonCor = () => {
     setLoading(false);
   };
 
+  const handleForgotPassword = async (event) => {
+    event.preventDefault();
+    setEsqueciError('');
+    setEsqueciSuccess('');
+    setLoading(true);
+    try {
+      const response = await api.post('/api/portal-doncor/esqueci-senha', {
+        documento,
+        email: esqueciEmail,
+        novaSenha: esqueciSenha
+      });
+      setEsqueciSuccess(response.data.message || 'Senha redefinida com sucesso.');
+      setTimeout(() => {
+        setShowForgot(false);
+        setEsqueciSuccess('');
+        setEsqueciEmail('');
+        setEsqueciSenha('');
+      }, 3000);
+    } catch (err) {
+      setEsqueciError(err?.response?.data?.detail || 'Erro ao redefinir a senha.');
+    }
+    setLoading(false);
+  };
+
   const handleLogout = () => {
     localStorage.removeItem(STORAGE_KEY);
     setSession(null);
@@ -251,19 +294,28 @@ const PortalDonCor = () => {
 
   const sendMessage = async () => {
     if (!session || (!message.trim() && !attachment)) return;
-    const saved = await sendPortalDonCorChat({
-      documento: session.documento,
-      empresa,
-      text: message.trim(),
-      attachmentName: attachment?.name || '',
-      attachmentSize: attachment?.size || 0,
-      attachments: attachment ? [attachmentMeta(attachment, 'Chat')] : [],
-      sender: empresa,
-      senderRole: 'portal'
-    });
-    setMessages((items) => [...items, saved]);
-    setMessage('');
-    setAttachment(null);
+    try {
+      let attachmentData = null;
+      if (attachment) {
+        attachmentData = { ...attachmentMeta(attachment, 'Chat'), base64: await fileToBase64(attachment) };
+      }
+      
+      const saved = await sendPortalDonCorChat({
+        documento: session.documento,
+        empresa,
+        text: message.trim(),
+        attachmentName: attachment?.name || '',
+        attachmentSize: attachment?.size || 0,
+        attachments: attachmentData ? [attachmentData] : [],
+        sender: empresa,
+        senderRole: 'portal'
+      });
+      setMessages((items) => [...items, saved]);
+      setMessage('');
+      setAttachment(null);
+    } catch(e) {
+      console.error(e);
+    }
   };
 
   const updateMovementField = (section, field, value) => {
@@ -395,6 +447,8 @@ const PortalDonCor = () => {
   const maxSolicitacoesStatus = useMemo(() => Math.max(...solicitacoesPorStatus.map((item) => item.value), 1), [solicitacoesPorStatus]);
   const maxSolicitacoesTipo = useMemo(() => Math.max(...solicitacoesPorTipo.map((item) => item.value), 1), [solicitacoesPorTipo]);
   const ultimasSolicitacoes = useMemo(() => solicitacoes.slice(0, 4), [solicitacoes]);
+  const demandasPendentes = useMemo(() => solicitacoes.filter((item) => !String(item.status || '').toLowerCase().includes('concl')).slice(0, 4), [solicitacoes]);
+  const demandasConcluidas = useMemo(() => solicitacoes.filter((item) => String(item.status || '').toLowerCase().includes('concl')).slice(0, 4), [solicitacoes]);
   const formulariosPorCategoria = useMemo(() => {
     const grouped = formularioCategories.map((category) => ({
       ...category,
@@ -451,15 +505,27 @@ const PortalDonCor = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, maxWidth: 720 }}>{[['Contratos', FolderOpen], ['Faturas', Receipt], ['Chat', MessageCircle]].map(([label, Icon]) => <div key={label} style={{ border: '1px solid #ffffff25', borderRadius: 16, padding: 14, background: '#ffffff12' }}><Icon size={18}/><div style={{ marginTop: 8, fontWeight: 800 }}>{label}</div></div>)}</div>
         </div>
         <div style={{ padding: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <form onSubmit={handleLogin} style={{ width: '100%', background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 22, padding: 30, boxShadow: '0 24px 70px rgba(15,23,42,0.12)' }}>
-            <div style={{ marginBottom: 24 }}><div style={{ width: 58, height: 58, borderRadius: 18, background: theme.blue, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 20, marginBottom: 14 }}>PC</div><h2 style={{ margin: 0, fontSize: '1.55rem', color: theme.text }}>Entrar no Portal do Cliente</h2><p style={{ margin: '8px 0 0', color: theme.muted, fontSize: '0.9rem' }}>Use o CNPJ/CPF vinculado e sua senha de acesso.</p></div>
-            {error && <div style={{ background:'#fff1f2', border:'1px solid #fecdd3', color:'#be123c', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{error}</div>}
-            {showForgot && <div style={{ background:'#fff7ed', border:'1px solid #fed7aa', color:'#9a3412', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.82rem' }}>Se esqueceu sua senha, entre em contato com a DonCor para redefinir o acesso.</div>}
-            <label style={{ display:'block', color:theme.text, fontWeight:800, fontSize:'0.84rem', marginBottom:6 }}>CNPJ ou CPF vinculado</label><Input value={documento} onChange={(event) => setDocumento(event.target.value)} placeholder="Digite o CNPJ da empresa ou CPF" style={{ marginBottom:12 }} />
-            <label style={{ display:'block', color:theme.text, fontWeight:800, fontSize:'0.84rem', marginBottom:6 }}>Senha</label><Input type="password" value={senha} onChange={(event) => setSenha(event.target.value)} placeholder="Digite sua senha" style={{ marginBottom:10 }} />
-            <button type="button" onClick={() => setShowForgot(true)} style={{ border:0, background:'transparent', color:theme.blue, cursor:'pointer', fontSize:'0.78rem', marginBottom:14, padding:0 }}>Esqueci minha senha</button>
-            <Button type="submit" disabled={loading} style={{ width:'100%', background:theme.blue, color:'#fff', fontWeight:900 }}>{loading ? 'Validando...' : 'Entrar no Portal do Cliente'}</Button>
-          </form>
+          {showForgot ? (
+            <form onSubmit={handleForgotPassword} style={{ width: '100%', background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 22, padding: 30, boxShadow: '0 24px 70px rgba(15,23,42,0.12)' }}>
+              <div style={{ marginBottom: 24 }}><div style={{ width: 58, height: 58, borderRadius: 18, background: theme.blue, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 20, marginBottom: 14 }}>PC</div><h2 style={{ margin: 0, fontSize: '1.55rem', color: theme.text }}>Redefinir Senha</h2><p style={{ margin: '8px 0 0', color: theme.muted, fontSize: '0.9rem' }}>Informe seus dados para recuperar o acesso.</p></div>
+              {esqueciError && <div style={{ background:'#fff1f2', border:'1px solid #fecdd3', color:'#be123c', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{esqueciError}</div>}
+              {esqueciSuccess && <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', color:'#15803d', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{esqueciSuccess}</div>}
+              <label style={{ display:'block', color:theme.text, fontWeight:800, fontSize:'0.84rem', marginBottom:6 }}>CNPJ ou CPF vinculado</label><Input value={documento} onChange={(event) => setDocumento(event.target.value)} placeholder="Digite o CNPJ da empresa ou CPF" style={{ marginBottom:12 }} />
+              <label style={{ display:'block', color:theme.text, fontWeight:800, fontSize:'0.84rem', marginBottom:6 }}>E-mail cadastrado</label><Input type="email" value={esqueciEmail} onChange={(event) => setEsqueciEmail(event.target.value)} placeholder="Digite o e-mail da conta" style={{ marginBottom:12 }} />
+              <label style={{ display:'block', color:theme.text, fontWeight:800, fontSize:'0.84rem', marginBottom:6 }}>Nova Senha</label><Input type="password" value={esqueciSenha} onChange={(event) => setEsqueciSenha(event.target.value)} placeholder="Mínimo 6 caracteres" style={{ marginBottom:14 }} />
+              <button type="button" onClick={() => setShowForgot(false)} style={{ border:0, background:'transparent', color:theme.muted, cursor:'pointer', fontSize:'0.84rem', marginBottom:14, padding:0, textDecoration: 'underline' }}>Voltar para o login</button>
+              <Button type="submit" disabled={loading} style={{ width:'100%', background:theme.blue, color:'#fff', fontWeight:900 }}>{loading ? 'Redefinindo...' : 'Confirmar Nova Senha'}</Button>
+            </form>
+          ) : (
+            <form onSubmit={handleLogin} style={{ width: '100%', background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 22, padding: 30, boxShadow: '0 24px 70px rgba(15,23,42,0.12)' }}>
+              <div style={{ marginBottom: 24 }}><div style={{ width: 58, height: 58, borderRadius: 18, background: theme.blue, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 20, marginBottom: 14 }}>PC</div><h2 style={{ margin: 0, fontSize: '1.55rem', color: theme.text }}>Entrar no Portal do Cliente</h2><p style={{ margin: '8px 0 0', color: theme.muted, fontSize: '0.9rem' }}>Use o CNPJ/CPF vinculado e sua senha de acesso.</p></div>
+              {error && <div style={{ background:'#fff1f2', border:'1px solid #fecdd3', color:'#be123c', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{error}</div>}
+              <label style={{ display:'block', color:theme.text, fontWeight:800, fontSize:'0.84rem', marginBottom:6 }}>CNPJ ou CPF vinculado</label><Input value={documento} onChange={(event) => setDocumento(event.target.value)} placeholder="Digite o CNPJ da empresa ou CPF" style={{ marginBottom:12 }} />
+              <label style={{ display:'block', color:theme.text, fontWeight:800, fontSize:'0.84rem', marginBottom:6 }}>Senha</label><Input type="password" value={senha} onChange={(event) => setSenha(event.target.value)} placeholder="Digite sua senha" style={{ marginBottom:10 }} />
+              <button type="button" onClick={() => { setShowForgot(true); setError(''); }} style={{ border:0, background:'transparent', color:theme.blue, cursor:'pointer', fontSize:'0.78rem', marginBottom:14, padding:0 }}>Esqueci minha senha</button>
+              <Button type="submit" disabled={loading} style={{ width:'100%', background:theme.blue, color:'#fff', fontWeight:900 }}>{loading ? 'Validando...' : 'Entrar no Portal do Cliente'}</Button>
+            </form>
+          )}
         </div>
       </div>
     );
@@ -484,23 +550,42 @@ const PortalDonCor = () => {
           {solicitacoes.length === 0 ? <EmptyState>Os gráficos serão exibidos após a primeira movimentação.</EmptyState> : renderDashboardBars(solicitacoesPorTipo, maxSolicitacoesTipo)}
         </section>
       </div>
-      <section style={{ ...card, padding:18 }}>
-        <SectionTitle title="Últimas solicitações" subtitle="Acompanhamento rápido das demandas recentes." />
-        {ultimasSolicitacoes.length === 0 ? <EmptyState>Nenhuma solicitação recente.</EmptyState> : (
-          <div style={{ display:'grid', gap:10 }}>
-            {ultimasSolicitacoes.map((item) => (
-              <div key={item.id || item.protocolo} style={{ border:`1px solid ${theme.border}`, borderRadius:12, padding:12, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
-                <div>
-                  <div style={{ color:theme.text, fontWeight:900, fontSize:'0.84rem' }}>#{item.protocolo} - {item.tipoLabel || item.tipo}</div>
-                  <div style={{ color:theme.muted, fontSize:'0.76rem', marginTop:3 }}>{item.beneficiario || item.contrato || 'Solicitação do cliente'}</div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+        <section style={{ ...card, padding:18 }}>
+          <SectionTitle title="Demandas pendentes" subtitle="Acompanhamento das demandas em andamento." />
+          {demandasPendentes.length === 0 ? <EmptyState>Nenhuma demanda pendente.</EmptyState> : (
+            <div style={{ display:'grid', gap:10 }}>
+              {demandasPendentes.map((item) => (
+                <div key={item.id || item.protocolo} style={{ border:`1px solid ${theme.border}`, borderRadius:12, padding:12, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+                  <div>
+                    <div style={{ color:theme.text, fontWeight:900, fontSize:'0.84rem' }}>#{item.protocolo} - {item.tipoLabel || item.tipo}</div>
+                    <div style={{ color:theme.muted, fontSize:'0.76rem', marginTop:3 }}>{item.beneficiario || item.contrato || 'Solicitação do cliente'}</div>
+                  </div>
+                  <StatusPill status={item.status}/>
                 </div>
-                <StatusPill status={item.status}/>
-              </div>
-            ))}
-          </div>
-        )}
-        <Button onClick={() => setActiveSection('chat')} style={{ width:'100%', marginTop:14, background:theme.primary, color:'#fff', display:'flex', gap:8 }}><MessageCircle size={15}/>Abrir atendimento</Button>
-      </section>
+              ))}
+            </div>
+          )}
+          <Button onClick={() => setActiveSection('solicitacoes')} style={{ width:'100%', marginTop:14, background:theme.blue, color:'#fff', display:'flex', gap:8 }}><FileText size={15}/>Ver todas</Button>
+        </section>
+        <section style={{ ...card, padding:18 }}>
+          <SectionTitle title="Demandas Concluídas" subtitle="Histórico de demandas finalizadas." />
+          {demandasConcluidas.length === 0 ? <EmptyState>Nenhuma demanda concluída.</EmptyState> : (
+            <div style={{ display:'grid', gap:10 }}>
+              {demandasConcluidas.map((item) => (
+                <div key={item.id || item.protocolo} style={{ border:`1px solid ${theme.border}`, borderRadius:12, padding:12, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+                  <div>
+                    <div style={{ color:theme.text, fontWeight:900, fontSize:'0.84rem' }}>#{item.protocolo} - {item.tipoLabel || item.tipo}</div>
+                    <div style={{ color:theme.muted, fontSize:'0.76rem', marginTop:3 }}>{item.beneficiario || item.contrato || 'Solicitação do cliente'}</div>
+                  </div>
+                  <StatusPill status={item.status}/>
+                </div>
+              ))}
+            </div>
+          )}
+          <Button onClick={() => setActiveSection('solicitacoes')} style={{ width:'100%', marginTop:14, background:theme.blue, color:'#fff', display:'flex', gap:8 }}><FileText size={15}/>Ver histórico</Button>
+        </section>
+      </div>
     </>
   );
 
@@ -800,24 +885,31 @@ const PortalDonCor = () => {
           </h3>
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 14, display: 'grid', gap: 12 }}>
             {['RG / CPF', 'Comprovante de Residência', 'CTPS / eSocial', 'Formulário Assinado', 'Outros'].map((doc) => (
-              <label key={doc} style={{ ...checkboxRow, border: `1px solid ${theme.border}`, padding: '12px 14px', borderRadius: 10, justifyContent: 'space-between', cursor: 'pointer' }}>
-                <span>
-                  <input type="checkbox" checked={!!attachments[doc]} onChange={(event) => updateChecklistAttachment('inclusao', doc, event.target.checked ? null : undefined)} style={{ marginRight: 10 }} />
-                  {doc}
-                  {attachments[doc]?.name && attachments[doc].name !== doc && <span style={{ color: theme.muted, marginLeft: 6, fontSize: '0.72rem' }}>({attachments[doc].name})</span>}
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <UploadCloud size={18} color={theme.muted} />
-                  <Input type="file" onChange={(event) => updateChecklistAttachment('inclusao', doc, event.target.files?.[0])} style={{ maxWidth: 112, fontSize: '0.68rem', padding: 4 }} />
-                </span>
-              </label>
+              <div key={doc} style={{ display: 'grid', gap: 8 }}>
+                <label style={{ ...checkboxRow, border: `1px solid ${theme.border}`, padding: '12px 14px', borderRadius: 10, justifyContent: 'space-between', cursor: 'pointer' }}>
+                  <span>
+                    <input type="checkbox" checked={!!attachments[doc]} onChange={(event) => updateChecklistAttachment('inclusao', doc, event.target.checked ? null : undefined)} style={{ marginRight: 10 }} />
+                    {doc}
+                    {attachments[doc]?.name && attachments[doc].name !== doc && <span style={{ color: theme.muted, marginLeft: 6, fontSize: '0.72rem' }}>({attachments[doc].name})</span>}
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <UploadCloud size={18} color={theme.muted} />
+                    <Input type="file" onChange={(event) => updateChecklistAttachment('inclusao', doc, event.target.files?.[0])} style={{ maxWidth: 112, fontSize: '0.68rem', padding: 4 }} />
+                  </span>
+                </label>
+                {doc === 'Outros' && !!attachments[doc] && (
+                  <div style={{ paddingLeft: 6 }}>
+                    <Input placeholder="Especifique qual anexo..." value={form.outrosDescricao || ''} onChange={(event) => updateMovementField('inclusao', 'outrosDescricao', event.target.value)} />
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </section>
 
         <div style={{ display: 'flex', gap: 10 }}>
           <Button variant="outline" onClick={() => resetMovementForm('inclusao')} style={{ flex: 1 }}>Cancelar</Button>
-          <Button disabled={submittingMovement} onClick={() => submitMovimentacao('inclusao')} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
+          <Button disabled={submittingMovement} onClick={() => setConfirmMovement('inclusao')} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
         </div>
       </div>
     </div>
@@ -929,24 +1021,31 @@ const PortalDonCor = () => {
           </h3>
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 14, display: 'grid', gap: 12 }}>
             {['Termo de Rescisão', 'Formulário de Exclusão Assinado', 'Outros'].map((doc) => (
-              <label key={doc} style={{ ...checkboxRow, border: `1px solid ${theme.border}`, padding: '12px 14px', borderRadius: 10, justifyContent: 'space-between', cursor: 'pointer' }}>
-                <span>
-                  <input type="checkbox" checked={!!attachments[doc]} onChange={(event) => updateChecklistAttachment('exclusao', doc, event.target.checked ? null : undefined)} style={{ marginRight: 10 }} />
-                  {doc}
-                  {attachments[doc]?.name && attachments[doc].name !== doc && <span style={{ color: theme.muted, marginLeft: 6, fontSize: '0.72rem' }}>({attachments[doc].name})</span>}
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <UploadCloud size={18} color={theme.muted} />
-                  <Input type="file" onChange={(event) => updateChecklistAttachment('exclusao', doc, event.target.files?.[0])} style={{ maxWidth: 112, fontSize: '0.68rem', padding: 4 }} />
-                </span>
-              </label>
+              <div key={doc} style={{ display: 'grid', gap: 8 }}>
+                <label style={{ ...checkboxRow, border: `1px solid ${theme.border}`, padding: '12px 14px', borderRadius: 10, justifyContent: 'space-between', cursor: 'pointer' }}>
+                  <span>
+                    <input type="checkbox" checked={!!attachments[doc]} onChange={(event) => updateChecklistAttachment('exclusao', doc, event.target.checked ? null : undefined)} style={{ marginRight: 10 }} />
+                    {doc}
+                    {attachments[doc]?.name && attachments[doc].name !== doc && <span style={{ color: theme.muted, marginLeft: 6, fontSize: '0.72rem' }}>({attachments[doc].name})</span>}
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <UploadCloud size={18} color={theme.muted} />
+                    <Input type="file" onChange={(event) => updateChecklistAttachment('exclusao', doc, event.target.files?.[0])} style={{ maxWidth: 112, fontSize: '0.68rem', padding: 4 }} />
+                  </span>
+                </label>
+                {doc === 'Outros' && !!attachments[doc] && (
+                  <div style={{ paddingLeft: 6 }}>
+                    <Input placeholder="Especifique qual anexo..." value={form.outrosDescricao || ''} onChange={(event) => updateMovementField('exclusao', 'outrosDescricao', event.target.value)} />
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </section>
 
         <div style={{ display: 'flex', gap: 10 }}>
           <Button variant="outline" onClick={() => resetMovementForm('exclusao')} style={{ flex: 1 }}>Cancelar</Button>
-          <Button disabled={submittingMovement} onClick={() => submitMovimentacao('exclusao')} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
+          <Button disabled={submittingMovement} onClick={() => setConfirmMovement('exclusao')} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
         </div>
       </div>
     </div>
@@ -983,6 +1082,22 @@ const PortalDonCor = () => {
 
         <section style={{ ...card, padding: 24 }}>
           <h3 style={{ color: theme.primary, margin: '0 0 14px', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <User size={20}/> Dados do Beneficiário
+          </h3>
+          <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={fieldLabel}>Nome Completo *</label>
+              <Input placeholder="Nome do beneficiário" value={form.beneficiario} onChange={(event) => updateMovementField('alteracao', 'beneficiario', event.target.value)} />
+            </div>
+            <div>
+              <label style={fieldLabel}>CPF *</label>
+              <Input placeholder="000.000.000-00" value={form.cpf} onChange={(event) => updateMovementField('alteracao', 'cpf', event.target.value)} />
+            </div>
+          </div>
+        </section>
+
+        <section style={{ ...card, padding: 24 }}>
+          <h3 style={{ color: theme.primary, margin: '0 0 14px', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: 10 }}>
             <FileText size={20}/> Detalhes da Alteração
           </h3>
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18 }}>
@@ -1014,10 +1129,17 @@ const PortalDonCor = () => {
           </h3>
           <div style={{ display: 'grid', gap: 12 }}>
             {['Alteração Cadastral', 'Upgrade', 'Downgrade', 'Outros'].map((tipo, index) => (
-              <label key={tipo} style={{ ...radioCard, alignItems: 'center', cursor: 'pointer', background: index === 0 ? '#fff' : '#f8faff' }}>
-                <input type="checkbox" checked={form.tipoMovimentacao.includes(tipo)} onChange={() => toggleMovementArrayValue('alteracao', 'tipoMovimentacao', tipo)} />
-                <span style={{ fontWeight: 700, color: theme.text, fontSize: '0.88rem' }}>{tipo}</span>
-              </label>
+              <div key={tipo} style={{ display: 'grid', gap: 8 }}>
+                <label style={{ ...radioCard, alignItems: 'center', cursor: 'pointer', background: index === 0 ? '#fff' : '#f8faff' }}>
+                  <input type="checkbox" checked={form.tipoMovimentacao.includes(tipo)} onChange={() => toggleMovementArrayValue('alteracao', 'tipoMovimentacao', tipo)} />
+                  <span style={{ fontWeight: 700, color: theme.text, fontSize: '0.88rem' }}>{tipo}</span>
+                </label>
+                {tipo === 'Outros' && form.tipoMovimentacao.includes(tipo) && (
+                  <div style={{ paddingLeft: 6 }}>
+                    <Input placeholder="Especifique o tipo de solicitação..." value={form.outrosDescricao || ''} onChange={(event) => updateMovementField('alteracao', 'outrosDescricao', event.target.value)} />
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </section>
@@ -1045,7 +1167,7 @@ const PortalDonCor = () => {
 
         <div style={{ display: 'flex', gap: 10 }}>
           <Button variant="outline" onClick={() => resetMovementForm('alteracao')} style={{ flex: 1 }}>Cancelar</Button>
-          <Button disabled={submittingMovement} onClick={() => submitMovimentacao('alteracao')} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
+          <Button disabled={submittingMovement} onClick={() => setConfirmMovement('alteracao')} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
         </div>
       </div>
     </div>
@@ -1168,7 +1290,39 @@ const PortalDonCor = () => {
     </div>
   );
 
-  const renderChat = () => <section style={{ ...card, minHeight:560, display:'flex', flexDirection:'column', overflow:'hidden' }}><div style={{ padding:'16px 18px', borderBottom:`1px solid ${theme.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}><div style={{ display:'flex', alignItems:'center', gap:10, color:theme.text, fontWeight:900 }}><MessageCircle size={18}/>Atendimento ao Cliente</div><div style={{ display:'flex', alignItems:'center', gap:8 }}><Button onClick={() => loadPortal(session)} variant="outline" style={{ fontSize:'0.75rem', display:'flex', gap:6 }}><RefreshCw size={13}/>Atualizar</Button><StatusPill status="Online agora" /></div></div><div style={{ flex:1, padding:18, background:'#f8fafc', overflowY:'auto' }}>{messages.length === 0 ? <EmptyState>Nenhuma mensagem ainda. Envie sua primeira solicitação para a equipe.</EmptyState> : messages.map((item) => <div key={item.id} style={{ display:'flex', justifyContent:item.direction === 'incoming' ? 'flex-end' : 'flex-start', marginBottom:10 }}><div style={{ maxWidth:'72%', background:item.direction === 'incoming' ? theme.blue : '#fff', color:item.direction === 'incoming' ? '#fff' : theme.text, border:`1px solid ${theme.border}`, borderRadius:14, padding:'10px 12px' }}><div style={{ fontSize:'0.68rem', opacity:0.82, marginBottom:4 }}>{item.sender}</div>{item.text && <div style={{ fontSize:'0.88rem' }}>{item.text}</div>}{item.attachmentName && <div style={{ marginTop:8, display:'flex', alignItems:'center', gap:6, fontSize:'0.78rem', fontWeight:800 }}><Paperclip size={13}/>{item.attachmentName}</div>}</div></div>)}</div><div style={{ padding:16, borderTop:`1px solid ${theme.border}` }}><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Digite sua mensagem para o atendimento..." style={{ width:'100%', minHeight:86, border:`1px solid ${theme.border}`, borderRadius:12, padding:'10px 12px', resize:'vertical', fontFamily:'inherit', fontSize:'0.86rem' }} /><div style={{ display:'flex', justifyContent:'space-between', gap:10, marginTop:10 }}><label style={{ border:`1px solid ${theme.border}`, borderRadius:10, padding:'8px 12px', cursor:'pointer', display:'flex', alignItems:'center', gap:6, color:theme.text, fontSize:'0.8rem' }}><Paperclip size={14}/> {attachment ? attachment.name : 'Anexar documento'}<Input type="file" onChange={(event) => setAttachment(event.target.files?.[0] || null)} style={{ display:'none' }} /></label><Button onClick={sendMessage} style={{ background:theme.blue, color:'#fff', display:'flex', gap:6 }}><Send size={14}/>Enviar</Button></div></div></section>;
+  const renderChat = () => <section style={{ ...card, minHeight:560, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+    <div style={{ padding:'16px 18px', borderBottom:`1px solid ${theme.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:10, color:theme.text, fontWeight:900 }}><MessageCircle size={18}/>Atendimento ao Cliente</div>
+      <div style={{ display:'flex', alignItems:'center', gap:8 }}><Button onClick={() => loadPortal(session)} variant="outline" style={{ fontSize:'0.75rem', display:'flex', gap:6 }}><RefreshCw size={13}/>Atualizar</Button><StatusPill status="Online agora" /></div>
+    </div>
+    <div style={{ flex:1, padding:18, background:'#f8fafc', overflowY:'auto' }}>
+      {messages.length === 0 ? <EmptyState>Nenhuma mensagem ainda. Envie sua primeira solicitação para a equipe.</EmptyState> : messages.map((item) => (
+        <div key={item.id} style={{ display:'flex', justifyContent:item.direction === 'incoming' ? 'flex-end' : 'flex-start', marginBottom:10 }}>
+          <div style={{ maxWidth:'72%', background:item.direction === 'incoming' ? theme.blue : '#fff', color:item.direction === 'incoming' ? '#fff' : theme.text, border:`1px solid ${theme.border}`, borderRadius:14, padding:'10px 12px' }}>
+            <div style={{ fontSize:'0.68rem', opacity:0.82, marginBottom:4 }}>{item.sender}</div>
+            {item.text && <div style={{ fontSize:'0.88rem', whiteSpace: 'pre-wrap' }}>{item.text}</div>}
+            {item.attachmentName && (
+              <div style={{ marginTop:8, display:'flex', alignItems:'center', gap:6, fontSize:'0.78rem', fontWeight:800 }}>
+                <Paperclip size={13}/>
+                {item.attachments?.[0]?.base64 ? (
+                  <a href={item.attachments[0].base64} download={item.attachmentName} style={{ color: 'inherit', textDecoration: 'underline' }}>{item.attachmentName}</a>
+                ) : (
+                  <span>{item.attachmentName}</span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+    <div style={{ padding:16, borderTop:`1px solid ${theme.border}` }}>
+      <textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Digite sua mensagem para o atendimento..." style={{ width:'100%', minHeight:86, border:`1px solid ${theme.border}`, borderRadius:12, padding:'10px 12px', resize:'vertical', fontFamily:'inherit', fontSize:'0.86rem' }} />
+      <div style={{ display:'flex', justifyContent:'space-between', gap:10, marginTop:10 }}>
+        <label style={{ border:`1px solid ${theme.border}`, borderRadius:10, padding:'8px 12px', cursor:'pointer', display:'flex', alignItems:'center', gap:6, color:theme.text, fontSize:'0.8rem' }}><Paperclip size={14}/> {attachment ? attachment.name : 'Anexar documento'}<Input type="file" onChange={(event) => setAttachment(event.target.files?.[0] || null)} style={{ display:'none' }} /></label>
+        <Button onClick={sendMessage} style={{ background:theme.blue, color:'#fff', display:'flex', gap:6 }}><Send size={14}/>Enviar</Button>
+      </div>
+    </div>
+  </section>;
 
   const renderActiveSection = () => {
     switch (activeSection) {
@@ -1216,7 +1370,61 @@ const PortalDonCor = () => {
           <button onClick={handleLogout} style={{ width:'100%', border:0, background:'transparent', color:'#cbd5e1', display:'flex', alignItems:'center', gap:10, padding:'10px 12px', cursor:'pointer', fontWeight:800 }}><LogOut size={17}/>Sair</button>
         </div>
       </aside>
-      <div style={{ minWidth:0 }}><header style={{ background:'#fff', borderBottom:`1px solid ${theme.border}`, padding:'14px 24px', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:5 }}><div style={{ display:'flex', alignItems:'center', gap:14 }}><div style={{ width:40, height:40, borderRadius:14, background:'#eff6ff', color:theme.blue, display:'flex', alignItems:'center', justifyContent:'center' }}><Building2 size={19}/></div><div><strong style={{ color:theme.text, fontSize:'1rem' }}>{empresa}</strong><div style={{ color:theme.muted, fontSize:'0.78rem' }}>{session.documento}</div></div></div><div style={{ width:420 }}><Input placeholder="Buscar..." /></div><div style={{ display:'flex', alignItems:'center', gap:8 }}><button style={{ border:`1px solid ${theme.border}`, background:'#fff', borderRadius:12, padding:9, color:theme.muted }}><Bell size={16}/></button><button style={{ border:`1px solid ${theme.border}`, background:'#fff', borderRadius:12, padding:9, color:theme.muted }}><HelpCircle size={16}/></button><Button variant="outline" onClick={() => setShowPassBox(!showPassBox)}>Alterar senha</Button></div></header><main style={{ padding:24, maxWidth:1320, margin:'0 auto' }}>{error && <div style={{ background:'#fff1f2', border:'1px solid #fecdd3', color:'#be123c', borderRadius:10, padding:'10px 12px', marginBottom:14 }}>{error}</div>}{successMsg && <div style={{ background:'#ecfdf5', border:'1px solid #bbf7d0', color:'#047857', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{successMsg}</div>}{passMsg && <div style={{ background:'#ecfdf5', border:'1px solid #bbf7d0', color:'#047857', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{passMsg}</div>}{showPassBox && <section style={{ ...card, padding:16, marginBottom:16 }}><h2 style={{ fontSize:'1rem', color:theme.text, margin:'0 0 12px' }}>Alterar senha de acesso</h2><div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr auto', gap:10, alignItems:'end' }}><div><label style={{ fontSize:'0.72rem', color:theme.muted, fontWeight:800 }}>Senha atual</label><Input type="password" value={senhaAtual} onChange={(e)=>setSenhaAtual(e.target.value)} placeholder="Senha atual" /></div><div><label style={{ fontSize:'0.72rem', color:theme.muted, fontWeight:800 }}>Nova senha</label><Input type="password" value={novaSenha} onChange={(e)=>setNovaSenha(e.target.value)} placeholder="Mínimo 6 caracteres" /></div><div><label style={{ fontSize:'0.72rem', color:theme.muted, fontWeight:800 }}>Confirmar nova senha</label><Input type="password" value={confirmaSenha} onChange={(e)=>setConfirmaSenha(e.target.value)} placeholder="Repita a nova senha" /></div><Button onClick={handleChangePass} style={{ background:theme.blue, color:'#fff' }}>Salvar senha</Button></div></section>}{loading && <div style={{ marginBottom:14, color:theme.muted, display:'flex', alignItems:'center', gap:8 }}><Activity size={16}/>Atualizando informações do cliente...</div>}{renderActiveSection()}</main></div>
+      <div style={{ minWidth:0 }}>
+        <header style={{ background:'#fff', borderBottom:`1px solid ${theme.border}`, padding:'14px 24px', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:5 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+            <div style={{ width:40, height:40, borderRadius:14, background:'#eff6ff', color:theme.blue, display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <Building2 size={19}/>
+            </div>
+            <div>
+              <strong style={{ color:theme.text, fontSize:'1rem' }}>{empresa}</strong>
+              <div style={{ color:theme.muted, fontSize:'0.78rem' }}>{session.documento}</div>
+            </div>
+          </div>
+          <div style={{ width:420 }}><Input placeholder="Buscar..." /></div>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <button
+              onClick={() => {
+                setActiveSection('chat');
+                const unread = messages.filter(m => m.direction === 'incoming' && !m.read).length;
+                if (unread > 0) markPortalDonCorChatRead({ documento: session.documento, empresa: session.empresa }).then(() => loadPortal(session));
+              }}
+              style={{ border:`1px solid ${theme.border}`, background:'#fff', borderRadius:12, padding:9, color:theme.muted, position: 'relative', cursor: 'pointer' }}
+            >
+              <Bell size={16}/>
+              {messages.filter(m => m.direction === 'incoming' && !m.read).length > 0 && (
+                <span style={{ position: 'absolute', top: -5, right: -5, background: '#e63757', color: '#fff', fontSize: '10px', fontWeight: 800, padding: '2px 5px', borderRadius: '50%' }}>
+                  {messages.filter(m => m.direction === 'incoming' && !m.read).length}
+                </span>
+              )}
+            </button>
+            <button style={{ border:`1px solid ${theme.border}`, background:'#fff', borderRadius:12, padding:9, color:theme.muted }}><HelpCircle size={16}/></button>
+            <Button variant="outline" onClick={() => setShowPassBox(!showPassBox)}>Alterar senha</Button>
+          </div>
+        </header>
+        <main style={{ padding:24, maxWidth:1320, margin:'0 auto' }}>
+          {error && <div style={{ background:'#fff1f2', border:'1px solid #fecdd3', color:'#be123c', borderRadius:10, padding:'10px 12px', marginBottom:14 }}>{error}</div>}
+          {successMsg && <div style={{ background:'#ecfdf5', border:'1px solid #bbf7d0', color:'#047857', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{successMsg}</div>}
+          {passMsg && <div style={{ background:'#ecfdf5', border:'1px solid #bbf7d0', color:'#047857', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{passMsg}</div>}
+          {showPassBox && <section style={{ ...card, padding:16, marginBottom:16 }}><h2 style={{ fontSize:'1rem', color:theme.text, margin:'0 0 12px' }}>Alterar senha de acesso</h2><div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr auto', gap:10, alignItems:'end' }}><div><label style={{ fontSize:'0.72rem', color:theme.muted, fontWeight:800 }}>Senha atual</label><Input type="password" value={senhaAtual} onChange={(e)=>setSenhaAtual(e.target.value)} placeholder="Senha atual" /></div><div><label style={{ fontSize:'0.72rem', color:theme.muted, fontWeight:800 }}>Nova senha</label><Input type="password" value={novaSenha} onChange={(e)=>setNovaSenha(e.target.value)} placeholder="Mínimo 6 caracteres" /></div><div><label style={{ fontSize:'0.72rem', color:theme.muted, fontWeight:800 }}>Confirmar nova senha</label><Input type="password" value={confirmaSenha} onChange={(e)=>setConfirmaSenha(e.target.value)} placeholder="Repita a nova senha" /></div><Button onClick={handleChangePass} style={{ background:theme.blue, color:'#fff' }}>Salvar senha</Button></div></section>}
+          {loading && <div style={{ marginBottom:14, color:theme.muted, display:'flex', alignItems:'center', gap:8 }}><Activity size={16}/>Atualizando informações do cliente...</div>}
+          {renderActiveSection()}
+        </main>
+      </div>
+      {confirmMovement && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.4)', backdropFilter: 'blur(3px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 18, padding: 28, width: '100%', maxWidth: 440, boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}>
+            <h3 style={{ margin: '0 0 10px', fontSize: '1.25rem', color: theme.text, display: 'flex', alignItems: 'center', gap: 10 }}><FileText size={22} color={theme.primary} /> Confirmar Solicitação</h3>
+            <p style={{ color: theme.muted, margin: '0 0 24px', fontSize: '0.95rem', lineHeight: 1.5 }}>
+              Deseja realmente enviar esta solicitação de <strong>{confirmMovement}</strong>? Verifique se todas as informações e os anexos necessários foram inseridos.
+            </p>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <Button variant="outline" onClick={() => setConfirmMovement(null)} style={{ flex: 1 }}>Revisar Dados</Button>
+              <Button disabled={submittingMovement} onClick={() => { setConfirmMovement(null); submitMovimentacao(confirmMovement); }} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Confirmar Envio'}</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

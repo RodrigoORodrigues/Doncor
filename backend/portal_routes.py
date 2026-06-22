@@ -401,12 +401,18 @@ def _attachment_list(value: Any) -> List[Dict[str, Any]]:
         if isinstance(item, dict):
             name = str(item.get("name") or item.get("nome") or item.get("attachmentName") or item.get("documento") or "").strip()
             if name:
-                attachments.append({
+                attachment_dict = {
                     "name": name,
                     "size": item.get("size") or item.get("tamanho") or item.get("attachmentSize") or 0,
                     "type": item.get("type") or item.get("contentType") or "",
                     "category": item.get("category") or item.get("categoria") or item.get("documento") or "",
-                })
+                }
+                
+                base64_data = item.get("base64") or item.get("fileBase64") or item.get("arquivoBase64")
+                if base64_data:
+                    attachment_dict["base64"] = base64_data
+                    
+                attachments.append(attachment_dict)
         else:
             name = str(item or "").strip()
             if name:
@@ -666,6 +672,40 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
             "contratos": context["contratoNumeros"],
             "primeiroAcesso": first_access,
         }
+
+    @app.post("/api/portal-doncor/esqueci-senha")
+    async def portal_doncor_esqueci_senha(payload: Dict[str, Any] = Body(...)):
+        documento = payload.get("documento") or payload.get("cpfCnpj") or payload.get("cpf_cnpj")
+        email = str(payload.get("email") or "").strip()
+        nova_senha = str(payload.get("novaSenha") or payload.get("newPassword") or "")
+
+        if not documento or not email or not nova_senha:
+            raise HTTPException(status_code=400, detail="Informe seu CNPJ/CPF, seu E-mail cadastrado e a nova senha.")
+
+        if len(nova_senha) < 6:
+            raise HTTPException(status_code=400, detail="A nova senha deve ter pelo menos 6 caracteres.")
+
+        partner = await _registered_partner(db, documento)
+        if not partner:
+            raise HTTPException(status_code=404, detail="CPF/CNPJ sem acesso cadastrado.")
+
+        partner_email = str(partner.get("email") or "").strip()
+        
+        if not partner_email:
+            raise HTTPException(status_code=403, detail="Nenhum e-mail registrado. Entre em contato com a DonCor.")
+
+        if partner_email.lower() != email.lower():
+            raise HTTPException(status_code=401, detail="E-mail informado não corresponde ao cadastrado.")
+
+        updated = dict(partner)
+        _set_access_secret(updated, nova_senha, now_iso)
+        updated["updatedAt"] = now_iso()
+        updated["atualizadoEm"] = now_br()
+        updated["senhaAtualizadaEm"] = now_iso()
+
+        await db.portal_parceiros.replace_one({"id": partner["id"]}, updated)
+
+        return {"ok": True, "message": "Senha redefinida com sucesso."}
 
     @app.post("/api/portal-doncor/alterar-senha")
     async def portal_doncor_alterar_senha(payload: Dict[str, Any] = Body(...)):
