@@ -41,6 +41,17 @@ class SupabaseCursor:
         return self.items if length is None else self.items[:length]
 
 
+# Predefined sets of known structured (flat) vs. payload (JSONB) tables to avoid
+# database probing and keep the Supabase console API logs pristine and free of 42703 errors.
+FLAT_TABLES = {"perfis", "apolices", "boletos", "robo_execucoes"}
+PAYLOAD_TABLES = {
+    "contratos_adesao", "contratos_empresarial", "inclusoes", "exclusoes", "transferencias",
+    "faturas", "comissoes", "seguradoras", "produtos", "colaboradores", "tarefas_pendentes",
+    "movimentacoes_recentes", "portal_parceiros", "portal_chat", "portal_solicitacoes", "portal_formularios",
+    "robo_estado", "robo_execucoes_log", "boletos_baixados", "robo_arquivos", "robo_diagnosticos"
+}
+
+
 class SupabaseCollection:
     def __init__(self, client, table_name: str, memory_store: dict[str, dict[str, dict[str, Any]]]):
         self.client = client
@@ -60,6 +71,14 @@ class SupabaseCollection:
         if self.client is None:
             self._payload_layout = True
             return True
+
+        if self.table_name in FLAT_TABLES:
+            self._payload_layout = False
+            return False
+        if self.table_name in PAYLOAD_TABLES:
+            self._payload_layout = True
+            return True
+
         try:
             self._table().select("id,payload").limit(1).execute()
             self._payload_layout = True
