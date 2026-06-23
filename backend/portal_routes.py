@@ -128,6 +128,7 @@ def _check_access_secret(partner: Dict[str, Any], secret: str) -> bool:
 
 def _public_partner(item: Dict[str, Any]) -> Dict[str, Any]:
     public = dict(item or {})
+    public.pop("_id", None)
     public.pop("accessDigest", None)
     public.pop("accessSalt", None)
     public["senhaDefinida"] = bool(item.get("accessDigest") and item.get("accessSalt"))
@@ -142,6 +143,7 @@ def _category_key(value: Any) -> str:
 
 def _public_formulario(item: Dict[str, Any]) -> Dict[str, Any]:
     public = dict(item or {})
+    public.pop("_id", None)
     public.pop("arquivoBase64", None)
     public["temArquivo"] = bool(item.get("arquivoBase64") or item.get("arquivoUrl"))
     return public
@@ -826,6 +828,7 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
         }
 
         await db.portal_solicitacoes.insert_one(item)
+        item.pop("_id", None)
         await _insert_operational_request(db, tipo, item, payload)
 
         chat_item = {
@@ -892,6 +895,7 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
             "criadoEm": now_br(),
         }
         await db.portal_chat.insert_one(item)
+        item.pop("_id", None)
         await _schedule_chat_notification(db, background_tasks, item)
         return item
 
