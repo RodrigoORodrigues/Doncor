@@ -19,7 +19,7 @@ def _env_bool(name: str, default: bool = False) -> bool:
     value = str(os.getenv(name, "")).strip().lower()
     if not value:
         return default
-    return value in {"1", "true", "yes", "sim", "on"}
+    return value in {"1", "true", "yes", "sim", "on", "verdadeiro", "ativado", "ativo"}
 
 
 def normalize_recipients(values: Iterable[Any]) -> list[str]:
@@ -99,7 +99,13 @@ def build_chat_notification_body(chat_item: dict[str, Any]) -> tuple[str, str]:
 
 
 def send_chat_notification_email(recipients: Iterable[str], chat_item: dict[str, Any]) -> dict[str, Any]:
-    if not _env_bool("EMAIL_NOTIFICATIONS_ENABLED", False):
+    notifications_enabled = (
+        _env_bool("EMAIL_NOTIFICATIONS_ENABLED", False) or
+        _env_bool("NOTIFICACOES_DE_EMAIL_ATIVADAS", False) or
+        _env_bool("NOTIFICACOES_EMAIL_ATIVADAS", False) or
+        _env_bool("NOTIFICAÇÕES_DE_EMAIL_ATIVADAS", False)
+    )
+    if not notifications_enabled:
         logger.info("Email notifications disabled; chat notification skipped.")
         return {"sent": False, "reason": "disabled"}
 
@@ -110,13 +116,14 @@ def send_chat_notification_email(recipients: Iterable[str], chat_item: dict[str,
 
     host = str(os.getenv("SMTP_HOST") or "").strip()
     try:
-        port = int(os.getenv("SMTP_PORT") or "587")
+        port_val = os.getenv("SMTP_PORT") or os.getenv("PORTA_SMTP") or "587"
+        port = int(str(port_val).strip())
     except ValueError:
-        logger.warning("Invalid SMTP_PORT value; using 587.")
+        logger.warning("Invalid SMTP_PORT/PORTA_SMTP value; using 587.")
         port = 587
     username = str(os.getenv("SMTP_USERNAME") or "").strip()
-    password = str(os.getenv("SMTP_PASSWORD") or "")
-    from_email = str(os.getenv("SMTP_FROM_EMAIL") or "").strip()
+    password = str(os.getenv("SMTP_PASSWORD") or os.getenv("SENHA_SMTP") or "")
+    from_email = str(os.getenv("SMTP_FROM_EMAIL") or os.getenv("SMTP_DE_EMAIL") or "").strip()
     from_name = str(os.getenv("SMTP_FROM_NAME") or "DonCor").strip() or "DonCor"
 
     if not host or not from_email:

@@ -131,8 +131,8 @@ const StatusPill = ({ status }) => {
   return <span style={{ color, background: bg, borderRadius: 999, padding: '4px 10px', fontSize: '0.72rem', fontWeight: 800 }}>{status || 'Em análise'}</span>;
 };
 
-const StatCard = ({ title, value, subtitle, icon: Icon, tone = theme.blue }) => (
-  <div style={{ ...card, padding: 18 }}>
+const StatCard = ({ title, value, subtitle, icon: Icon, tone = theme.blue, onClick }) => (
+  <div onClick={onClick} style={{ ...card, padding: 18, cursor: onClick ? 'pointer' : 'default', transition: 'all 0.2s' }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
       <div>
         <div style={{ color: theme.muted, fontSize: '0.78rem', fontWeight: 700 }}>{title}</div>
@@ -226,7 +226,6 @@ const PortalDonCor = () => {
     try {
       const data = await loginPortalDonCor({ documento, senha });
       setSession(data);
-      console.log("LOGIN DATA", data);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       setSenha('');
       if (data.primeiroAcesso) {
@@ -321,6 +320,7 @@ const PortalDonCor = () => {
       setAttachment(null);
     } catch(e) {
       console.error(e);
+      alert('Erro ao enviar mensagem. Tente novamente ou contate o suporte.');
     }
   };
 
@@ -541,10 +541,10 @@ const PortalDonCor = () => {
     <>
       <SectionTitle title={`Bem-vindo ao seu Portal, ${empresa}`} subtitle="Resumo das operações ativas por seção." action={<Button onClick={() => { setActiveSection('movimentacao'); setActiveMovementTab('inclusao'); }} style={{ background: theme.blue, color: '#fff', display: 'flex', gap: 8 }}><FileText size={15}/>Novo chamado</Button>} />
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4, minmax(0, 1fr))', gap:14, marginBottom:16 }}>
-        <StatCard title="Contratos vigentes" value={payload?.resumo?.contratos || contratos.length || 0} subtitle="Ativos" icon={FolderOpen}/>
-        <StatCard title="Boletos disponíveis" value={payload?.resumo?.boletos || boletos.length || 0} subtitle="PDFs no sistema" icon={Download} tone={theme.ok}/>
-        <StatCard title="Solicitações abertas" value={solicitacoesAbertas} subtitle="Aguardando conclusão" icon={FileText} tone={theme.warning}/>
-        <StatCard title="Mensagens no chat" value={mensagensAtendimento} subtitle="Atendimento registrado" icon={MessageCircle} tone={theme.primary}/>
+        <StatCard title="Contratos vigentes" value={payload?.resumo?.contratos || contratos.length || 0} subtitle="Ativos" icon={FolderOpen} onClick={() => setActiveSection('contratos')}/>
+        <StatCard title="Boletos disponíveis" value={payload?.resumo?.boletos || boletos.length || 0} subtitle="PDFs no sistema" icon={Download} tone={theme.ok} onClick={() => setActiveSection('faturas')}/>
+        <StatCard title="Solicitações abertas" value={solicitacoesAbertas} subtitle="Aguardando conclusão" icon={FileText} tone={theme.warning} onClick={() => setActiveSection('solicitacoes')}/>
+        <StatCard title="Mensagens no chat" value={mensagensAtendimento} subtitle="Atendimento registrado" icon={MessageCircle} tone={theme.primary} onClick={() => setActiveSection('chat')}/>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:16 }}>
         <section style={{ ...card, padding:18 }}>
