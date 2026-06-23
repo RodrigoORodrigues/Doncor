@@ -849,6 +849,7 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
             "criadoEm": now_br(),
         }
         await db.portal_chat.insert_one(chat_item)
+        chat_item.pop("_id", None)
         await _schedule_chat_notification(db, background_tasks, chat_item)
 
         return item

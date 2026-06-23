@@ -226,6 +226,7 @@ const PortalDonCor = () => {
     try {
       const data = await loginPortalDonCor({ documento, senha });
       setSession(data);
+      console.log("LOGIN DATA", data);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       setSenha('');
       if (data.primeiroAcesso) {
