@@ -101,7 +101,15 @@ class SupabaseCollection:
             return [copy.deepcopy(item) for item in self._memory_table().values()]
 
         if self._uses_payload_layout():
-            response = self._table().select("id,payload").execute()
+            try:
+                response = self._table().select("id,payload").execute()
+            except Exception as exc:
+                exc_str = str(exc)
+                if "42703" in exc_str or "payload" in exc_str.lower() or "does not exist" in exc_str.lower():
+                    self._payload_layout = False
+                    response = self._table().select("*").execute()
+                else:
+                    raise exc
         else:
             response = self._table().select("*").execute()
 
@@ -135,7 +143,15 @@ class SupabaseCollection:
         if self.client is None:
             self._memory_table()[item_id] = payload
         elif self._uses_payload_layout():
-            self._table().upsert({"id": item_id, "payload": payload}).execute()
+            try:
+                self._table().upsert({"id": item_id, "payload": payload}).execute()
+            except Exception as exc:
+                exc_str = str(exc)
+                if "42703" in exc_str or "payload" in exc_str.lower() or "does not exist" in exc_str.lower():
+                    self._payload_layout = False
+                    self._table().upsert(payload).execute()
+                else:
+                    raise exc
         else:
             self._table().upsert(payload).execute()
         return {"inserted_id": item_id}
@@ -161,7 +177,15 @@ class SupabaseCollection:
         if self.client is None:
             self._memory_table()[item_id] = payload
         elif self._uses_payload_layout():
-            self._table().upsert({"id": item_id, "payload": payload}).execute()
+            try:
+                self._table().upsert({"id": item_id, "payload": payload}).execute()
+            except Exception as exc:
+                exc_str = str(exc)
+                if "42703" in exc_str or "payload" in exc_str.lower() or "does not exist" in exc_str.lower():
+                    self._payload_layout = False
+                    self._table().upsert(payload).execute()
+                else:
+                    raise exc
         else:
             self._table().upsert(payload).execute()
         return UpdateResult(1 if current else 0)
@@ -179,7 +203,15 @@ class SupabaseCollection:
         if self.client is None:
             self._memory_table()[item_id] = payload
         elif self._uses_payload_layout():
-            self._table().upsert({"id": item_id, "payload": payload}).execute()
+            try:
+                self._table().upsert({"id": item_id, "payload": payload}).execute()
+            except Exception as exc:
+                exc_str = str(exc)
+                if "42703" in exc_str or "payload" in exc_str.lower() or "does not exist" in exc_str.lower():
+                    self._payload_layout = False
+                    self._table().upsert(payload).execute()
+                else:
+                    raise exc
         else:
             self._table().upsert(payload).execute()
         return UpdateResult(1 if current else 0)
