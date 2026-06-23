@@ -294,6 +294,11 @@ const PortalDonCor = () => {
 
   const sendMessage = async () => {
     if (!session || (!message.trim() && !attachment)) return;
+    if (attachment && attachment.size > 2 * 1024 * 1024) {
+      alert('O tamanho máximo do anexo é de 2MB. Por favor, escolha um arquivo menor.');
+      return;
+    }
+    
     try {
       let attachmentData = null;
       if (attachment) {

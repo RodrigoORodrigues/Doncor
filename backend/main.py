@@ -6,6 +6,7 @@ It also persists files returned by the external RPA service into the RPA history
 """
 
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List
@@ -50,6 +51,27 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+import traceback
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    print(f"Error caught in global handler: {exc}")
+    traceback.print_exc()
+    
+    origin = request.headers.get('origin')
+    cors_headers = {
+        "Access-Control-Allow-Origin": origin if origin in _build_allowed_origins() or re.match(r"https://.*\.vercel\.app|http://localhost:\d+", origin or "") else "*",
+        "Access-Control-Allow-Credentials": "true",
+    } if origin else {}
+
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Ocorreu um erro interno no servidor."},
+        headers=cors_headers
+    )
 
 
 @app.get("/")
