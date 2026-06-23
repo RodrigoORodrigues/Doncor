@@ -740,7 +740,12 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
 
     @app.get("/api/portal-doncor/resumo")
     async def portal_doncor_resumo(documento: str = Query(...)):
-        return await _portal_payload(db, documento)
+        try:
+            return await _portal_payload(db, documento)
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Erro na rota /resumo do Portal: {str(exc)}")
 
     @app.get("/api/portal-doncor/solicitacoes")
     async def portal_doncor_solicitacoes(
@@ -750,36 +755,41 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
         status: str = "todos",
         limit: int = Query(default=200, ge=1, le=1000),
     ):
-        context = await _find_partner_context(db, documento)
-        doc = _digits(documento)
-        contrato_numeros = set(context.get("contratoNumeros") or [])
-        empresa_norm = str(context.get("empresa") or "").strip().lower()
+        try:
+            context = await _find_partner_context(db, documento)
+            doc = _digits(documento)
+            contrato_numeros = set(context.get("contratoNumeros") or [])
+            empresa_norm = str(context.get("empresa") or "").strip().lower()
 
-        items = await _all(db.portal_solicitacoes, "createdAt", limit)
-        filtered = [
-            item for item in items
-            if _digits(item.get("documento")) == doc
-            or (item.get("contrato") and item.get("contrato") in contrato_numeros)
-            or (empresa_norm and str(item.get("empresa") or "").strip().lower() == empresa_norm)
-        ]
-
-        if tipo and tipo != "todos":
-            tipo_norm = tipo.strip().lower()
-            filtered = [item for item in filtered if str(item.get("tipo") or item.get("tipoLabel") or "").strip().lower() == tipo_norm]
-        if status and status != "todos":
-            status_norm = status.strip().lower()
-            filtered = [item for item in filtered if str(item.get("status") or "").strip().lower() == status_norm]
-
-        term = str(search or "").strip().lower()
-        if term:
-            term_digits = _digits(term)
+            items = await _all(db.portal_solicitacoes, "createdAt", limit)
             filtered = [
-                item for item in filtered
-                if term in " ".join(str(item.get(key) or "").lower() for key in ["protocolo", "tipoLabel", "beneficiario", "cpf", "contrato", "status", "detalhes"])
-                or (term_digits and term_digits in _digits(item.get("cpf")))
+                item for item in items
+                if _digits(item.get("documento")) == doc
+                or (item.get("contrato") and item.get("contrato") in contrato_numeros)
+                or (empresa_norm and str(item.get("empresa") or "").strip().lower() == empresa_norm)
             ]
 
-        return sorted(filtered, key=lambda item: item.get("createdAt") or "", reverse=True)
+            if tipo and tipo != "todos":
+                tipo_norm = tipo.strip().lower()
+                filtered = [item for item in filtered if str(item.get("tipo") or item.get("tipoLabel") or "").strip().lower() == tipo_norm]
+            if status and status != "todos":
+                status_norm = status.strip().lower()
+                filtered = [item for item in filtered if str(item.get("status") or "").strip().lower() == status_norm]
+
+            term = str(search or "").strip().lower()
+            if term:
+                term_digits = _digits(term)
+                filtered = [
+                    item for item in filtered
+                    if term in " ".join(str(item.get(key) or "").lower() for key in ["protocolo", "tipoLabel", "beneficiario", "cpf", "contrato", "status", "detalhes"])
+                    or (term_digits and term_digits in _digits(item.get("cpf")))
+                ]
+
+            return sorted(filtered, key=lambda item: item.get("createdAt") or "", reverse=True)
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Erro na rota /solicitacoes do Portal: {str(exc)}")
 
     @app.post("/api/portal-doncor/movimentacoes")
     async def portal_doncor_movimentacao(background_tasks: BackgroundTasks, payload: Dict[str, Any] = Body(...)):
@@ -856,49 +866,61 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
 
     @app.get("/api/portal-doncor/chat")
     async def portal_doncor_chat(documento: str = "", empresa: str = "", limit: int = Query(default=100, ge=1, le=300)):
-        items = await _all(db.portal_chat, "createdAt", limit)
-        doc = _digits(documento)
-        empresa_norm = str(empresa or "").strip().lower()
-        if doc:
-            items = [item for item in items if _digits(item.get("documento")) == doc]
-        if empresa_norm:
-            items = [item for item in items if str(item.get("empresa") or item.get("company") or "").strip().lower() == empresa_norm]
-        return sorted(items, key=lambda item: item.get("createdAt") or "")
+        try:
+            items = await _all(db.portal_chat, "createdAt", limit)
+            doc = _digits(documento)
+            empresa_norm = str(empresa or "").strip().lower()
+            if doc:
+                items = [item for item in items if _digits(item.get("documento")) == doc]
+            if empresa_norm:
+                items = [item for item in items if str(item.get("empresa") or item.get("company") or "").strip().lower() == empresa_norm]
+            return sorted(items, key=lambda item: item.get("createdAt") or "")
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Erro na rota /chat (GET) do Portal: {str(exc)}")
 
     @app.post("/api/portal-doncor/chat")
     async def portal_doncor_chat_send(background_tasks: BackgroundTasks, payload: Dict[str, Any] = Body(...)):
-        documento = _digits(payload.get("documento"))
-        empresa = str(payload.get("empresa") or payload.get("company") or "Parceiro").strip()
-        text = str(payload.get("text") or payload.get("mensagem") or "").strip()
-        attachment_name = str(payload.get("attachmentName") or payload.get("anexoNome") or "").strip()
-        attachments = _attachment_list(payload.get("attachments") or payload.get("anexos"))
-        if not attachment_name and attachments:
-            attachment_name = ", ".join(attachment["name"] for attachment in attachments)
-        if not text and not attachment_name and not attachments:
-            raise HTTPException(status_code=400, detail="Digite uma mensagem ou anexe um documento.")
+        try:
+            documento = _digits(payload.get("documento"))
+            empresa = str(payload.get("empresa") or payload.get("company") or "Parceiro").strip()
+            text = str(payload.get("text") or payload.get("mensagem") or "").strip()
+            attachment_name = str(payload.get("attachmentName") or payload.get("anexoNome") or "").strip()
+            attachments = _attachment_list(payload.get("attachments") or payload.get("anexos"))
+            if not attachment_name and attachments:
+                attachment_name = ", ".join(attachment["name"] for attachment in attachments)
+            if not text and not attachment_name and not attachments:
+                raise HTTPException(status_code=400, detail="Digite uma mensagem ou anexe um documento.")
 
-        sender_role = str(payload.get("senderRole") or payload.get("origem") or "portal").lower()
-        direction = "incoming" if sender_role in {"portal", "empresa", "parceiro"} else "outgoing"
-        item = {
-            "id": str(uuid.uuid4()),
-            "documento": documento,
-            "empresa": empresa,
-            "company": empresa,
-            "text": text,
-            "attachmentName": attachment_name,
-            "attachmentSize": payload.get("attachmentSize") or 0,
-            "attachments": attachments,
-            "sender": payload.get("sender") or empresa,
-            "senderRole": sender_role,
-            "direction": direction,
-            "read": direction == "outgoing",
-            "createdAt": now_iso(),
-            "criadoEm": now_br(),
-        }
-        await db.portal_chat.insert_one(item)
-        item.pop("_id", None)
-        await _schedule_chat_notification(db, background_tasks, item)
-        return item
+            sender_role = str(payload.get("senderRole") or payload.get("origem") or "portal").lower()
+            direction = "incoming" if sender_role in {"portal", "empresa", "parceiro"} else "outgoing"
+            item = {
+                "id": str(uuid.uuid4()),
+                "documento": documento,
+                "empresa": empresa,
+                "company": empresa,
+                "text": text,
+                "attachmentName": attachment_name,
+                "attachmentSize": payload.get("attachmentSize") or 0,
+                "attachments": attachments,
+                "sender": payload.get("sender") or empresa,
+                "senderRole": sender_role,
+                "direction": direction,
+                "read": direction == "outgoing",
+                "createdAt": now_iso(),
+                "criadoEm": now_br(),
+            }
+            await db.portal_chat.insert_one(item)
+            item.pop("_id", None)
+            await _schedule_chat_notification(db, background_tasks, item)
+            return item
+        except HTTPException:
+            raise
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=str(exc))
 
     @app.patch("/api/portal-doncor/chat/read")
     async def portal_doncor_chat_read(payload: Dict[str, Any] = Body(...)):
