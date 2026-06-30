@@ -41,17 +41,6 @@ class SupabaseCursor:
         return self.items if length is None else self.items[:length]
 
 
-# Predefined sets of known structured (flat) vs. payload (JSONB) tables to avoid
-# database probing and keep the Supabase console API logs pristine and free of 42703 errors.
-FLAT_TABLES = {"perfis", "apolices", "boletos", "robo_execucoes"}
-PAYLOAD_TABLES = {
-    "contratos_adesao", "contratos_empresarial", "inclusoes", "exclusoes", "transferencias",
-    "faturas", "comissoes", "seguradoras", "produtos", "colaboradores", "tarefas_pendentes",
-    "movimentacoes_recentes", "portal_parceiros", "portal_chat", "portal_solicitacoes", "portal_formularios",
-    "robo_estado", "robo_execucoes_log", "boletos_baixados", "robo_arquivos", "robo_diagnosticos"
-}
-
-
 class SupabaseCollection:
     def __init__(self, client, table_name: str, memory_store: dict[str, dict[str, dict[str, Any]]]):
         self.client = client
@@ -69,13 +58,6 @@ class SupabaseCollection:
         if self._payload_layout is not None:
             return self._payload_layout
         if self.client is None:
-            self._payload_layout = True
-            return True
-
-        if self.table_name in FLAT_TABLES:
-            self._payload_layout = False
-            return False
-        if self.table_name in PAYLOAD_TABLES:
             self._payload_layout = True
             return True
 
@@ -104,14 +86,16 @@ class SupabaseCollection:
             try:
                 response = self._table().select("id,payload").execute()
             except Exception as exc:
-                exc_str = str(exc)
-                if "42703" in exc_str or "payload" in exc_str.lower() or "does not exist" in exc_str.lower():
-                    self._payload_layout = False
+                self._payload_layout = False
+                try:
                     response = self._table().select("*").execute()
-                else:
-                    raise exc
+                except Exception:
+                    return []
         else:
-            response = self._table().select("*").execute()
+            try:
+                response = self._table().select("*").execute()
+            except Exception:
+                return []
 
         return [self._row_to_item(row) for row in response.data or []]
 
@@ -145,15 +129,17 @@ class SupabaseCollection:
         elif self._uses_payload_layout():
             try:
                 self._table().upsert({"id": item_id, "payload": payload}).execute()
-            except Exception as exc:
-                exc_str = str(exc)
-                if "42703" in exc_str or "payload" in exc_str.lower() or "does not exist" in exc_str.lower():
-                    self._payload_layout = False
+            except Exception:
+                self._payload_layout = False
+                try:
                     self._table().upsert(payload).execute()
-                else:
-                    raise exc
+                except Exception:
+                    pass
         else:
-            self._table().upsert(payload).execute()
+            try:
+                self._table().upsert(payload).execute()
+            except Exception:
+                pass
         return {"inserted_id": item_id}
 
     async def insert_many(self, documents: list[dict[str, Any]]):
@@ -179,15 +165,17 @@ class SupabaseCollection:
         elif self._uses_payload_layout():
             try:
                 self._table().upsert({"id": item_id, "payload": payload}).execute()
-            except Exception as exc:
-                exc_str = str(exc)
-                if "42703" in exc_str or "payload" in exc_str.lower() or "does not exist" in exc_str.lower():
-                    self._payload_layout = False
+            except Exception:
+                self._payload_layout = False
+                try:
                     self._table().upsert(payload).execute()
-                else:
-                    raise exc
+                except Exception:
+                    pass
         else:
-            self._table().upsert(payload).execute()
+            try:
+                self._table().upsert(payload).execute()
+            except Exception:
+                pass
         return UpdateResult(1 if current else 0)
 
     async def replace_one(self, query: dict[str, Any], document: dict[str, Any], upsert: bool = False):
@@ -205,15 +193,17 @@ class SupabaseCollection:
         elif self._uses_payload_layout():
             try:
                 self._table().upsert({"id": item_id, "payload": payload}).execute()
-            except Exception as exc:
-                exc_str = str(exc)
-                if "42703" in exc_str or "payload" in exc_str.lower() or "does not exist" in exc_str.lower():
-                    self._payload_layout = False
+            except Exception:
+                self._payload_layout = False
+                try:
                     self._table().upsert(payload).execute()
-                else:
-                    raise exc
+                except Exception:
+                    pass
         else:
-            self._table().upsert(payload).execute()
+            try:
+                self._table().upsert(payload).execute()
+            except Exception:
+                pass
         return UpdateResult(1 if current else 0)
 
     async def delete_one(self, query: dict[str, Any]):

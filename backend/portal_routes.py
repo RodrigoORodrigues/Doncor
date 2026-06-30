@@ -740,12 +740,7 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
 
     @app.get("/api/portal-doncor/resumo")
     async def portal_doncor_resumo(documento: str = Query(...)):
-        try:
-            return await _portal_payload(db, documento)
-        except Exception as exc:
-            import traceback
-            traceback.print_exc()
-            raise HTTPException(status_code=500, detail=f"Erro na rota /resumo do Portal: {str(exc)}")
+        return await _portal_payload(db, documento)
 
     @app.get("/api/portal-doncor/solicitacoes")
     async def portal_doncor_solicitacoes(
@@ -866,61 +861,49 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
 
     @app.get("/api/portal-doncor/chat")
     async def portal_doncor_chat(documento: str = "", empresa: str = "", limit: int = Query(default=100, ge=1, le=300)):
-        try:
-            items = await _all(db.portal_chat, "createdAt", limit)
-            doc = _digits(documento)
-            empresa_norm = str(empresa or "").strip().lower()
-            if doc:
-                items = [item for item in items if _digits(item.get("documento")) == doc]
-            if empresa_norm:
-                items = [item for item in items if str(item.get("empresa") or item.get("company") or "").strip().lower() == empresa_norm]
-            return sorted(items, key=lambda item: item.get("createdAt") or "")
-        except Exception as exc:
-            import traceback
-            traceback.print_exc()
-            raise HTTPException(status_code=500, detail=f"Erro na rota /chat (GET) do Portal: {str(exc)}")
+        items = await _all(db.portal_chat, "createdAt", limit)
+        doc = _digits(documento)
+        empresa_norm = str(empresa or "").strip().lower()
+        if doc:
+            items = [item for item in items if _digits(item.get("documento")) == doc]
+        if empresa_norm:
+            items = [item for item in items if str(item.get("empresa") or item.get("company") or "").strip().lower() == empresa_norm]
+        return sorted(items, key=lambda item: item.get("createdAt") or "")
 
     @app.post("/api/portal-doncor/chat")
     async def portal_doncor_chat_send(background_tasks: BackgroundTasks, payload: Dict[str, Any] = Body(...)):
-        try:
-            documento = _digits(payload.get("documento"))
-            empresa = str(payload.get("empresa") or payload.get("company") or "Parceiro").strip()
-            text = str(payload.get("text") or payload.get("mensagem") or "").strip()
-            attachment_name = str(payload.get("attachmentName") or payload.get("anexoNome") or "").strip()
-            attachments = _attachment_list(payload.get("attachments") or payload.get("anexos"))
-            if not attachment_name and attachments:
-                attachment_name = ", ".join(attachment["name"] for attachment in attachments)
-            if not text and not attachment_name and not attachments:
-                raise HTTPException(status_code=400, detail="Digite uma mensagem ou anexe um documento.")
+        documento = _digits(payload.get("documento"))
+        empresa = str(payload.get("empresa") or payload.get("company") or "Parceiro").strip()
+        text = str(payload.get("text") or payload.get("mensagem") or "").strip()
+        attachment_name = str(payload.get("attachmentName") or payload.get("anexoNome") or "").strip()
+        attachments = _attachment_list(payload.get("attachments") or payload.get("anexos"))
+        if not attachment_name and attachments:
+            attachment_name = ", ".join(attachment["name"] for attachment in attachments)
+        if not text and not attachment_name and not attachments:
+            raise HTTPException(status_code=400, detail="Digite uma mensagem ou anexe um documento.")
 
-            sender_role = str(payload.get("senderRole") or payload.get("origem") or "portal").lower()
-            direction = "incoming" if sender_role in {"portal", "empresa", "parceiro"} else "outgoing"
-            item = {
-                "id": str(uuid.uuid4()),
-                "documento": documento,
-                "empresa": empresa,
-                "company": empresa,
-                "text": text,
-                "attachmentName": attachment_name,
-                "attachmentSize": payload.get("attachmentSize") or 0,
-                "attachments": attachments,
-                "sender": payload.get("sender") or empresa,
-                "senderRole": sender_role,
-                "direction": direction,
-                "read": direction == "outgoing",
-                "createdAt": now_iso(),
-                "criadoEm": now_br(),
-            }
-            await db.portal_chat.insert_one(item)
-            item.pop("_id", None)
-            await _schedule_chat_notification(db, background_tasks, item)
-            return item
-        except HTTPException:
-            raise
-        except Exception as exc:
-            import traceback
-            traceback.print_exc()
-            raise HTTPException(status_code=500, detail=str(exc))
+        sender_role = str(payload.get("senderRole") or payload.get("origem") or "portal").lower()
+        direction = "incoming" if sender_role in {"portal", "empresa", "parceiro"} else "outgoing"
+        item = {
+            "id": str(uuid.uuid4()),
+            "documento": documento,
+            "empresa": empresa,
+            "company": empresa,
+            "text": text,
+            "attachmentName": attachment_name,
+            "attachmentSize": payload.get("attachmentSize") or 0,
+            "attachments": attachments,
+            "sender": payload.get("sender") or empresa,
+            "senderRole": sender_role,
+            "direction": direction,
+            "read": direction == "outgoing",
+            "createdAt": now_iso(),
+            "criadoEm": now_br(),
+        }
+        await db.portal_chat.insert_one(item)
+        item.pop("_id", None)
+        await _schedule_chat_notification(db, background_tasks, item)
+        return item
 
     @app.patch("/api/portal-doncor/chat/read")
     async def portal_doncor_chat_read(payload: Dict[str, Any] = Body(...)):
