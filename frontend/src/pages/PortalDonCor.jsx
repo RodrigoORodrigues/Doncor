@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import DoncorLogo from '../components/DoncorLogo';
-import {
+import api, {
   loginPortalDonCor,
   fetchPortalDonCorResumo,
   fetchPortalDonCorFormularios,
@@ -19,7 +19,8 @@ import {
   fetchLgpdConfig,
   saveLgpdConfig,
   fetchLgpdAceites,
-  aceitarLgpd
+  aceitarLgpd,
+  markPortalDonCorChatRead
 } from '../services/api';
 
 const STORAGE_KEY = 'doncor_portal_cliente_session';
@@ -176,6 +177,7 @@ const PortalDonCor = () => {
   const [esqueciEmail, setEsqueciEmail] = useState('');
   const [esqueciSenha, setEsqueciSenha] = useState('');
   const [esqueciError, setEsqueciError] = useState('');
+  const [esqueciSuccess, setEsqueciSuccess] = useState('');
   const [showPassBox, setShowPassBox] = useState(false);
   const [senhaAtual, setSenhaAtual] = useState('');
   const [novaSenha, setNovaSenha] = useState('');
