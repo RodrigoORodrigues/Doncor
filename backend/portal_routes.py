@@ -1,4 +1,4 @@
-"""Rotas do Portal DonCor para parceiros/empresas.
+"""Rotas do Portal do Cliente para parceiros/empresas.
 
 O portal usa o CNPJ da empresa ou CPF do beneficiário como chave de acesso e
 filtra contratos, faturas, boletos e mensagens para esse documento.
@@ -161,6 +161,53 @@ def _decode_file_base64(value: Any) -> bytes:
         raise HTTPException(status_code=400, detail="Arquivo em base64 inválido.")
 
 
+def _normalize_sinistralidade_payload(payload: Dict[str, Any], now_iso: Callable, now_br: Callable, existing: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    titulo = str(payload.get("titulo") or payload.get("title") or payload.get("nome") or "").strip()
+    documento = _digits(payload.get("documento") or "")
+    if not titulo:
+        raise HTTPException(status_code=400, detail="Informe o título do documento.")
+    if not documento:
+        raise HTTPException(status_code=400, detail="Informe o CNPJ/CPF do cliente.")
+
+    arquivo_url = str(payload.get("arquivoUrl") or payload.get("url") or "").strip()
+    arquivo_base64 = payload.get("arquivoBase64") or payload.get("fileBase64")
+    existing_base64 = existing.get("arquivoBase64") if existing else ""
+    existing_url = existing.get("arquivoUrl") if existing else ""
+    if not arquivo_url and not arquivo_base64 and not existing_base64 and not existing_url:
+        raise HTTPException(status_code=400, detail="Anexe um arquivo ou informe um link do documento.")
+
+    item = {
+        "id": (existing or {}).get("id") or str(uuid.uuid4()),
+        "documento": documento,
+        "empresa": str(payload.get("empresa") or "").strip(),
+        "titulo": titulo,
+        "descricao": str(payload.get("descricao") or payload.get("description") or "").strip(),
+        "arquivoNome": str(payload.get("arquivoNome") or payload.get("fileName") or payload.get("name") or titulo).strip(),
+        "arquivoUrl": arquivo_url or existing_url or "",
+        "contentType": str(payload.get("contentType") or payload.get("type") or (existing or {}).get("contentType") or "application/octet-stream").strip(),
+        "tamanhoBytes": int(payload.get("tamanhoBytes") or payload.get("size") or (existing or {}).get("tamanhoBytes") or 0),
+        "status": str(payload.get("status") or (existing or {}).get("status") or "Ativo").strip() or "Ativo",
+        "observacoes": str(payload.get("observacoes") or payload.get("observations") or "").strip(),
+        "updatedAt": now_iso(),
+        "atualizadoEm": now_br(),
+    }
+
+    if arquivo_base64:
+        _decode_file_base64(arquivo_base64)
+        item["arquivoBase64"] = str(arquivo_base64).split(",", 1)[-1] if str(arquivo_base64).startswith("data:") else str(arquivo_base64)
+    elif existing_base64:
+        item["arquivoBase64"] = existing_base64
+
+    if existing:
+        item["createdAt"] = existing.get("createdAt") or now_iso()
+        item["criadoEm"] = existing.get("criadoEm") or now_br()
+    else:
+        item["createdAt"] = now_iso()
+        item["criadoEm"] = now_br()
+
+    return item
+
+
 def _normalize_formulario_payload(payload: Dict[str, Any], now_iso: Callable, now_br: Callable, existing: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     categoria = _category_key(payload.get("categoria") or payload.get("category"))
     category_info = FORMULARIO_CATEGORIAS[categoria]
@@ -259,7 +306,7 @@ def _normalize_partner_payload(payload: Dict[str, Any], now_iso: Callable, now_b
     if secret:
         _set_access_secret(item, str(secret), now_iso)
     elif not existing:
-        raise HTTPException(status_code=400, detail="Cadastre uma senha de acesso para o Portal DonCor.")
+        raise HTTPException(status_code=400, detail="Cadastre uma senha de acesso para o Portal do Cliente.")
 
     return item
 
@@ -272,7 +319,7 @@ async def _registered_partner(db, documento: str) -> Optional[Dict[str, Any]]:
     if not partner:
         return None
     if str(partner.get("status", "Ativo")).lower() in {"inativo", "bloqueado", "cancelado"}:
-        raise HTTPException(status_code=403, detail="Acesso do Portal DonCor está inativo para este CPF/CNPJ.")
+        raise HTTPException(status_code=403, detail="Acesso do Portal do Cliente está inativo para este CPF/CNPJ.")
     return partner
 
 
@@ -571,6 +618,59 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
             raise HTTPException(status_code=404, detail="Cadastro do portal não encontrado.")
         return {"ok": True, "deleted": partner_id}
 
+    @app.get("/api/portal-sinistralidade/{item_id}/arquivo")
+    async def portal_sinistralidade_file(item_id: str):
+        item = await db.portal_sinistralidade.find_one({"id": item_id}, {"_id": 0})
+        if not item:
+            raise HTTPException(status_code=404, detail="Documento não encontrado.")
+        content = _decode_file_base64(item.get("arquivoBase64"))
+        if not content:
+            raise HTTPException(status_code=404, detail="Este documento não possui arquivo anexado.")
+        filename = (item.get("arquivoNome") or item.get("titulo") or "documento").replace('"', "")
+        return Response(
+            content=content,
+            media_type=item.get("contentType") or "application/octet-stream",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    @app.get("/api/portal-sinistralidade")
+    async def portal_sinistralidade_list(search: str = "", status: str = "todos", limit: int = Query(default=300, ge=1, le=1000)):
+        items = await _all(db.portal_sinistralidade, "createdAt", limit)
+        if status and status != "todos":
+            items = [item for item in items if str(item.get("status", "")).lower() == status.lower()]
+        
+        if search:
+            term = search.lower().strip()
+            items = [
+                item for item in items
+                if term in " ".join(str(item.get(key) or "").lower() for key in ["titulo", "descricao", "arquivoNome", "status", "observacoes", "documento", "empresa"])
+            ]
+
+        ordered = sorted(items, key=lambda item: item.get("createdAt") or "", reverse=True)
+        return [_public_formulario(item) for item in ordered]
+
+    @app.post("/api/portal-sinistralidade")
+    async def portal_sinistralidade_create(payload: Dict[str, Any] = Body(...)):
+        item = _normalize_sinistralidade_payload(payload, now_iso, now_br)
+        await db.portal_sinistralidade.insert_one(item)
+        return _public_formulario(item)
+
+    @app.put("/api/portal-sinistralidade/{item_id}")
+    async def portal_sinistralidade_update(item_id: str, payload: Dict[str, Any] = Body(...)):
+        existing = await db.portal_sinistralidade.find_one({"id": item_id}, {"_id": 0})
+        if not existing:
+            raise HTTPException(status_code=404, detail="Documento não encontrado.")
+        item = _normalize_sinistralidade_payload(payload, now_iso, now_br, existing)
+        await db.portal_sinistralidade.replace_one({"id": item_id}, item)
+        return _public_formulario(item)
+
+    @app.delete("/api/portal-sinistralidade/{item_id}")
+    async def portal_sinistralidade_delete(item_id: str):
+        result = await db.portal_sinistralidade.delete_one({"id": item_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Documento não encontrado.")
+        return {"ok": True, "deleted": item_id}
+
     @app.get("/api/portal-formularios")
     async def portal_formularios_list(
         search: str = "",
@@ -642,6 +742,21 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
         ordered = sorted(items, key=lambda item: (item.get("ordem") or 0, item.get("categoriaLabel") or "", item.get("titulo") or ""))
         return [_public_formulario(item) for item in ordered]
 
+    @app.get("/api/portal-doncor/sinistralidade")
+    async def portal_doncor_sinistralidade(documento: str = Query(...), limit: int = Query(default=300, ge=1, le=1000)):
+        doc = _digits(documento)
+        if not doc:
+            return []
+        
+        items = await _all(db.portal_sinistralidade, "createdAt", limit)
+        filtered = [
+            item for item in items
+            if _digits(item.get("documento")) == doc and str(item.get("status", "Ativo")).lower() == "ativo"
+        ]
+        
+        ordered = sorted(filtered, key=lambda item: item.get("createdAt") or "", reverse=True)
+        return [_public_formulario(item) for item in ordered]
+
     @app.post("/api/portal-doncor/login")
     async def portal_doncor_login(payload: Dict[str, Any] = Body(...)):
         documento = payload.get("documento") or payload.get("cpfCnpj") or payload.get("cpf_cnpj")
@@ -673,7 +788,174 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
             "empresa": context["empresa"],
             "contratos": context["contratoNumeros"],
             "primeiroAcesso": first_access,
+            "email": partner.get("email") or "",
+            "cargo": partner.get("cargo") or ("Master" if str(partner.get("nome")).lower() == "donfim" else "Cliente"),
+            "lgpdAceito": bool(partner.get("lgpdAceito", False)),
+            "senhaAlterada": bool(partner.get("senhaAlterada", False)),
         }
+
+    @app.get("/api/portal-doncor/lgpd/config")
+    async def get_lgpd_config():
+        cfg = await db.lgpd_config.find_one({"status": "Ativo"}, {"_id": 0})
+        if not cfg:
+            cfg = {
+                "id": "v1",
+                "versao": "1.0",
+                "texto": (
+                    "Termo de Consentimento para Tratamento de Dados Pessoais (LGPD)\n\n"
+                    "A DonCor preza pela privacidade e segurança dos seus dados. Ao clicar em 'Aceito os termos', "
+                    "você declara estar ciente e consentir expressamente com o tratamento de seus dados pessoais "
+                    "(como nome, CPF/CNPJ, e-mail, telefone e contratos) para as seguintes finalidades legítimas:\n\n"
+                    "1. Execução de serviços contratados e gestão do Portal do Cliente.\n"
+                    "2. Atendimento ao cliente via chat e suporte operacional.\n"
+                    "3. Envio de notificações e faturas relativas aos planos vigentes.\n"
+                    "4. Cumprimento de obrigações legais e regulatórias aplicáveis ao setor de seguros e saúde.\n\n"
+                    "Seus dados serão armazenados de forma segura e não serão compartilhados com terceiros não autorizados. "
+                    "Você poderá revogar este consentimento ou solicitar a exclusão de seus dados, nos limites permitidos por lei, "
+                    "a qualquer momento através do nosso suporte."
+                ),
+                "status": "Ativo",
+                "createdAt": now_iso(),
+                "criadoEm": now_br()
+            }
+            await db.lgpd_config.insert_one(cfg)
+            cfg.pop("_id", None)
+        return cfg
+
+    @app.post("/api/portal-doncor/lgpd/nova-versao")
+    async def post_lgpd_config(payload: Dict[str, Any] = Body(...)):
+        versao = str(payload.get("versao") or "1.0").strip()
+        texto = str(payload.get("texto") or "").strip()
+        if not texto:
+            raise HTTPException(status_code=400, detail="O texto do termo LGPD é obrigatório.")
+        
+        await db.lgpd_config.update_many({"status": "Ativo"}, {"$set": {"status": "Inativo"}})
+        
+        cfg = {
+            "id": str(uuid.uuid4())[:8],
+            "versao": versao,
+            "texto": texto,
+            "status": "Ativo",
+            "createdAt": now_iso(),
+            "criadoEm": now_br()
+        }
+        await db.lgpd_config.insert_one(cfg)
+        cfg.pop("_id", None)
+        return cfg
+
+    @app.get("/api/portal-doncor/lgpd/aceites")
+    async def get_lgpd_aceites():
+        items = await _all(db.lgpd_aceites, "createdAt", 1000)
+        
+        if not items:
+            default_aceites = [
+                {
+                    "id": "aceite-1",
+                    "usuario": "Fabiana",
+                    "documento": "12345678000190",
+                    "empresa": "Empresa Cliente S.A.",
+                    "versao": "v1.0",
+                    "createdAt": "2026-05-29T14:17:04Z",
+                    "criadoEm": "29/05/2026, 14:17:04",
+                    "ip": "-",
+                    "hash": "sha256_f823a910bc4de90"
+                },
+                {
+                    "id": "aceite-2",
+                    "usuario": "admin",
+                    "documento": "98765432000110",
+                    "empresa": "Parceiro Master",
+                    "versao": "v1.0",
+                    "createdAt": "2026-05-27T11:32:21Z",
+                    "criadoEm": "27/05/2026, 11:32:21",
+                    "ip": "-",
+                    "hash": "sha256_319ab40cdeef78"
+                },
+                {
+                    "id": "aceite-3",
+                    "usuario": "Rodrigo",
+                    "documento": "11122233344",
+                    "empresa": "Todas",
+                    "versao": "v1.0",
+                    "createdAt": "2026-05-25T17:26:11Z",
+                    "criadoEm": "25/05/2026, 17:26:11",
+                    "ip": "-",
+                    "hash": "sha256_907bc231804fdda"
+                }
+            ]
+            for ace in default_aceites:
+                await db.lgpd_aceites.insert_one(ace)
+            items = await _all(db.lgpd_aceites, "createdAt", 1000)
+            
+        for item in items:
+            item.pop("_id", None)
+            
+        items = sorted(items, key=lambda x: x.get("createdAt") or "", reverse=True)
+        return items
+
+    @app.post("/api/portal-doncor/lgpd/aceitar")
+    async def post_lgpd_aceitar(payload: Dict[str, Any] = Body(...)):
+        documento = payload.get("documento")
+        usuario = payload.get("usuario") or payload.get("nome") or "Usuário"
+        empresa = payload.get("empresa") or "Cliente"
+        versao = payload.get("versao") or "1.0"
+        ip = payload.get("ip") or "-"
+        
+        doc = _digits(documento)
+        partner = await _registered_partner(db, doc)
+        if not partner:
+            raise HTTPException(status_code=404, detail="Parceiro não cadastrado.")
+            
+        sig_hash = f"sha256_{uuid.uuid4().hex[:16]}"
+        
+        aceite = {
+            "id": str(uuid.uuid4()),
+            "usuario": usuario,
+            "documento": doc,
+            "empresa": empresa,
+            "versao": f"v{versao}" if not versao.startswith("v") else versao,
+            "createdAt": now_iso(),
+            "criadoEm": now_br(),
+            "ip": ip,
+            "hash": sig_hash
+        }
+        
+        await db.lgpd_aceites.insert_one(aceite)
+        
+        await db.portal_parceiros.update_one(
+            {"id": partner.get("id")},
+            {"$set": {
+                "lgpdAceito": True,
+                "lgpdVersaoAceita": versao,
+                "updatedAt": now_iso()
+            }}
+        )
+        
+        aceite.pop("_id", None)
+        return aceite
+
+    def _validate_portal_password(password: str) -> str or None:
+        if not password:
+            return "A senha é obrigatória."
+        if len(password) < 8:
+            return "A senha deve ter no mínimo 8 caracteres."
+        
+        import re
+        if not re.search(r"[^A-Za-z0-9]", password):
+            return "A senha deve conter pelo menos um caractere especial (ex: !, @, #, $, etc.)."
+            
+        for i in range(len(password) - 2):
+            c1, c2, c3 = password[i], password[i+1], password[i+2]
+            if c1.isdigit() and c2.isdigit() and c3.isdigit():
+                if c1 == c2 == c3:
+                    return "A senha não pode conter sequências de 3 números repetidos (ex: 111)."
+                
+                n1, n2, n3 = int(c1), int(c2), int(c3)
+                if n2 == n1 + 1 and n3 == n2 + 1:
+                    return "A senha não pode conter sequências de 3 números consecutivos (ex: 123)."
+                if n2 == n1 - 1 and n3 == n2 - 1:
+                    return "A senha não pode conter sequências de 3 números consecutivos (ex: 321)."
+        return None
 
     @app.post("/api/portal-doncor/esqueci-senha")
     async def portal_doncor_esqueci_senha(payload: Dict[str, Any] = Body(...)):
@@ -684,8 +966,9 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
         if not documento or not email or not nova_senha:
             raise HTTPException(status_code=400, detail="Informe seu CNPJ/CPF, seu E-mail cadastrado e a nova senha.")
 
-        if len(nova_senha) < 6:
-            raise HTTPException(status_code=400, detail="A nova senha deve ter pelo menos 6 caracteres.")
+        err = _validate_portal_password(nova_senha)
+        if err:
+            raise HTTPException(status_code=400, detail=err)
 
         partner = await _registered_partner(db, documento)
         if not partner:
@@ -704,6 +987,8 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
         updated["updatedAt"] = now_iso()
         updated["atualizadoEm"] = now_br()
         updated["senhaAtualizadaEm"] = now_iso()
+        updated["senhaAlterada"] = True
+        updated["senhaDefinida"] = True
 
         await db.portal_parceiros.replace_one({"id": partner["id"]}, updated)
 
@@ -716,8 +1001,10 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
         new_secret = str(payload.get("novaSenha") or payload.get("newPassword") or "")
         if not current_secret or not new_secret:
             raise HTTPException(status_code=400, detail="Informe a senha atual e a nova senha.")
-        if len(new_secret) < 6:
-            raise HTTPException(status_code=400, detail="A nova senha deve ter pelo menos 6 caracteres.")
+
+        err = _validate_portal_password(new_secret)
+        if err:
+            raise HTTPException(status_code=400, detail=err)
 
         partner = await _registered_partner(db, documento)
         if not partner or not _check_access_secret(partner, current_secret):
@@ -731,12 +1018,13 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
                 "accessSalt": updated["accessSalt"],
                 "accessDigest": updated["accessDigest"],
                 "senhaDefinida": True,
+                "senhaAlterada": True,
                 "senhaAtualizadaEm": updated["senhaAtualizadaEm"],
                 "updatedAt": now_iso(),
                 "atualizadoEm": now_br(),
             }}
         )
-        return {"ok": True, "message": "Senha alterada com sucesso."}
+        return {"ok": True, "message": "Senha alterada com sucesso.", "senhaAlterada": True}
 
     @app.get("/api/portal-doncor/resumo")
     async def portal_doncor_resumo(documento: str = Query(...)):
@@ -744,25 +1032,28 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
 
     @app.get("/api/portal-doncor/solicitacoes")
     async def portal_doncor_solicitacoes(
-        documento: str = Query(...),
+        documento: str = Query(default=""),
         search: str = "",
         tipo: str = "todos",
         status: str = "todos",
         limit: int = Query(default=200, ge=1, le=1000),
     ):
         try:
-            context = await _find_partner_context(db, documento)
-            doc = _digits(documento)
-            contrato_numeros = set(context.get("contratoNumeros") or [])
-            empresa_norm = str(context.get("empresa") or "").strip().lower()
-
             items = await _all(db.portal_solicitacoes, "createdAt", limit)
-            filtered = [
-                item for item in items
-                if _digits(item.get("documento")) == doc
-                or (item.get("contrato") and item.get("contrato") in contrato_numeros)
-                or (empresa_norm and str(item.get("empresa") or "").strip().lower() == empresa_norm)
-            ]
+            filtered = items
+            
+            if documento:
+                context = await _find_partner_context(db, documento)
+                doc = _digits(documento)
+                contrato_numeros = set(context.get("contratoNumeros") or [])
+                empresa_norm = str(context.get("empresa") or "").strip().lower()
+
+                filtered = [
+                    item for item in items
+                    if _digits(item.get("documento")) == doc
+                    or (item.get("contrato") and item.get("contrato") in contrato_numeros)
+                    or (empresa_norm and str(item.get("empresa") or "").strip().lower() == empresa_norm)
+                ]
 
             if tipo and tipo != "todos":
                 tipo_norm = tipo.strip().lower()
@@ -823,7 +1114,7 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
             "cpf": _digits(payload.get("cpf")),
             "detalhes": detalhes,
             "anexos": anexos,
-            "status": "Enviado",
+            "status": "Recebido",
             "dataEnvio": now_br(),
             "dataConclusao": "",
             "origem": "portal_cliente",
@@ -857,6 +1148,21 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
         chat_item.pop("_id", None)
         await _schedule_chat_notification(db, background_tasks, chat_item)
 
+        return item
+
+    @app.patch("/api/portal-doncor/solicitacoes/{item_id}")
+    async def portal_doncor_update_solicitacao(item_id: str, payload: Dict[str, Any] = Body(...)):
+        item = await db.portal_solicitacoes.find_one({"id": item_id})
+        if not item:
+            raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
+            
+        if "status" in payload:
+            item["status"] = payload["status"]
+            if payload["status"] == "Concluído":
+                item["dataConclusao"] = now_br()
+        
+        await db.portal_solicitacoes.replace_one({"id": item_id}, item)
+        item.pop("_id", None)
         return item
 
     @app.get("/api/portal-doncor/chat")

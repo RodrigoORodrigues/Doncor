@@ -41,7 +41,7 @@ const PortalParceiros = () => {
       setData(await fetchPortalParceiros(search, statusFilter));
     } catch (err) {
       console.error(err);
-      setError('Não foi possível carregar os cadastros do Portal DonCor.');
+      setError('Não foi possível carregar os cadastros do Portal do Cliente.');
     }
     setLoading(false);
   }, [search, statusFilter]);
@@ -100,7 +100,7 @@ const PortalParceiros = () => {
   };
 
   const handleDelete = async (item) => {
-    if (!window.confirm(`Excluir o acesso do Portal DonCor para ${item.nome || item.empresa || item.documento}?`)) return;
+    if (!window.confirm(`Excluir o acesso do Portal do Cliente para ${item.nome || item.empresa || item.documento}?`)) return;
     try {
       await deletePortalParceiro(item.id);
       await loadData();
@@ -117,7 +117,7 @@ const PortalParceiros = () => {
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' }}>
         <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
           <div style={{ width:'36px', height:'36px', borderRadius:'8px', background:'#2C7BE515', display:'flex', alignItems:'center', justifyContent:'center' }}><UserCheck size={18} color="#2C7BE5" /></div>
-          <div><h2 style={{ fontSize:'1.1rem', fontWeight:600, color:'#344050', margin:0 }}>Cadastros do Portal DonCor</h2><p style={{ fontSize:'0.72rem', color:'#8a8d93', margin:0 }}>Cadastre CPF ou CNPJ autorizado a acessar o Portal DonCor.</p></div>
+          <div><h2 style={{ fontSize:'1.1rem', fontWeight:600, color:'#344050', margin:0 }}>Acessos e Clientes (Portal do Cliente)</h2><p style={{ fontSize:'0.72rem', color:'#8a8d93', margin:0 }}>Gerencie as contas dos clientes para o Portal do Cliente.</p></div>
         </div>
         <Button onClick={openCreate} style={{ background:'#2C7BE5', color:'#fff', fontSize:'0.78rem', display:'flex', alignItems:'center', gap:'6px' }}><Plus size={14}/>Novo Acesso</Button>
       </div>
@@ -148,11 +148,11 @@ const PortalParceiros = () => {
             </tr>))}</tbody>
           </table>
         )}
-        {!loading && data.length===0 && <div style={{padding:'40px',textAlign:'center',color:'#8a8d93'}}>Nenhum CPF/CNPJ cadastrado para o Portal DonCor.</div>}
+        {!loading && data.length===0 && <div style={{padding:'40px',textAlign:'center',color:'#8a8d93'}}>Nenhum CPF/CNPJ cadastrado para o Portal do Cliente.</div>}
       </div>
       <div style={{display:'flex',justifyContent:'space-between',marginTop:'12px',fontSize:'0.72rem',color:'#8a8d93'}}><span>Exibindo {data.length} registros</span><span>Portal externo: /portal-doncor</span></div>
 
-      <Dialog open={showForm} onOpenChange={setShowForm}><DialogContent style={{maxWidth:'760px'}}><DialogHeader><DialogTitle>{editing ? 'Editar Acesso do Portal' : 'Novo Acesso do Portal DonCor'}</DialogTitle></DialogHeader>
+      <Dialog open={showForm} onOpenChange={setShowForm}><DialogContent style={{maxWidth:'760px'}}><DialogHeader><DialogTitle>{editing ? 'Editar Acesso do Portal' : 'Novo Acesso do Portal do Cliente'}</DialogTitle></DialogHeader>
         <div style={{display:'flex',flexDirection:'column',gap:'12px',padding:'8px 0'}}>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
             <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Nome / Responsável</label><Input placeholder="Nome do responsável ou beneficiário" value={formData.nome} onChange={e=>updateField('nome', e.target.value)}/></div>

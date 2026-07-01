@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, BarChart3, Bell, Building2, Download, Eye, FileText, FolderOpen, HelpCircle, Home, LogOut, MessageCircle, Paperclip, Receipt, RefreshCw, Search, Send, Shield, UploadCloud, UserMinus, UserPlus, User } from 'lucide-react';
+import { Activity, BarChart3, Bell, Building2, Download, Eye, FileText, FolderOpen, HelpCircle, Home, LogOut, MessageCircle, Paperclip, Receipt, RefreshCw, Search, Send, Shield, UploadCloud, UserMinus, UserPlus, User, Settings, ChevronDown } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import DoncorLogo from '../components/DoncorLogo';
 import {
   loginPortalDonCor,
   fetchPortalDonCorResumo,
@@ -11,7 +13,13 @@ import {
   fetchPortalDonCorChat,
   getPortalFormularioDownloadUrl,
   sendPortalDonCorChat,
-  alterarSenhaPortalDonCor
+  alterarSenhaPortalDonCor,
+  fetchPortalDonCorSinistralidade,
+  getPortalSinistralidadeDownloadUrl,
+  fetchLgpdConfig,
+  saveLgpdConfig,
+  fetchLgpdAceites,
+  aceitarLgpd
 } from '../services/api';
 
 const STORAGE_KEY = 'doncor_portal_cliente_session';
@@ -87,7 +95,7 @@ const defaultMovementForms = {
     outrosDescricao: '',
   },
   alteracao: {
-    planos: ['Saúde'],
+    planos: [],
     beneficiario: '',
     cpf: '',
     detalhes: '',
@@ -125,10 +133,10 @@ const StatusPill = ({ status }) => {
   const ok = normalized.includes('pago') || normalized.includes('ativo') || normalized.includes('baixado') || normalized.includes('concl');
   const danger = normalized.includes('pend');
   const warn = normalized.includes('andamento');
-  const neutral = normalized.includes('enviado') || normalized.includes('abert');
+  const neutral = normalized.includes('recebido') || normalized.includes('abert');
   const color = ok ? theme.ok : danger ? '#DC2626' : warn ? theme.warning : neutral ? theme.muted : theme.muted;
   const bg = ok ? '#ECFDF5' : danger ? '#FEF2F2' : warn ? '#FFFBEB' : '#F1F5F9';
-  return <span style={{ color, background: bg, borderRadius: 999, padding: '4px 10px', fontSize: '0.72rem', fontWeight: 800 }}>{status || 'Em análise'}</span>;
+  return <span style={{ color, background: bg, borderRadius: 999, padding: '4px 10px', fontSize: '0.72rem', fontWeight: 800 }}>{status || 'Recebido'}</span>;
 };
 
 const StatCard = ({ title, value, subtitle, icon: Icon, tone = theme.blue, onClick }) => (
@@ -163,17 +171,66 @@ const PortalDonCor = () => {
   const [activeSection, setActiveSection] = useState('dashboard');
   const [activeMovementTab, setActiveMovementTab] = useState('inclusao');
   const [confirmMovement, setConfirmMovement] = useState(null);
+  const [confirmTerm, setConfirmTerm] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
   const [esqueciEmail, setEsqueciEmail] = useState('');
   const [esqueciSenha, setEsqueciSenha] = useState('');
   const [esqueciError, setEsqueciError] = useState('');
-  const [esqueciSuccess, setEsqueciSuccess] = useState('');
-
   const [showPassBox, setShowPassBox] = useState(false);
   const [senhaAtual, setSenhaAtual] = useState('');
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmaSenha, setConfirmaSenha] = useState('');
   const [passMsg, setPassMsg] = useState('');
+
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [perfilForm, setPerfilForm] = useState({ nome: '', email: '', telefone: '', cargo: '' });
+
+  // LGPD Consent and Password Redefinition State Variables
+  const [lgpdText, setLgpdText] = useState('');
+  const [lgpdVersion, setLgpdVersion] = useState('1.0');
+  const [lgpdAcceptedCheckbox, setLgpdAcceptedCheckbox] = useState(false);
+  const [lgpdError, setLgpdError] = useState('');
+  const [lgpdSubmitting, setLgpdSubmitting] = useState(false);
+
+  const [tempSenha, setTempSenha] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [confirmNewPass, setConfirmNewPass] = useState('');
+  const [passError, setPassError] = useState('');
+  const [passSuccess, setPassSuccess] = useState('');
+  const [passSubmitting, setPassSubmitting] = useState(false);
+
+  const [lgpdAceitesList, setLgpdAceitesList] = useState([]);
+  const [lgpdSearchText, setLgpdSearchText] = useState('');
+  const [selectedAceite, setSelectedAceite] = useState(null);
+  const [showNovaVersaoModal, setShowNovaVersaoModal] = useState(false);
+  const [novaVersaoText, setNovaVersaoText] = useState('');
+  const [novaVersaoLabel, setNovaVersaoLabel] = useState('1.1');
+
+  useEffect(() => {
+    if (session) {
+      setPerfilForm({
+        nome: session.empresa || session.nome || 'Usuário',
+        email: session.email || 'Não informado',
+        telefone: session.telefone || 'Não informado',
+        cargo: session.cargo || 'Cliente'
+      });
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (session && !session.lgpdAceito) {
+      fetchLgpdConfig()
+        .then((cfg) => {
+          setLgpdText(cfg.texto);
+          setLgpdVersion(cfg.versao);
+        })
+        .catch((err) => {
+          setLgpdError('Não foi possível carregar os termos da LGPD.');
+        });
+    }
+  }, [session]);
+
+  const [configForm, setConfigForm] = useState({ notifications: true, autoUpdate: true });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [payload, setPayload] = useState(null);
@@ -182,6 +239,7 @@ const PortalDonCor = () => {
   const [attachment, setAttachment] = useState(null);
   const [formularios, setFormularios] = useState([]);
   const [solicitacoes, setSolicitacoes] = useState([]);
+  const [sinistralidade, setSinistralidade] = useState([]);
   const [solicitacoesSearch, setSolicitacoesSearch] = useState('');
   const [solicitacoesTipo, setSolicitacoesTipo] = useState('todos');
   const [solicitacoesStatus, setSolicitacoesStatus] = useState('todos');
@@ -192,28 +250,94 @@ const PortalDonCor = () => {
 
   const empresa = session?.empresa || session?.nome || 'Cliente';
 
+  // Security evaluation conditions
+  const needsLgpdAcceptance = session && !session.lgpdAceito;
+  const needsPasswordChange = session && session.lgpdAceito && !session.senhaAlterada;
+
+  const isDonfim = useMemo(() => {
+    return session?.nome?.toLowerCase() === 'donfim' || session?.email?.toLowerCase().includes('donfim') || perfilForm?.nome?.toLowerCase() === 'donfim' || perfilForm?.cargo?.toLowerCase() === 'master';
+  }, [session, perfilForm]);
+
+  const filteredMenuItems = useMemo(() => {
+    const base = [
+      { id: 'dashboard', label: 'Dashboard', icon: Home },
+      { id: 'contratos', label: 'Contratos', icon: FolderOpen },
+      { id: 'faturas', label: 'Faturas', icon: Receipt },
+      { id: 'bi', label: 'Sinistralidade e BI', icon: BarChart3 },
+      { id: 'movimentacao', label: 'Movimentação', icon: RefreshCw },
+      { id: 'solicitacoes', label: 'Solicitações', icon: FileText },
+      { id: 'formularios', label: 'Formulários e Manuais', icon: FileText },
+      { id: 'chat', label: 'Chat', icon: MessageCircle },
+    ];
+    if (isDonfim) {
+      base.push({ id: 'lgpd', label: 'Governança LGPD', icon: '🛡️' });
+    }
+    return base;
+  }, [isDonfim]);
+
+  const isLengthValid = newPass.length >= 8;
+  const containsSpecialChar = /[^A-Za-z0-9]/.test(newPass);
+  const hasNoSequence = (val) => {
+    if (!val) return true;
+    for (let i = 0; i <= val.length - 3; i++) {
+      const c1 = val[i];
+      const c2 = val[i+1];
+      const c3 = val[i+2];
+      if (/\d/.test(c1) && /\d/.test(c2) && /\d/.test(c3)) {
+        if (c1 === c2 && c2 === c3) return false;
+        const n1 = parseInt(c1, 10);
+        const n2 = parseInt(c2, 10);
+        const n3 = parseInt(c3, 10);
+        if (n2 === n1 + 1 && n3 === n2 + 1) return false;
+        if (n2 === n1 - 1 && n3 === n2 - 1) return false;
+      }
+    }
+    return true;
+  };
+  const isSequenceValid = hasNoSequence(newPass);
+  const isMatchValid = newPass === confirmNewPass && newPass.length > 0;
+  const isFormValid = isLengthValid && containsSpecialChar && isSequenceValid && isMatchValid;
+
   const loadPortal = useCallback(async (currentSession = session) => {
     if (!currentSession?.documento) return;
+    if (!currentSession.lgpdAceito || !currentSession.senhaAlterada) return;
     setLoading(true);
     try {
-      const [resumo, chat, solicitacoesData, formulariosData] = await Promise.all([
+      const [resumo, chat, solicitacoesData, formulariosData, sinistroData] = await Promise.all([
         fetchPortalDonCorResumo(currentSession.documento),
         fetchPortalDonCorChat({ documento: currentSession.documento, empresa: currentSession.empresa }),
         fetchPortalDonCorSolicitacoes({ documento: currentSession.documento }),
         fetchPortalDonCorFormularios(),
+        fetchPortalDonCorSinistralidade(currentSession.documento)
       ]);
       setPayload(resumo);
       setMessages(chat || []);
       setSolicitacoes(solicitacoesData || []);
       setFormularios(formulariosData || []);
+      setSinistralidade(sinistroData || []);
     } catch (err) {
       setError(err?.response?.data?.detail || 'Não foi possível carregar o Portal do Cliente.');
     }
     setLoading(false);
   }, [session]);
 
+  const loadLgpdGovernance = useCallback(async () => {
+    try {
+      const data = await fetchLgpdAceites();
+      setLgpdAceitesList(data);
+    } catch (err) {
+      console.error('Erro ao carregar aceites LGPD:', err);
+    }
+  }, []);
+
   useEffect(() => {
-    if (!session) return undefined;
+    if (activeSection === 'lgpd' && isDonfim) {
+      loadLgpdGovernance();
+    }
+  }, [activeSection, isDonfim, loadLgpdGovernance]);
+
+  useEffect(() => {
+    if (!session || !session.lgpdAceito || !session.senhaAlterada) return undefined;
     loadPortal(session);
     const timer = setInterval(() => loadPortal(session), PORTAL_REFRESH_MS);
     return () => clearInterval(timer);
@@ -225,18 +349,106 @@ const PortalDonCor = () => {
     setLoading(true);
     try {
       const data = await loginPortalDonCor({ documento, senha });
+      setTempSenha(senha); // Keep current login password as temporary
       setSession(data);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       setSenha('');
-      if (data.primeiroAcesso) {
-        setShowPassBox(true);
-        setPassMsg('Primeiro acesso confirmado. Você pode trocar sua senha agora.');
+      if (data.lgpdAceito && data.senhaAlterada) {
+        await loadPortal(data);
       }
-      await loadPortal(data);
     } catch (err) {
       setError(err?.response?.data?.detail || 'CPF/CNPJ ou senha inválidos.');
     }
     setLoading(false);
+  };
+
+  const handleAcceptLgpd = async () => {
+    if (!lgpdAcceptedCheckbox) return;
+    setLgpdSubmitting(true);
+    setLgpdError('');
+    try {
+      await aceitarLgpd({
+        documento: session.documento,
+        usuario: session.nome,
+        empresa: session.empresa,
+        versao: lgpdVersion,
+        ip: '127.0.0.1'
+      });
+      const updatedSession = { ...session, lgpdAceito: true };
+      setSession(updatedSession);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedSession));
+    } catch (err) {
+      setLgpdError(err?.response?.data?.detail || 'Erro ao registrar aceite de LGPD.');
+    }
+    setLgpdSubmitting(false);
+  };
+
+  const handleSaveFirstPassword = async (e) => {
+    e.preventDefault();
+    if (!isFormValid) return;
+    setPassSubmitting(true);
+    setPassError('');
+    try {
+      await alterarSenhaPortalDonCor({
+        documento: session.documento,
+        senhaAtual: tempSenha || senha,
+        novaSenha: newPass
+      });
+      const updatedSession = { ...session, senhaAlterada: true, primeiroAcesso: false };
+      setSession(updatedSession);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedSession));
+      setPassSuccess('Sua senha foi redefinida com sucesso!');
+      await loadPortal(updatedSession);
+    } catch (err) {
+      setPassError(err?.response?.data?.detail || 'Erro ao redefinir a senha.');
+    }
+    setPassSubmitting(false);
+  };
+
+  const handleExportLgpd = () => {
+    if (lgpdAceitesList.length === 0) return;
+    const headers = ['Usuario', 'Documento', 'Empresa', 'Versao', 'Data/Hora', 'IP', 'Hash de Assinatura'];
+    const rows = lgpdAceitesList.map(item => [
+      item.usuario || '',
+      item.documento || '',
+      item.empresa || '',
+      item.versao || '',
+      item.criadoEm || item.createdAt || '',
+      item.ip || '',
+      item.hash || ''
+    ]);
+    
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" 
+      + [headers.join(','), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `auditoria_lgpd_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleSaveNovaVersao = async (e) => {
+    e.preventDefault();
+    if (!novaVersaoText || !novaVersaoLabel) return;
+    try {
+      await saveLgpdConfig({
+        versao: novaVersaoLabel,
+        texto: novaVersaoText
+      });
+      setShowNovaVersaoModal(false);
+      setNovaVersaoText('');
+      setNovaVersaoLabel((parseFloat(novaVersaoLabel) + 0.1).toFixed(1));
+      
+      const cfg = await fetchLgpdConfig();
+      setLgpdText(cfg.texto);
+      setLgpdVersion(cfg.versao);
+      alert('Nova versão de termos LGPD publicada com sucesso! Todos os usuários que fizerem login deverão aceitar esta nova versão.');
+    } catch (err) {
+      alert('Erro ao salvar nova versão dos termos.');
+    }
   };
 
   const handleForgotPassword = async (event) => {
@@ -267,6 +479,10 @@ const PortalDonCor = () => {
     localStorage.removeItem(STORAGE_KEY);
     setSession(null);
     setPayload(null);
+    setTempSenha('');
+    setNewPass('');
+    setConfirmNewPass('');
+    setLgpdAcceptedCheckbox(false);
     setMessages([]);
     setFormularios([]);
     setDocumento('');
@@ -425,8 +641,7 @@ const PortalDonCor = () => {
   const mensagensAtendimento = useMemo(() => messages.length, [messages]);
   const solicitacoesPorStatus = useMemo(() => {
     const base = [
-      { key: 'enviado', label: 'Enviado', value: 0, color: theme.muted },
-      { key: 'pendente', label: 'Pendente', value: 0, color: '#DC2626' },
+      { key: 'recebido', label: 'Recebido', value: 0, color: theme.muted },
       { key: 'em andamento', label: 'Em andamento', value: 0, color: theme.warning },
       { key: 'concluido', label: 'Concluído', value: 0, color: theme.ok },
     ];
@@ -499,12 +714,51 @@ const PortalDonCor = () => {
     </div>
   );
 
+  const chartData = useMemo(() => {
+    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const data = months.map(m => ({ name: m, solicitacoes: 0, boletos: 0 }));
+    
+    solicitacoes.forEach(s => {
+      if (s.dataSolicitacao) {
+        const parts = s.dataSolicitacao.split('/');
+        if (parts.length >= 2) {
+          const mIndex = parseInt(parts[1], 10) - 1;
+          if (mIndex >= 0 && mIndex < 12) {
+            data[mIndex].solicitacoes++;
+          }
+        }
+      }
+    });
+    
+    boletos.forEach(b => {
+      if (b.dataVencimento || b.competencia) {
+        const dateStr = b.dataVencimento || b.competencia;
+        const parts = dateStr.split('/');
+        if (parts.length >= 2) {
+          const mIndex = parseInt(parts[1], 10) - 1;
+          if (mIndex >= 0 && mIndex < 12) {
+            data[mIndex].boletos++;
+          }
+        }
+      }
+    });
+    
+    const currentMonth = new Date().getMonth();
+    const last6Months = [];
+    for (let i = 5; i >= 0; i--) {
+      let m = currentMonth - i;
+      if (m < 0) m += 12;
+      last6Months.push(data[m]);
+    }
+    return last6Months;
+  }, [solicitacoes, boletos]);
+
   if (!session) {
     return (
       <div style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) minmax(320px, 460px)', background: theme.bg }}>
         <div style={{ background: `linear-gradient(135deg, ${theme.navy} 0%, ${theme.primary} 100%)`, color: '#fff', padding: 48, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 56 }}><div style={{ width: 48, height: 48, borderRadius: 16, background: '#ffffff1f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Shield size={26} /></div><div><div style={{ fontSize: '1.1rem', fontWeight: 900 }}>Portal do Cliente</div><div style={{ opacity: 0.78, fontSize: '0.82rem' }}>Gestão de apólices e benefícios</div></div></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 56 }}><DoncorLogo size={36} /><div style={{ height: 24, width: 1, background: '#ffffff30', margin: '0 4px' }} /><div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#fff' }}>Portal do Cliente</div></div>
             <h1 style={{ fontSize: '2.4rem', lineHeight: 1.08, margin: '0 0 18px', maxWidth: 620 }}>Acompanhe contratos, faturas, movimentações e atendimento em um só lugar.</h1>
             <p style={{ maxWidth: 540, opacity: 0.82, fontSize: '1rem', lineHeight: 1.6 }}>Área exclusiva para empresas e parceiros cadastrados consultarem boletos, histórico financeiro, relatórios e abrirem solicitações com a equipe.</p>
           </div>
@@ -513,7 +767,7 @@ const PortalDonCor = () => {
         <div style={{ padding: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {showForgot ? (
             <form onSubmit={handleForgotPassword} style={{ width: '100%', background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 22, padding: 30, boxShadow: '0 24px 70px rgba(15,23,42,0.12)' }}>
-              <div style={{ marginBottom: 24 }}><div style={{ width: 58, height: 58, borderRadius: 18, background: theme.blue, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 20, marginBottom: 14 }}>PC</div><h2 style={{ margin: 0, fontSize: '1.55rem', color: theme.text }}>Redefinir Senha</h2><p style={{ margin: '8px 0 0', color: theme.muted, fontSize: '0.9rem' }}>Informe seus dados para recuperar o acesso.</p></div>
+              <div style={{ marginBottom: 24 }}><div style={{ marginBottom: 14 }}><DoncorLogo size={40} /></div><h2 style={{ margin: 0, fontSize: '1.55rem', color: theme.text }}>Redefinir Senha</h2><p style={{ margin: '8px 0 0', color: theme.muted, fontSize: '0.9rem' }}>Informe seus dados para recuperar o acesso.</p></div>
               {esqueciError && <div style={{ background:'#fff1f2', border:'1px solid #fecdd3', color:'#be123c', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{esqueciError}</div>}
               {esqueciSuccess && <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', color:'#15803d', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{esqueciSuccess}</div>}
               <label style={{ display:'block', color:theme.text, fontWeight:800, fontSize:'0.84rem', marginBottom:6 }}>CNPJ ou CPF vinculado</label><Input value={documento} onChange={(event) => setDocumento(event.target.value)} placeholder="Digite o CNPJ da empresa ou CPF" style={{ marginBottom:12 }} />
@@ -524,7 +778,7 @@ const PortalDonCor = () => {
             </form>
           ) : (
             <form onSubmit={handleLogin} style={{ width: '100%', background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 22, padding: 30, boxShadow: '0 24px 70px rgba(15,23,42,0.12)' }}>
-              <div style={{ marginBottom: 24 }}><div style={{ width: 58, height: 58, borderRadius: 18, background: theme.blue, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 20, marginBottom: 14 }}>PC</div><h2 style={{ margin: 0, fontSize: '1.55rem', color: theme.text }}>Entrar no Portal do Cliente</h2><p style={{ margin: '8px 0 0', color: theme.muted, fontSize: '0.9rem' }}>Use o CNPJ/CPF vinculado e sua senha de acesso.</p></div>
+              <div style={{ marginBottom: 24 }}><div style={{ marginBottom: 14 }}><DoncorLogo size={40} /></div><h2 style={{ margin: 0, fontSize: '1.55rem', color: theme.text }}>Entrar no Portal do Cliente</h2><p style={{ margin: '8px 0 0', color: theme.muted, fontSize: '0.9rem' }}>Use o CNPJ/CPF vinculado e sua senha de acesso.</p></div>
               {error && <div style={{ background:'#fff1f2', border:'1px solid #fecdd3', color:'#be123c', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{error}</div>}
               <label style={{ display:'block', color:theme.text, fontWeight:800, fontSize:'0.84rem', marginBottom:6 }}>CNPJ ou CPF vinculado</label><Input value={documento} onChange={(event) => setDocumento(event.target.value)} placeholder="Digite o CNPJ da empresa ou CPF" style={{ marginBottom:12 }} />
               <label style={{ display:'block', color:theme.text, fontWeight:800, fontSize:'0.84rem', marginBottom:6 }}>Senha</label><Input type="password" value={senha} onChange={(event) => setSenha(event.target.value)} placeholder="Digite sua senha" style={{ marginBottom:10 }} />
@@ -537,6 +791,14 @@ const PortalDonCor = () => {
     );
   }
 
+  if (needsLgpdAcceptance) {
+    return renderLgpdAcceptanceScreen();
+  }
+
+  if (needsPasswordChange) {
+    return renderPasswordChangeScreen();
+  }
+
   const renderDashboard = () => (
     <>
       <SectionTitle title={`Bem-vindo ao seu Portal, ${empresa}`} subtitle="Resumo das operações ativas por seção." action={<Button onClick={() => { setActiveSection('movimentacao'); setActiveMovementTab('inclusao'); }} style={{ background: theme.blue, color: '#fff', display: 'flex', gap: 8 }}><FileText size={15}/>Novo chamado</Button>} />
@@ -546,6 +808,27 @@ const PortalDonCor = () => {
         <StatCard title="Solicitações abertas" value={solicitacoesAbertas} subtitle="Aguardando conclusão" icon={FileText} tone={theme.warning} onClick={() => setActiveSection('solicitacoes')}/>
         <StatCard title="Mensagens no chat" value={mensagensAtendimento} subtitle="Atendimento registrado" icon={MessageCircle} tone={theme.primary} onClick={() => setActiveSection('chat')}/>
       </div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:16, marginBottom:16 }}>
+        <section style={{ ...card, padding:18 }}>
+          <SectionTitle title="Evolução do Sistema - Portal do Cliente" subtitle="Gráficos referentes aos dados do sistema" />
+          <div style={{ width: '100%', height: 300, marginTop: 20 }}>
+            {chartData.every(d => d.solicitacoes === 0 && d.boletos === 0) ? (
+              <EmptyState>Os gráficos serão exibidos após a primeira movimentação ou boleto.</EmptyState>
+            ) : (
+              <ResponsiveContainer>
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: theme.muted, fontSize: 12}} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fill: theme.muted, fontSize: 12}} />
+                  <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                  <Bar dataKey="solicitacoes" name="Solicitações" fill={theme.primary} radius={[4, 4, 0, 0]} barSize={30} />
+                  <Bar dataKey="boletos" name="Boletos Acessados" fill={theme.blue} radius={[4, 4, 0, 0]} barSize={30} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </section>
+      </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:16 }}>
         <section style={{ ...card, padding:18 }}>
           <SectionTitle title="Status das Solicitações" subtitle="Distribuição das demandas enviadas." />
@@ -554,42 +837,6 @@ const PortalDonCor = () => {
         <section style={{ ...card, padding:18 }}>
           <SectionTitle title="Movimentações por tipo" subtitle="Inclusões, exclusões e alterações solicitadas." />
           {solicitacoes.length === 0 ? <EmptyState>Os gráficos serão exibidos após a primeira movimentação.</EmptyState> : renderDashboardBars(solicitacoesPorTipo, maxSolicitacoesTipo)}
-        </section>
-      </div>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
-        <section style={{ ...card, padding:18 }}>
-          <SectionTitle title="Demandas pendentes" subtitle="Acompanhamento das demandas em andamento." />
-          {demandasPendentes.length === 0 ? <EmptyState>Nenhuma demanda pendente.</EmptyState> : (
-            <div style={{ display:'grid', gap:10 }}>
-              {demandasPendentes.map((item) => (
-                <div key={item.id || item.protocolo} style={{ border:`1px solid ${theme.border}`, borderRadius:12, padding:12, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
-                  <div>
-                    <div style={{ color:theme.text, fontWeight:900, fontSize:'0.84rem' }}>#{item.protocolo} - {item.tipoLabel || item.tipo}</div>
-                    <div style={{ color:theme.muted, fontSize:'0.76rem', marginTop:3 }}>{item.beneficiario || item.contrato || 'Solicitação do cliente'}</div>
-                  </div>
-                  <StatusPill status={item.status}/>
-                </div>
-              ))}
-            </div>
-          )}
-          <Button onClick={() => setActiveSection('solicitacoes')} style={{ width:'100%', marginTop:14, background:theme.blue, color:'#fff', display:'flex', gap:8 }}><FileText size={15}/>Ver todas</Button>
-        </section>
-        <section style={{ ...card, padding:18 }}>
-          <SectionTitle title="Demandas Concluídas" subtitle="Histórico de demandas finalizadas." />
-          {demandasConcluidas.length === 0 ? <EmptyState>Nenhuma demanda concluída.</EmptyState> : (
-            <div style={{ display:'grid', gap:10 }}>
-              {demandasConcluidas.map((item) => (
-                <div key={item.id || item.protocolo} style={{ border:`1px solid ${theme.border}`, borderRadius:12, padding:12, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
-                  <div>
-                    <div style={{ color:theme.text, fontWeight:900, fontSize:'0.84rem' }}>#{item.protocolo} - {item.tipoLabel || item.tipo}</div>
-                    <div style={{ color:theme.muted, fontSize:'0.76rem', marginTop:3 }}>{item.beneficiario || item.contrato || 'Solicitação do cliente'}</div>
-                  </div>
-                  <StatusPill status={item.status}/>
-                </div>
-              ))}
-            </div>
-          )}
-          <Button onClick={() => setActiveSection('solicitacoes')} style={{ width:'100%', marginTop:14, background:theme.blue, color:'#fff', display:'flex', gap:8 }}><FileText size={15}/>Ver histórico</Button>
         </section>
       </div>
     </>
@@ -734,27 +981,30 @@ const PortalDonCor = () => {
 
   const renderBi = () => (
     <section style={{ ...card, padding: 18 }}>
-      <h3 style={{ margin: '0 0 14px', color: theme.text, fontSize: '0.95rem', fontWeight: 700 }}>Histórico de Relatórios</h3>
-      <p style={{ margin: '0 0 14px', color: theme.muted, fontSize: '0.8rem' }}>Últimos documentos processados pelo BI</p>
-      <div style={{ display: 'grid', gap: 10 }}>
-        {[
-          { name: 'Relatório de Sinistralidade Q2 2023.pdf', size: '3,2 MB', date: '15/01/2023' },
-          { name: 'Base_Sinistro_Carência_Final.xlsx', size: '1,1 MB', date: '15/01/2023' },
-          { name: 'Base_Histórico_jan_e_Jun_2023.csv', size: '0,8 MB', date: '15/01/2023' },
-          { name: 'Relatório_Sinistralidade_Q2_2023.pdf', size: '2,2 MB', date: '15/01/2023' }
-        ].map((file, idx) => (
-          <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', border: `1px solid ${theme.border}`, borderRadius: 10, background: '#f8fafc' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <FileText color={theme.blue} size={16} />
-              <div>
-                <div style={{ color: theme.text, fontWeight: 600, fontSize: '0.85rem' }}>{file.name}</div>
-                <div style={{ color: theme.muted, fontSize: '0.7rem' }}>{file.size} • {file.date}</div>
+      <SectionTitle title="Sinistralidade e BI" subtitle="Relatórios e arquivos processados para acompanhamento de indicadores." />
+      {sinistralidade.length === 0 ? <EmptyState>Nenhum documento disponível no momento.</EmptyState> : (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {sinistralidade.map((file, idx) => (
+            <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', border: `1px solid ${theme.border}`, borderRadius: 10, background: '#f8fafc' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <FileText color={theme.blue} size={16} />
+                <div>
+                  <div style={{ color: theme.text, fontWeight: 600, fontSize: '0.85rem' }}>{file.titulo}</div>
+                  <div style={{ color: theme.muted, fontSize: '0.7rem' }}>
+                    {file.arquivoNome && `${file.arquivoNome} • `}
+                    {file.criadoEm}
+                  </div>
+                </div>
               </div>
+              {(file.arquivoUrl || file.arquivoNome) && (
+                <a href={getPortalSinistralidadeDownloadUrl(file)} target="_blank" rel="noreferrer" style={{ color: theme.muted }}>
+                  <Download size={16} style={{ cursor: 'pointer' }} />
+                </a>
+              )}
             </div>
-            <Download size={16} color={theme.muted} style={{ cursor: 'pointer' }} />
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 
@@ -802,7 +1052,7 @@ const PortalDonCor = () => {
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={fieldLabel}>Nome Completo *</label>
-              <Input placeholder="Ex: João da Silva" value={form.beneficiario} onChange={(event) => updateMovementField('inclusao', 'beneficiario', event.target.value)} />
+              <Input placeholder="Nome completo do beneficiário" value={form.beneficiario} onChange={(event) => updateMovementField('inclusao', 'beneficiario', event.target.value)} />
             </div>
             <div>
               <label style={fieldLabel}>CPF *</label>
@@ -915,7 +1165,7 @@ const PortalDonCor = () => {
 
         <div style={{ display: 'flex', gap: 10 }}>
           <Button variant="outline" onClick={() => resetMovementForm('inclusao')} style={{ flex: 1 }}>Cancelar</Button>
-          <Button disabled={submittingMovement} onClick={() => setConfirmMovement('inclusao')} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
+          <Button disabled={submittingMovement} onClick={() => { setConfirmMovement('inclusao'); setConfirmTerm(false); }} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
         </div>
       </div>
     </div>
@@ -1051,7 +1301,7 @@ const PortalDonCor = () => {
 
         <div style={{ display: 'flex', gap: 10 }}>
           <Button variant="outline" onClick={() => resetMovementForm('exclusao')} style={{ flex: 1 }}>Cancelar</Button>
-          <Button disabled={submittingMovement} onClick={() => setConfirmMovement('exclusao')} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
+          <Button disabled={submittingMovement} onClick={() => { setConfirmMovement('exclusao'); setConfirmTerm(false); }} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
         </div>
       </div>
     </div>
@@ -1069,20 +1319,21 @@ const PortalDonCor = () => {
             <Building2 size={20}/> Dados do Contrato
           </h3>
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <label style={{ ...radioCard, alignItems: 'center', cursor: 'pointer' }}>
-              <input type="checkbox" checked={form.planos.includes('Saúde')} onChange={() => toggleMovementArrayValue('alteracao', 'planos', 'Saúde')} />
-              <div>
-                <strong style={{ color: theme.text }}>Saúde</strong>
-                <div style={{ color: theme.muted, fontSize: '0.82rem' }}>Apólice nº 987654321</div>
-              </div>
-            </label>
-            <label style={{ ...radioCard, alignItems: 'center', cursor: 'pointer' }}>
-              <input type="checkbox" checked={form.planos.includes('Dental')} onChange={() => toggleMovementArrayValue('alteracao', 'planos', 'Dental')} />
-              <div>
-                <strong style={{ color: theme.text }}>Dental</strong>
-                <div style={{ color: theme.muted, fontSize: '0.82rem' }}>Apólice nº 123456789</div>
-              </div>
-            </label>
+            {contratos.length === 0 ? (
+              <div style={{ color: theme.muted, fontSize: '0.9rem', gridColumn: '1 / -1' }}>Nenhum contrato encontrado.</div>
+            ) : contratos.map((item, idx) => (
+              <label key={item.contrato || idx} style={{ ...radioCard, alignItems: 'center', cursor: 'pointer' }}>
+                <input 
+                  type="checkbox" 
+                  checked={form.planos.includes(item.contrato)} 
+                  onChange={() => toggleMovementArrayValue('alteracao', 'planos', item.contrato)} 
+                />
+                <div>
+                  <strong style={{ color: theme.text }}>{item.plano || item.seguradora || 'Saúde'}</strong>
+                  <div style={{ color: theme.muted, fontSize: '0.82rem' }}>{item.contrato !== 'Contrato Principal' ? `Apólice nº ${item.contrato}` : item.contrato}</div>
+                </div>
+              </label>
+            ))}
           </div>
         </section>
 
@@ -1173,7 +1424,7 @@ const PortalDonCor = () => {
 
         <div style={{ display: 'flex', gap: 10 }}>
           <Button variant="outline" onClick={() => resetMovementForm('alteracao')} style={{ flex: 1 }}>Cancelar</Button>
-          <Button disabled={submittingMovement} onClick={() => setConfirmMovement('alteracao')} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
+          <Button disabled={submittingMovement} onClick={() => { setConfirmMovement('alteracao'); setConfirmTerm(false); }} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
         </div>
       </div>
     </div>
@@ -1214,8 +1465,7 @@ const PortalDonCor = () => {
           </select>
           <select value={solicitacoesStatus} onChange={(event) => setSolicitacoesStatus(event.target.value)} style={{ ...selectStyle, maxWidth: 150 }}>
             <option value="todos">Status: Todos</option>
-            <option value="enviado">Enviado</option>
-            <option value="pendente">Pendente</option>
+            <option value="recebido">Recebido</option>
             <option value="em andamento">Em Andamento</option>
             <option value="concluído">Concluído</option>
           </select>
@@ -1330,8 +1580,477 @@ const PortalDonCor = () => {
     </div>
   </section>;
 
+  const renderPerfil = () => (
+    <section style={{ ...card, padding: 24, maxWidth: 800 }}>
+      <SectionTitle title={<span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><User size={20} color={theme.primary} /> Meu Perfil</span>} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginTop: 16 }}>
+        <div>
+          <label style={{ ...fieldLabel, marginBottom: 6 }}>Nome</label>
+          <Input value={perfilForm.nome} onChange={(e) => setPerfilForm(prev => ({...prev, nome: e.target.value}))} />
+        </div>
+        <div>
+          <label style={{ ...fieldLabel, marginBottom: 6 }}>E-mail</label>
+          <Input value={perfilForm.email} onChange={(e) => setPerfilForm(prev => ({...prev, email: e.target.value}))} />
+        </div>
+        <div>
+          <label style={{ ...fieldLabel, marginBottom: 6 }}>Telefone</label>
+          <Input value={perfilForm.telefone} onChange={(e) => setPerfilForm(prev => ({...prev, telefone: e.target.value}))} />
+        </div>
+        <div>
+          <label style={{ ...fieldLabel, marginBottom: 6 }}>Cargo</label>
+          <Input value={perfilForm.cargo} onChange={(e) => setPerfilForm(prev => ({...prev, cargo: e.target.value}))} />
+        </div>
+      </div>
+      <Button 
+        onClick={() => { setSuccessMsg('Perfil atualizado com sucesso!'); setTimeout(() => setSuccessMsg(''), 3000); }} 
+        style={{ background: theme.blue, color: '#fff', display: 'flex', gap: 8, marginTop: 24 }}
+      >
+        <FileText size={16}/> Salvar alterações
+      </Button>
+    </section>
+  );
+
+  const renderConfiguracoes = () => (
+    <section style={{ ...card, padding: 24, maxWidth: 600 }}>
+      <SectionTitle title={<span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Settings size={20} color={theme.primary} /> Configurações</span>} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 16 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', color: theme.text }}>
+          <input type="checkbox" checked={configForm.notifications} onChange={(e) => setConfigForm(prev => ({...prev, notifications: e.target.checked}))} style={{ width: 16, height: 16 }} />
+          Receber notificações por e-mail
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', color: theme.text }}>
+          <input type="checkbox" checked={configForm.autoUpdate} onChange={(e) => setConfigForm(prev => ({...prev, autoUpdate: e.target.checked}))} style={{ width: 16, height: 16 }} />
+          Atualização automática de dados
+        </label>
+        
+        <div style={{ marginTop: 20 }}>
+          <Button onClick={() => setShowPassBox(!showPassBox)} style={{ background: theme.blue, color: '#fff' }}>
+            <Shield size={16} style={{ marginRight: 8 }}/> Trocar acesso
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
+
+  const renderLgpdAcceptanceScreen = () => {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', padding: 24 }}>
+        <div style={{ width: '100%', maxWidth: 680, background: '#fff', borderRadius: 24, padding: 36, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
+            <div style={{ width: 50, height: 50, borderRadius: 16, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>🛡️</div>
+            <div>
+              <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>Termos de Privacidade e LGPD</h2>
+              <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: 2 }}>Versão ativa dos termos: v{lgpdVersion}</div>
+            </div>
+          </div>
+
+          <p style={{ color: '#334155', fontSize: '0.95rem', lineHeight: 1.5, marginBottom: 20 }}>
+            Para prosseguir e acessar o Portal do Cliente DonCor, é necessário que você leia e concorde com os termos de consentimento para tratamento de dados pessoais (Lei Geral de Proteção de Dados - Lei nº 13.709/2018).
+          </p>
+
+          <div style={{ 
+            height: 260, 
+            overflowY: 'auto', 
+            background: '#f8fafc', 
+            border: '1px solid #cbd5e1', 
+            borderRadius: 12, 
+            padding: 20, 
+            fontSize: '0.88rem', 
+            lineHeight: '1.6', 
+            color: '#334155', 
+            whiteSpace: 'pre-wrap',
+            marginBottom: 24,
+            fontFamily: 'system-ui, sans-serif'
+          }}>
+            {lgpdText || 'Carregando termos de privacidade...'}
+          </div>
+
+          {lgpdError && (
+            <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', color: '#be123c', borderRadius: 10, padding: '10px 12px', marginBottom: 20, fontSize: '0.86rem' }}>
+              {lgpdError}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 28 }}>
+            <input 
+              type="checkbox" 
+              id="lgpd-checkbox"
+              checked={lgpdAcceptedCheckbox} 
+              onChange={(e) => setLgpdAcceptedCheckbox(e.target.checked)} 
+              style={{ width: 20, height: 20, cursor: 'pointer', marginTop: 2 }}
+            />
+            <label htmlFor="lgpd-checkbox" style={{ fontSize: '0.9rem', color: '#334155', cursor: 'pointer', userSelect: 'none', fontWeight: 600 }}>
+              Declaro que li, compreendi e concordo integralmente com o tratamento de meus dados pessoais conforme descrito acima.
+            </label>
+          </div>
+
+          <div style={{ display: 'flex', gap: 16 }}>
+            <button 
+              onClick={handleLogout} 
+              style={{ flex: 1, padding: '12px 20px', border: '1px solid #cbd5e1', borderRadius: 12, background: 'transparent', color: '#475569', cursor: 'pointer', fontWeight: 800 }}
+            >
+              Cancelar e Sair
+            </button>
+            <Button 
+              onClick={handleAcceptLgpd} 
+              disabled={!lgpdAcceptedCheckbox || lgpdSubmitting}
+              style={{ flex: 1, padding: '12px 20px', background: lgpdAcceptedCheckbox ? theme.blue : '#cbd5e1', color: '#fff', borderRadius: 12, border: 0, fontWeight: 900, cursor: lgpdAcceptedCheckbox ? 'pointer' : 'not-allowed' }}
+            >
+              {lgpdSubmitting ? 'Registrando...' : 'Aceitar e Continuar'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderPasswordChangeScreen = () => {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', padding: 24 }}>
+        <div style={{ width: '100%', maxWidth: 540, background: '#fff', borderRadius: 24, padding: 36, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
+            <div style={{ width: 50, height: 50, borderRadius: 16, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>🔑</div>
+            <div>
+              <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 900, color: '#0f172a' }}>Trocar Senha Temporária</h2>
+              <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: 2 }}>É obrigatório alterar a senha para o primeiro acesso.</div>
+            </div>
+          </div>
+
+          <p style={{ color: '#475569', fontSize: '0.9rem', lineHeight: 1.5, marginBottom: 24 }}>
+            Sua conta utiliza uma senha temporária. Para sua total segurança, defina uma nova senha forte obedecendo os critérios abaixo.
+          </p>
+
+          <form onSubmit={handleSaveFirstPassword}>
+            <div style={{ display: 'grid', gap: 18, marginBottom: 24 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 800, color: '#334155', marginBottom: 6 }}>Senha Temporária de Login</label>
+                <Input 
+                  type="password" 
+                  value={tempSenha || senha} 
+                  onChange={(e) => setTempSenha(e.target.value)} 
+                  placeholder="Senha temporária utilizada para entrar" 
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 800, color: '#334155', marginBottom: 6 }}>Nova Senha</label>
+                <Input 
+                  type="password" 
+                  value={newPass} 
+                  onChange={(e) => setNewPass(e.target.value)} 
+                  placeholder="Mínimo 8 caracteres com caractere especial" 
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 800, color: '#334155', marginBottom: 6 }}>Confirmar Nova Senha</label>
+                <Input 
+                  type="password" 
+                  value={confirmNewPass} 
+                  onChange={(e) => setConfirmNewPass(e.target.value)} 
+                  placeholder="Repita a nova senha criada" 
+                  required
+                />
+              </div>
+            </div>
+
+            {/* LIVE FEEDBACK CHECKLIST */}
+            <div style={{ background: '#f8fafc', borderRadius: 12, padding: 16, border: '1px solid #e2e8f0', marginBottom: 24 }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#475569', marginBottom: 10 }}>Requisitos de Segurança:</div>
+              <div style={{ display: 'grid', gap: 8, fontSize: '0.82rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: isLengthValid ? '#16a34a' : '#dc2626' }}>
+                  <span>{isLengthValid ? '✅' : '❌'}</span>
+                  <span>Mínimo de 8 caracteres</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: containsSpecialChar ? '#16a34a' : '#dc2626' }}>
+                  <span>{containsSpecialChar ? '✅' : '❌'}</span>
+                  <span>Conter ao menos 1 caractere especial (ex: !, @, #, $, etc.)</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: isSequenceValid ? '#16a34a' : '#dc2626' }}>
+                  <span>{isSequenceValid ? '✅' : '❌'}</span>
+                  <span>Não conter sequências consecutivas ou iguais de 3 ou mais números (ex: 123, 321, 111)</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: isMatchValid ? '#16a34a' : '#dc2626' }}>
+                  <span>{isMatchValid ? '✅' : '❌'}</span>
+                  <span>As senhas devem ser idênticas</span>
+                </div>
+              </div>
+            </div>
+
+            {passError && (
+              <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', color: '#be123c', borderRadius: 10, padding: '10px 12px', marginBottom: 20, fontSize: '0.86rem' }}>
+                {passError}
+              </div>
+            )}
+
+            {passSuccess && (
+              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#15803d', borderRadius: 10, padding: '10px 12px', marginBottom: 20, fontSize: '0.86rem' }}>
+                {passSuccess}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 16 }}>
+              <button 
+                type="button"
+                onClick={handleLogout} 
+                style={{ flex: 1, padding: '12px 20px', border: '1px solid #cbd5e1', borderRadius: 12, background: 'transparent', color: '#475569', cursor: 'pointer', fontWeight: 800 }}
+              >
+                Voltar e Sair
+              </button>
+              <Button 
+                type="submit" 
+                disabled={!isFormValid || passSubmitting}
+                style={{ flex: 1, padding: '12px 20px', background: isFormValid ? theme.blue : '#cbd5e1', color: '#fff', borderRadius: 12, border: 0, fontWeight: 900, cursor: isFormValid ? 'pointer' : 'not-allowed' }}
+              >
+                {passSubmitting ? 'Alterando...' : 'Confirmar Nova Senha'}
+              </Button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
+  const renderLgpdGovernance = () => {
+    const filteredLogs = lgpdAceitesList.filter(item => {
+      if (!lgpdSearchText) return true;
+      const term = lgpdSearchText.toLowerCase();
+      return (
+        item.usuario?.toLowerCase().includes(term) ||
+        item.empresa?.toLowerCase().includes(term) ||
+        item.versao?.toLowerCase().includes(term) ||
+        item.hash?.toLowerCase().includes(term)
+      );
+    });
+
+    const uniqueUsersCount = new Set(lgpdAceitesList.map(item => item.documento)).size;
+
+    return (
+      <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 900, color: theme.text, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span>🛡️</span> Governança LGPD e Termos Aceitos
+            </h1>
+            <p style={{ margin: '6px 0 0', color: theme.muted, fontSize: '0.88rem' }}>
+              Auditabilidade e controle de consentimento dos usuários da plataforma.
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Button 
+              onClick={handleExportLgpd} 
+              style={{ background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', fontWeight: 800 }}
+            >
+              📥 Exportar
+            </Button>
+            <Button 
+              onClick={() => {
+                setNovaVersaoText(lgpdText);
+                setNovaVersaoLabel((parseFloat(lgpdVersion) + 0.1).toFixed(1));
+                setShowNovaVersaoModal(true);
+              }} 
+              style={{ background: theme.blue, color: '#fff', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', fontWeight: 800 }}
+            >
+              ➕ Nova Versão
+            </Button>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 20 }}>
+          <div style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ fontSize: '2.5rem' }}>💚</div>
+            <div>
+              <div style={{ color: theme.muted, fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase' }}>Total de Aceites</div>
+              <div style={{ fontSize: '1.8rem', fontWeight: 900, color: theme.text, marginTop: 4 }}>{lgpdAceitesList.length}</div>
+            </div>
+          </div>
+
+          <div style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ fontSize: '2.5rem' }}>📜</div>
+            <div>
+              <div style={{ color: theme.muted, fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase' }}>Versão Ativa</div>
+              <div style={{ fontSize: '1.8rem', fontWeight: 900, color: theme.text, marginTop: 4 }}>v{lgpdVersion}</div>
+            </div>
+          </div>
+
+          <div style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ fontSize: '2.5rem' }}>👥</div>
+            <div>
+              <div style={{ color: theme.muted, fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase' }}>Usuários Únicos</div>
+              <div style={{ fontSize: '1.8rem', fontWeight: 900, color: theme.text, marginTop: 4 }}>{uniqueUsersCount || lgpdAceitesList.length}</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ ...card, padding: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 900, color: theme.text }}>Registro de Atividades</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 340 }}>
+              <span style={{ color: theme.muted }}>🔍</span>
+              <Input 
+                placeholder="Buscar por usuário, hash, versão..." 
+                value={lgpdSearchText} 
+                onChange={(e) => setLgpdSearchText(e.target.value)} 
+                style={{ flex: 1 }}
+              />
+            </div>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: `2px solid ${theme.border}`, color: theme.muted, fontSize: '0.8rem', fontWeight: 800 }}>
+                  <th style={{ padding: '12px 16px' }}>USUÁRIO</th>
+                  <th style={{ padding: '12px 16px' }}>EMPRESA</th>
+                  <th style={{ padding: '12px 16px' }}>VERSÃO</th>
+                  <th style={{ padding: '12px 16px' }}>DATA/HORA</th>
+                  <th style={{ padding: '12px 16px' }}>IP</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'center' }}>AÇÕES</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '24px 16px', textAlign: 'center', color: theme.muted, fontSize: '0.9rem' }}>
+                      Nenhum aceite correspondente encontrado.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredLogs.map((item, index) => (
+                    <tr key={item.id || index} style={{ borderBottom: `1px solid ${theme.border}`, fontSize: '0.88rem', color: theme.text }} onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                      <td style={{ padding: '14px 16px', fontWeight: 800 }}>{item.usuario}</td>
+                      <td style={{ padding: '14px 16px' }}>{item.empresa || 'Todas'}</td>
+                      <td style={{ padding: '14px 16px' }}><span style={{ background: '#f1f5f9', padding: '4px 8px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 700, color: '#475569' }}>{item.versao}</span></td>
+                      <td style={{ padding: '14px 16px' }}>{item.criadoEm || item.createdAt}</td>
+                      <td style={{ padding: '14px 16px', color: theme.muted }}>{item.ip}</td>
+                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                        <button 
+                          onClick={() => setSelectedAceite(item)}
+                          style={{ border: 0, background: '#eff6ff', color: theme.blue, cursor: 'pointer', padding: '6px 12px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = '#dbeafe'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = '#eff6ff'}
+                        >
+                          👁️ Detalhes
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {selectedAceite && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}>
+            <div style={{ background: '#fff', borderRadius: 20, padding: 30, width: '100%', maxWidth: 600, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: `1px solid ${theme.border}`, paddingBottom: 14 }}>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: theme.text }}>Comprovante de Aceite LGPD</h3>
+                <button onClick={() => setSelectedAceite(null)} style={{ border: 0, background: 'transparent', fontSize: '1.5rem', cursor: 'pointer', color: theme.muted }}>&times;</button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20, fontSize: '0.88rem' }}>
+                <div>
+                  <div style={{ color: theme.muted, fontWeight: 700 }}>Usuário:</div>
+                  <div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{selectedAceite.usuario}</div>
+                </div>
+                <div>
+                  <div style={{ color: theme.muted, fontWeight: 700 }}>Documento:</div>
+                  <div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{selectedAceite.documento}</div>
+                </div>
+                <div>
+                  <div style={{ color: theme.muted, fontWeight: 700 }}>Empresa:</div>
+                  <div style={{ color: theme.text, marginTop: 2 }}>{selectedAceite.empresa || 'Todas'}</div>
+                </div>
+                <div>
+                  <div style={{ color: theme.muted, fontWeight: 700 }}>Versão Aceita:</div>
+                  <div style={{ color: theme.text, marginTop: 2 }}>{selectedAceite.versao}</div>
+                </div>
+                <div>
+                  <div style={{ color: theme.muted, fontWeight: 700 }}>Data e Hora:</div>
+                  <div style={{ color: theme.text, marginTop: 2 }}>{selectedAceite.criadoEm || selectedAceite.createdAt}</div>
+                </div>
+                <div>
+                  <div style={{ color: theme.muted, fontWeight: 700 }}>Endereço IP:</div>
+                  <div style={{ color: theme.text, marginTop: 2 }}>{selectedAceite.ip}</div>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ color: theme.muted, fontWeight: 700, fontSize: '0.88rem', marginBottom: 6 }}>Hash de Consentimento:</div>
+                <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 8, padding: '10px 12px', fontSize: '0.8rem', fontFamily: 'monospace', color: '#475569', wordBreak: 'break-all' }}>
+                  {selectedAceite.hash}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Button onClick={() => setSelectedAceite(null)} style={{ background: theme.blue, color: '#fff', fontWeight: 800 }}>
+                  Fechar Comprovante
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showNovaVersaoModal && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}>
+            <div style={{ background: '#fff', borderRadius: 20, padding: 30, width: '100%', maxWidth: 680, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottom: `1px solid ${theme.border}`, paddingBottom: 14 }}>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: theme.text }}>Publicar Nova Versão dos Termos LGPD</h3>
+                <button onClick={() => setShowNovaVersaoModal(false)} style={{ border: 0, background: 'transparent', fontSize: '1.5rem', cursor: 'pointer', color: theme.muted }}>&times;</button>
+              </div>
+
+              <form onSubmit={handleSaveNovaVersao}>
+                <div style={{ display: 'grid', gap: 16, marginBottom: 20 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 800, color: theme.text, marginBottom: 6 }}>Identificador de Versão</label>
+                    <Input 
+                      value={novaVersaoLabel} 
+                      onChange={(e) => setNovaVersaoLabel(e.target.value)} 
+                      placeholder="Ex: 1.1" 
+                      required 
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 800, color: theme.text, marginBottom: 6 }}>Texto dos Termos LGPD</label>
+                    <textarea 
+                      value={novaVersaoText} 
+                      onChange={(e) => setNovaVersaoText(e.target.value)} 
+                      rows={8}
+                      style={{ width: '100%', border: `1px solid ${theme.border}`, borderRadius: 10, padding: 12, fontSize: '0.88rem', color: theme.text, resize: 'vertical' }}
+                      placeholder="Escreva os termos legais..." 
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowNovaVersaoModal(false)} 
+                    style={{ padding: '10px 16px', border: '1px solid #cbd5e1', borderRadius: 10, background: 'transparent', color: theme.muted, cursor: 'pointer' }}
+                  >
+                    Cancelar
+                  </button>
+                  <Button type="submit" style={{ background: theme.blue, color: '#fff', fontWeight: 800 }}>
+                    Publicar Termos
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderActiveSection = () => {
     switch (activeSection) {
+      case 'perfil': return renderPerfil();
+      case 'configuracoes': return renderConfiguracoes();
       case 'contratos': return renderContratos();
       case 'faturas': return renderFaturas();
       case 'bi': return renderBi();
@@ -1339,6 +2058,9 @@ const PortalDonCor = () => {
       case 'solicitacoes': return renderSolicitacoes();
       case 'formularios': return renderFormularios();
       case 'chat': return renderChat();
+      case 'lgpd': 
+        if (!isDonfim) return renderDashboard();
+        return renderLgpdGovernance();
       default: return renderDashboard();
     }
   };
@@ -1347,18 +2069,22 @@ const PortalDonCor = () => {
     <div style={{ minHeight:'100vh', background:theme.bg, display:'grid', gridTemplateColumns:'278px 1fr' }}>
       <aside style={{ background:theme.navy, color:'#fff', padding:20, display:'flex', flexDirection:'column', gap:18 }}>
         <div style={{ display:'flex', alignItems:'center', gap:12, padding:'6px 4px 18px', borderBottom:'1px solid #ffffff1f' }}>
-          <div style={{ width:44, height:44, borderRadius:15, background:'#ffffff1f', display:'flex', alignItems:'center', justifyContent:'center' }}><Shield size={24}/></div>
-          <div>
-            <div style={{ fontWeight:900, fontSize:'1.04rem' }}>{empresa}</div>
-            <div style={{ color:'#cbd5e1', fontSize:'0.75rem' }}>Portal do Cliente</div>
+          <div style={{ display: 'flex', alignItems: 'center' }}><DoncorLogo size={28} showText={true} /></div>
+          <div style={{ display: 'flex', flexDirection: 'column', borderLeft: '1px solid #ffffff24', paddingLeft: 10, marginLeft: 4 }}>
+            <div style={{ fontWeight:900, fontSize:'0.82rem', color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 }}>{empresa}</div>
+            <div style={{ color:'#cbd5e1', fontSize:'0.65rem', fontWeight: 600 }}>Portal do Cliente</div>
           </div>
         </div>
         <Button onClick={() => { setActiveSection('movimentacao'); setActiveMovementTab('inclusao'); }} style={{ background:theme.blue, color:'#fff', justifyContent:'flex-start', gap:8 }}><FileText size={15}/>Novo chamado</Button>
         <nav style={{ display:'grid', gap:6 }}>
-          {menuItems.map((item) => (
+          {filteredMenuItems.map((item) => (
             <React.Fragment key={item.id}>
               <button onClick={() => setActiveSection(item.id)} style={{ border:0, borderRadius:12, padding:'10px 12px', cursor:'pointer', textAlign:'left', display:'flex', alignItems:'center', gap:10, background:activeSection === item.id ? '#ffffff18' : 'transparent', color:activeSection === item.id ? '#fff' : '#cbd5e1', fontWeight:activeSection === item.id ? 900 : 700 }}>
-                <item.icon size={17}/>{item.label}
+                {typeof item.icon === 'string' ? (
+                  <span style={{ fontSize: '16px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 17, height: 17 }}>{item.icon}</span>
+                ) : (
+                  <item.icon size={17}/>
+                )}{item.label}
               </button>
               {item.id === 'movimentacao' && activeSection === 'movimentacao' && (
                 <div style={{ display:'grid', gap:4, margin:'-2px 0 2px 28px', paddingLeft:10, borderLeft:'1px solid #ffffff24' }}>
@@ -1404,8 +2130,40 @@ const PortalDonCor = () => {
                 </span>
               )}
             </button>
-            <button style={{ border:`1px solid ${theme.border}`, background:'#fff', borderRadius:12, padding:9, color:theme.muted }}><HelpCircle size={16}/></button>
-            <Button variant="outline" onClick={() => setShowPassBox(!showPassBox)}>Alterar senha</Button>
+            <div style={{ position: 'relative' }}>
+              <button 
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                style={{ border:`1px solid ${theme.border}`, background:'#f8fafc', borderRadius:12, padding:'6px 14px', color:theme.text, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+              >
+                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 800, color: theme.primary }}>{perfilForm.nome}</span>
+                </div>
+                <ChevronDown size={14} color={theme.muted}/>
+              </button>
+              
+              {showProfileMenu && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 220, background: '#fff', border: `1px solid ${theme.border}`, borderRadius: 12, boxShadow: '0 10px 25px rgba(0,0,0,0.1)', overflow: 'hidden', zIndex: 50 }}>
+                  <div style={{ padding: '16px 16px 12px', borderBottom: `1px solid ${theme.border}`, background: '#f8fafc' }}>
+                    <div style={{ fontWeight: 900, color: theme.primary, fontSize: '0.95rem' }}>{perfilForm.nome}</div>
+                    <div style={{ color: theme.muted, fontSize: '0.75rem', marginTop: 2 }}>{perfilForm.email}</div>
+                    <div style={{ color: theme.muted, fontSize: '0.75rem', marginTop: 2 }}>{perfilForm.cargo}</div>
+                  </div>
+                  <div style={{ padding: '8px' }}>
+                    <button onClick={() => { setActiveSection('perfil'); setShowProfileMenu(false); }} style={{ width: '100%', textAlign: 'left', padding: '10px 12px', background: 'transparent', border: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, color: theme.text, fontSize: '0.85rem', borderRadius: 8 }} onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                      <User size={16} color={theme.blue} /> Meu Perfil
+                    </button>
+                    <button onClick={() => { setActiveSection('configuracoes'); setShowProfileMenu(false); }} style={{ width: '100%', textAlign: 'left', padding: '10px 12px', background: 'transparent', border: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, color: theme.text, fontSize: '0.85rem', borderRadius: 8 }} onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                      <Settings size={16} color={theme.blue} /> Configurações
+                    </button>
+                  </div>
+                  <div style={{ padding: '8px', borderTop: `1px solid ${theme.border}` }}>
+                    <button onClick={handleLogout} style={{ width: '100%', textAlign: 'left', padding: '10px 12px', background: 'transparent', border: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, color: '#e63757', fontSize: '0.85rem', borderRadius: 8 }} onMouseEnter={(e) => e.currentTarget.style.background = '#fff1f2'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                      <LogOut size={16} /> Sair
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
         <main style={{ padding:24, maxWidth:1320, margin:'0 auto' }}>
@@ -1421,12 +2179,41 @@ const PortalDonCor = () => {
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.4)', backdropFilter: 'blur(3px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: '#fff', borderRadius: 18, padding: 28, width: '100%', maxWidth: 440, boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}>
             <h3 style={{ margin: '0 0 10px', fontSize: '1.25rem', color: theme.text, display: 'flex', alignItems: 'center', gap: 10 }}><FileText size={22} color={theme.primary} /> Confirmar Solicitação</h3>
-            <p style={{ color: theme.muted, margin: '0 0 24px', fontSize: '0.95rem', lineHeight: 1.5 }}>
-              Deseja realmente enviar esta solicitação de <strong>{confirmMovement}</strong>? Verifique se todas as informações e os anexos necessários foram inseridos.
-            </p>
+            
+            <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', marginBottom: '20px', fontSize: '0.85rem', color: theme.text, border: `1px solid ${theme.border}` }}>
+              {confirmMovement === 'inclusao' && (
+                <>
+                  <div style={{ marginBottom: 4 }}><strong>Movimentação:</strong> Inclusão</div>
+                  <div style={{ marginBottom: 4 }}><strong>Nome:</strong> {movementForms[confirmMovement].nome || '-'}</div>
+                  <div style={{ marginBottom: 4 }}><strong>CPF:</strong> {movementForms[confirmMovement].cpf || '-'}</div>
+                  <div><strong>Contrato:</strong> {movementForms[confirmMovement].contrato || contratos?.[0]?.contrato || '-'}</div>
+                </>
+              )}
+              {confirmMovement === 'exclusao' && (
+                <>
+                  <div style={{ marginBottom: 4 }}><strong>Movimentação:</strong> Exclusão</div>
+                  <div style={{ marginBottom: 4 }}><strong>Beneficiário:</strong> {movementForms[confirmMovement].nome || '-'}</div>
+                  <div style={{ marginBottom: 4 }}><strong>Contrato:</strong> {movementForms[confirmMovement].contrato || contratos?.[0]?.contrato || '-'}</div>
+                  <div><strong>Motivo:</strong> {movementForms[confirmMovement].motivoExclusao || '-'}</div>
+                </>
+              )}
+              {confirmMovement === 'alteracao' && (
+                <>
+                  <div style={{ marginBottom: 4 }}><strong>Movimentação:</strong> Alteração</div>
+                  <div style={{ marginBottom: 4 }}><strong>Detalhes:</strong> {movementForms[confirmMovement].detalhes || '-'}</div>
+                  <div><strong>Contrato:</strong> {movementForms[confirmMovement].contrato || contratos?.[0]?.contrato || '-'}</div>
+                </>
+              )}
+            </div>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.85rem', color: theme.muted, marginBottom: 24, cursor: 'pointer' }}>
+              <input type="checkbox" checked={confirmTerm} onChange={(e) => setConfirmTerm(e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
+              Confirmo a leitura e o envio destas informações.
+            </label>
+
             <div style={{ display: 'flex', gap: 12 }}>
               <Button variant="outline" onClick={() => setConfirmMovement(null)} style={{ flex: 1 }}>Revisar Dados</Button>
-              <Button disabled={submittingMovement} onClick={() => { setConfirmMovement(null); submitMovimentacao(confirmMovement); }} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Confirmar Envio'}</Button>
+              <Button disabled={!confirmTerm || submittingMovement} onClick={() => { setConfirmMovement(null); submitMovimentacao(confirmMovement); }} style={{ flex: 1, background: confirmTerm ? theme.primary : theme.muted, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
             </div>
           </div>
         </div>

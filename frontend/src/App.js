@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import TopNav from "./components/TopNav";
 import TabSystem from "./components/TabSystem";
+import DoncorLogo from "./components/DoncorLogo";
 import Dashboard from "./pages/Dashboard";
 import Adesao from "./pages/Adesao";
 import Empresarial from "./pages/Empresarial";
@@ -23,6 +24,8 @@ import Chat from "./pages/Chat";
 import PortalDonCor from "./pages/PortalDonCor";
 import PortalParceiros from "./pages/PortalParceiros";
 import PortalFormularios from "./pages/PortalFormularios";
+import PortalSolicitacoes from "./pages/PortalSolicitacoes";
+import PortalSinistralidade from "./pages/PortalSinistralidade";
 import { Loader2 } from "lucide-react";
 
 const DEFAULT_ACCESS = "dashboard";
@@ -41,7 +44,9 @@ const ALL_PAGES = [
   "produtos",
   "colaboradores",
   "portal-parceiros",
+  "portal-solicitacoes",
   "portal-formularios",
+  "portal-sinistralidade",
   "relatorios",
   "robo",
   "robo-config",
@@ -119,6 +124,8 @@ const normalizeAccessConfig = (value) => {
 const LoginScreen = ({ onLogin, error }) => {
   const [username, setUsername] = useState(MASTER_USERNAME);
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [keepSession, setKeepSession] = useState(false);
 
   const validatePassword = (role, inputPassword) => {
     const isMaster = role.toLowerCase() === MASTER_USERNAME.toLowerCase();
@@ -151,48 +158,99 @@ const LoginScreen = ({ onLogin, error }) => {
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #eef4fb 0%, #f8fafc 100%)", padding: "24px" }}>
-      <form onSubmit={handleSubmit} style={{ width: "100%", maxWidth: "420px", background: "#fff", border: "1px solid #e3e6f0", borderRadius: "16px", padding: "28px", boxShadow: "0 20px 45px rgba(44, 64, 80, 0.12)" }}>
-        <div style={{ textAlign: "center", marginBottom: "22px" }}>
-          <div style={{ width: "54px", height: "54px", borderRadius: "16px", background: "#3a5a8c", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: "20px", marginBottom: "12px" }}>DC</div>
-          <h1 style={{ margin: 0, fontSize: "1.35rem", color: "#344050" }}>Don Cor Web</h1>
-          <p style={{ margin: "6px 0 0", color: "#6b7280", fontSize: "0.88rem" }}>Gestão de Apólices - Don Cor</p>
-          <a href="/portal-doncor" style={{ display:'inline-block', marginTop:'10px', color:'#2C7BE5', fontSize:'0.82rem', fontWeight:700 }}>Acessar Portal do Cliente</a>
+      <form onSubmit={handleSubmit} style={{ width: "100%", maxWidth: "400px", background: "#fff", border: "1px solid #eaeaea", borderRadius: "20px", padding: "36px 36px 28px", boxShadow: "0 15px 35px rgba(0, 0, 0, 0.05)" }}>
+        <div style={{ textAlign: "center", marginBottom: "26px" }}>
+          <div style={{ marginBottom: "14px", display: "flex", justifyContent: "center" }}>
+            <DoncorLogo size={46} />
+          </div>
+          <p style={{ margin: "4px 0 0", color: "#6b7280", fontSize: "0.85rem" }}>Gestão de Apólices e Benefícios</p>
         </div>
 
         {error && (
-          <div style={{ background: "#fff1f2", border: "1px solid #fecdd3", color: "#be123c", borderRadius: "8px", padding: "10px 12px", marginBottom: "14px", fontSize: "0.86rem" }}>
+          <div style={{ background: "#fff1f2", border: "1px solid #fecdd3", color: "#be123c", borderRadius: "8px", padding: "10px 12px", marginBottom: "16px", fontSize: "0.86rem" }}>
             {error}
           </div>
         )}
 
-        <label style={{ display: "block", color: "#344050", fontWeight: 600, fontSize: "0.85rem", marginBottom: "6px" }}>
-          Perfil de acesso
+        <label style={{ display: "block", color: "#000000", fontWeight: "700", fontSize: "0.88rem", marginBottom: "6px", textAlign: "left" }}>
+          Usuário
         </label>
-        <select value={username} onChange={(event) => setUsername(event.target.value)} style={{ width: "100%", border: "1px solid #d8e2ef", borderRadius: "8px", padding: "10px 12px", marginBottom: "16px", fontSize: "0.95rem", background: "#fff" }}>
-          <option value="Donfim">Donfim / Master</option>
-          <option value="Diretoria">Diretoria</option>
-          <option value="Gerencia">Gerencia</option>
-          <option value="Analista">Analista</option>
-        </select>
+        <div style={{ position: "relative", marginBottom: "18px" }}>
+          <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "1.1rem", color: "#64748b", pointerEvents: "none" }}>👤</span>
+          <select 
+            value={username} 
+            onChange={(event) => setUsername(event.target.value)} 
+            style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "10px 12px 10px 38px", fontSize: "0.95rem", background: "#f8fafc", color: "#1e293b", cursor: "pointer", outline: "none", boxSizing: "border-box", WebkitAppearance: "none", MozAppearance: "none", appearance: "none" }}
+          >
+            <option value="Donfim">Master</option>
+            <option value="Diretoria">Diretoria</option>
+            <option value="Gerencia">Gerencia</option>
+            <option value="Analista">Analista</option>
+          </select>
+          <span style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", fontSize: "0.8rem", color: "#64748b" }}>▼</span>
+        </div>
 
-        <label style={{ display: "block", color: "#344050", fontWeight: 600, fontSize: "0.85rem", marginBottom: "6px" }}>
+        <label style={{ display: "block", color: "#000000", fontWeight: "700", fontSize: "0.88rem", marginBottom: "6px", textAlign: "left" }}>
           Senha
         </label>
-        <input
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          placeholder="Digite a senha do perfil"
-          style={{ width: "100%", border: "1px solid #d8e2ef", borderRadius: "8px", padding: "10px 12px", marginBottom: "16px", fontSize: "0.95rem", background: "#fff", boxSizing: "border-box" }}
-        />
+        <div style={{ position: "relative", marginBottom: "20px" }}>
+          <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "1.1rem", color: "#64748b", pointerEvents: "none" }}>🔑</span>
+          <input
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Digite sua senha"
+            style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "10px 38px 10px 38px", fontSize: "0.95rem", background: "#f8fafc", color: "#1e293b", outline: "none", boxSizing: "border-box" }}
+          />
+          <button 
+            type="button" 
+            onClick={() => setShowPassword(!showPassword)}
+            style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: "1.1rem", padding: 0 }}
+          >
+            {showPassword ? "🙈" : "👁️"}
+          </button>
+        </div>
 
-        <button type="submit" style={{ width: "100%", background: "#2C7BE5", color: "#fff", border: "none", borderRadius: "8px", padding: "11px 14px", fontWeight: 700, cursor: "pointer" }}>
-          Entrar
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "24px" }}>
+          <input 
+            type="checkbox" 
+            id="keep-session" 
+            checked={keepSession} 
+            onChange={(e) => setKeepSession(e.target.checked)}
+            style={{ width: "16px", height: "16px", cursor: "pointer", borderRadius: "4px" }} 
+          />
+          <label htmlFor="keep-session" style={{ fontSize: "0.88rem", color: "#000000", cursor: "pointer", userSelect: "none" }}>
+            Manter sessão iniciada
+          </label>
+        </div>
+
+        <button 
+          type="submit" 
+          style={{ 
+            width: "100%", 
+            background: "linear-gradient(to bottom, #f1f5f9, #cbd5e1)", 
+            border: "1px solid #94a3b8", 
+            color: "#0f172a", 
+            borderRadius: "8px", 
+            padding: "12px 14px", 
+            fontWeight: "700", 
+            fontSize: "0.95rem", 
+            cursor: "pointer", 
+            display: "flex", 
+            alignItems: "center", 
+            justifyContent: "center", 
+            gap: "8px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+          }}
+        >
+          <span>🔒</span> Entrar no Sistema
         </button>
 
-        <p style={{ margin: "16px 0 0", color: "#8a8d93", fontSize: "0.78rem", textAlign: "center" }}>
-          Acesso local temporário para liberar o frontend. Para produção, use Supabase Auth.
-        </p>
+        <div style={{ textAlign: "center", marginTop: "18px" }}>
+          <a href="/portal-doncor" style={{ color: "#2C7BE5", fontSize: "0.82rem", fontWeight: 700, textDecoration: "none" }}>
+            Acessar Portal do Cliente
+          </a>
+        </div>
       </form>
     </div>
   );
@@ -243,7 +301,9 @@ const pageComponents = {
   produtos: Produtos,
   colaboradores: Colaboradores,
   "portal-parceiros": PortalParceiros,
+  "portal-solicitacoes": PortalSolicitacoes,
   "portal-formularios": PortalFormularios,
+  "portal-sinistralidade": PortalSinistralidade,
   relatorios: Relatorios,
   robo: Robo,
   "robo-config": RoboConfig,

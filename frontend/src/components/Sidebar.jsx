@@ -6,6 +6,7 @@ import {
   BarChart3, Download, LayoutDashboard,
   Menu, Bot, Settings, User, HelpCircle, MessageCircle, UserCheck, FileText
 } from 'lucide-react';
+import DoncorLogo from './DoncorLogo';
 
 const iconMap = {
   Users, Handshake, UserPlus, UserMinus, ArrowLeftRight,
@@ -34,23 +35,22 @@ const buildStrictMenuItems = () => {
     if (section.section === 'Cadastros') {
       normalized.push({
         ...section,
+        items: [...section.items],
+      });
+      normalized.push({
+        section: 'Portal do Cliente',
         items: [
-          ...section.items,
-          { id: 'portal-parceiros', label: 'Portal DonCor', icon: 'UserCheck', page: 'portal-parceiros' },
+          { id: 'portal-parceiros', label: 'Acessos e Clientes', icon: 'UserCheck', page: 'portal-parceiros' },
+          { id: 'portal-solicitacoes', label: 'Solicitações', icon: 'FileText', page: 'portal-solicitacoes' },
           { id: 'portal-formularios', label: 'Formulários e Manuais', icon: 'FileText', page: 'portal-formularios' },
+          { id: 'portal-sinistralidade', label: 'Sinistralidade e BI', icon: 'BarChart2', page: 'portal-sinistralidade' },
+          { id: 'chat', label: 'Chat', icon: 'MessageCircle', page: 'chat' },
         ],
       });
       return;
     }
 
     normalized.push(section);
-  });
-
-  normalized.push({
-    section: 'Chat',
-    items: [
-      { id: 'chat', label: 'Chat', icon: 'MessageCircle', page: 'chat' },
-    ],
   });
 
   return normalized;
@@ -89,20 +89,8 @@ const Sidebar = ({ collapsed, onToggle, onMenuClick, activeItem, allowedPages = 
           <Menu size={20} />
         </button>
         {!collapsed && (
-          <div style={{ display: 'flex', alignItems: 'center', animation: 'fadeIn 0.3s ease' }}>
-            <svg width="32" height="32" viewBox="0 0 100 100" style={{ marginRight: '6px' }}>
-              <circle cx="50" cy="50" r="45" fill="#2a5fcf" />
-              <path d="M35 25 Q35 75 65 75 Q45 75 45 50 Q45 25 65 25 Q35 25 35 25Z" fill="white" />
-            </svg>
-            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
-              <span style={{ fontWeight: 600, fontSize: '1.1rem', color: '#1a3a52', fontFamily: 'Poppins, sans-serif', letterSpacing: '-0.5px' }}>
-                Don Cor
-                <span style={{ fontSize: '0.6rem', fontWeight: 400, color: '#e6832a', marginLeft: '4px' }}>WEB</span>
-              </span>
-              <span style={{ fontSize: '0.55rem', color: '#a8b5c3', fontWeight: 400, marginTop: '1px' }}>
-                Gestão de Apólices
-              </span>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', animation: 'fadeIn 0.3s ease', marginLeft: '4px' }}>
+            <DoncorLogo size={26} />
           </div>
         )}
       </div>

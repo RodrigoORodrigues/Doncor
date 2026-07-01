@@ -63,7 +63,7 @@ def _attachment_names(chat_item: dict[str, Any]) -> list[str]:
 def build_chat_notification_body(chat_item: dict[str, Any]) -> tuple[str, str]:
     empresa = str(chat_item.get("empresa") or chat_item.get("company") or "Cliente").strip()
     documento = str(chat_item.get("documento") or "-").strip() or "-"
-    sender = str(chat_item.get("sender") or "Portal DonCor").strip()
+    sender = str(chat_item.get("sender") or "Portal do Cliente").strip()
     created_at = str(chat_item.get("criadoEm") or chat_item.get("createdAt") or "").strip()
     text = str(chat_item.get("text") or "").strip() or "Mensagem enviada com anexo."
     attachment_names = _attachment_names(chat_item)

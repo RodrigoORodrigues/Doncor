@@ -4,7 +4,13 @@ const PRODUCTION_BACKEND_URL = "https://doncor.up.railway.app";
 
 const isHostedFrontend = () => {
   if (typeof window === "undefined") return false;
-  return /(^|\.)doncor\.site$/i.test(window.location.hostname) || /\.vercel\.app$/i.test(window.location.hostname);
+  const hostname = window.location.hostname;
+  return (
+    /(^|\.)doncor\.site$/i.test(hostname) ||
+    /\.vercel\.app$/i.test(hostname) ||
+    /\.run\.app$/i.test(hostname) ||
+    (hostname !== "localhost" && hostname !== "127.0.0.1" && !hostname.startsWith("192.168."))
+  );
 };
 
 const normalizeBackendUrl = (value) => {
@@ -278,7 +284,7 @@ export const fetchRoboConfig = () => getObject("/robo/config", {}, roboAuthConfi
 export const saveRoboConfig = (data) => api.post("/robo/config", data, roboAuthConfig).then((r) => r.data);
 export const triggerRoboReal = (data) => api.post("/robo/trigger-real", data, roboAuthConfig).then((r) => r.data);
 
-// ─── Portal DonCor / Parceiros ───────────────────
+// ─── Portal do Cliente / Parceiros ───────────────────
 export const fetchPortalParceiros = (search = "", status = "todos") =>
   getArray("/portal-parceiros", { params: { search, status } });
 export const createPortalParceiro = (data) => api.post("/portal-parceiros", data).then((r) => r.data);
@@ -294,17 +300,35 @@ export const getPortalFormularioDownloadUrl = (item) => {
   if (!item?.id) return "";
   return `${API}/portal-formularios/${item.id}/arquivo`;
 };
+export const fetchPortalSinistralidade = (search = "", status = "todos") =>
+  getArray("/portal-sinistralidade", { params: { search, status } });
+export const createPortalSinistralidade = (data) => api.post("/portal-sinistralidade", data).then((r) => r.data);
+export const updatePortalSinistralidade = (id, data) => api.put(`/portal-sinistralidade/${id}`, data).then((r) => r.data);
+export const deletePortalSinistralidade = (id) => api.delete(`/portal-sinistralidade/${id}`).then((r) => r.data);
+export const getPortalSinistralidadeDownloadUrl = (item) => {
+  if (item?.arquivoUrl) return item.arquivoUrl;
+  if (!item?.id) return "";
+  return `${API}/portal-sinistralidade/${item.id}/arquivo`;
+};
+
 export const loginPortalDonCor = ({ documento, senha }) => api.post("/portal-doncor/login", { documento, senha }).then((r) => r.data);
 export const alterarSenhaPortalDonCor = (data) => api.post("/portal-doncor/alterar-senha", data).then((r) => r.data);
 export const fetchPortalDonCorResumo = (documento) => getObject("/portal-doncor/resumo", {}, { params: { documento } });
 export const fetchPortalDonCorFormularios = ({ categoria = "todos" } = {}) =>
   getArray("/portal-doncor/formularios", { params: { categoria } });
+export const fetchPortalDonCorSinistralidade = (documento) => getArray("/portal-doncor/sinistralidade", { params: { documento } });
 export const fetchPortalDonCorSolicitacoes = ({ documento = "", search = "", tipo = "todos", status = "todos" } = {}) =>
   getArray("/portal-doncor/solicitacoes", { params: { documento, search, tipo, status } });
+export const updatePortalDonCorSolicitacao = (id, data) => api.patch(`/portal-doncor/solicitacoes/${id}`, data).then((r) => r.data);
 export const createPortalDonCorMovimentacao = (data) => api.post("/portal-doncor/movimentacoes", data).then((r) => r.data);
 export const fetchPortalDonCorChat = ({ documento = "", empresa = "" } = {}) =>
   getArray("/portal-doncor/chat", { params: { documento, empresa } });
 export const sendPortalDonCorChat = (data) => api.post("/portal-doncor/chat", data).then((r) => r.data);
 export const markPortalDonCorChatRead = (data) => api.patch("/portal-doncor/chat/read", data).then((r) => r.data);
+
+export const fetchLgpdConfig = () => api.get("/portal-doncor/lgpd/config").then((r) => r.data);
+export const saveLgpdConfig = (data) => api.post("/portal-doncor/lgpd/nova-versao", data).then((r) => r.data);
+export const fetchLgpdAceites = () => api.get("/portal-doncor/lgpd/aceites").then((r) => r.data);
+export const aceitarLgpd = (data) => api.post("/portal-doncor/lgpd/aceitar", data).then((r) => r.data);
 
 export default api;
