@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import DoncorLogo from '../components/DoncorLogo';
-import api, {
+import {
   loginPortalDonCor,
   fetchPortalDonCorResumo,
   fetchPortalDonCorFormularios,
@@ -14,6 +14,7 @@ import api, {
   getPortalFormularioDownloadUrl,
   sendPortalDonCorChat,
   alterarSenhaPortalDonCor,
+  esqueciSenhaPortalDonCor,
   fetchPortalDonCorSinistralidade,
   getPortalSinistralidadeDownloadUrl,
   fetchLgpdConfig,
@@ -459,12 +460,12 @@ const PortalDonCor = () => {
     setEsqueciSuccess('');
     setLoading(true);
     try {
-      const response = await api.post('/api/portal-doncor/esqueci-senha', {
+      const data = await esqueciSenhaPortalDonCor({
         documento,
         email: esqueciEmail,
         novaSenha: esqueciSenha
       });
-      setEsqueciSuccess(response.data.message || 'Senha redefinida com sucesso.');
+      setEsqueciSuccess(data.message || 'Senha redefinida com sucesso.');
       setTimeout(() => {
         setShowForgot(false);
         setEsqueciSuccess('');

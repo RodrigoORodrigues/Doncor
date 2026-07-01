@@ -313,6 +313,7 @@ export const getPortalSinistralidadeDownloadUrl = (item) => {
 
 export const loginPortalDonCor = ({ documento, senha }) => api.post("/portal-doncor/login", { documento, senha }).then((r) => r.data);
 export const alterarSenhaPortalDonCor = (data) => api.post("/portal-doncor/alterar-senha", data).then((r) => r.data);
+export const esqueciSenhaPortalDonCor = (data) => api.post("/portal-doncor/esqueci-senha", data).then((r) => r.data);
 export const fetchPortalDonCorResumo = (documento) => getObject("/portal-doncor/resumo", {}, { params: { documento } });
 export const fetchPortalDonCorFormularios = ({ categoria = "todos" } = {}) =>
   getArray("/portal-doncor/formularios", { params: { categoria } });
