@@ -1060,7 +1060,10 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
                 filtered = [item for item in filtered if str(item.get("tipo") or item.get("tipoLabel") or "").strip().lower() == tipo_norm]
             if status and status != "todos":
                 status_norm = status.strip().lower()
-                filtered = [item for item in filtered if str(item.get("status") or "").strip().lower() == status_norm]
+                if status_norm in ("enviado", "recebido"):
+                    filtered = [item for item in filtered if str(item.get("status") or "").strip().lower() in ("enviado", "recebido")]
+                else:
+                    filtered = [item for item in filtered if str(item.get("status") or "").strip().lower() == status_norm]
 
             term = str(search or "").strip().lower()
             if term:

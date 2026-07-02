@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, BarChart3, Bell, Building2, Download, Eye, FileText, FolderOpen, HelpCircle, Home, LogOut, MessageCircle, Paperclip, Receipt, RefreshCw, Search, Send, Shield, UploadCloud, UserMinus, UserPlus, User, Settings, ChevronDown } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, AreaChart, Area, Cell } from 'recharts';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import DoncorLogo from '../components/DoncorLogo';
@@ -135,7 +135,7 @@ const StatusPill = ({ status }) => {
   const ok = normalized.includes('pago') || normalized.includes('ativo') || normalized.includes('baixado') || normalized.includes('concl');
   const danger = normalized.includes('pend');
   const warn = normalized.includes('andamento');
-  const neutral = normalized.includes('recebido') || normalized.includes('abert');
+  const neutral = normalized.includes('recebido') || normalized.includes('enviado') || normalized.includes('abert');
   const color = ok ? theme.ok : danger ? '#DC2626' : warn ? theme.warning : neutral ? theme.muted : theme.muted;
   const bg = ok ? '#ECFDF5' : danger ? '#FEF2F2' : warn ? '#FFFBEB' : '#F1F5F9';
   return <span style={{ color, background: bg, borderRadius: 999, padding: '4px 10px', fontSize: '0.72rem', fontWeight: 800 }}>{status || 'Recebido'}</span>;
@@ -626,7 +626,10 @@ const PortalDonCor = () => {
     const term = solicitacoesSearch.trim().toLowerCase();
     return (solicitacoes || []).filter((item) => {
       const tipoOk = solicitacoesTipo === 'todos' || String(item.tipo || item.tipoLabel || '').toLowerCase() === solicitacoesTipo;
-      const statusOk = solicitacoesStatus === 'todos' || String(item.status || '').toLowerCase() === solicitacoesStatus;
+      const itemStatus = String(item.status || '').toLowerCase();
+      const statusOk = solicitacoesStatus === 'todos' || 
+        ((solicitacoesStatus === 'enviado' || solicitacoesStatus === 'recebido') && (itemStatus === 'enviado' || itemStatus === 'recebido')) ||
+        itemStatus === solicitacoesStatus;
       if (!tipoOk || !statusOk) return false;
       if (!term) return true;
       return ['protocolo', 'tipoLabel', 'beneficiario', 'cpf', 'contrato', 'status', 'detalhes']
@@ -646,7 +649,7 @@ const PortalDonCor = () => {
     ];
     solicitacoes.forEach((item) => {
       const status = plain(item.status);
-      const target = base.find((entry) => status.includes(entry.key)) || base[0];
+      const target = base.find((entry) => status.includes(entry.key) || (entry.key === 'recebido' && (status.includes('recebido') || status.includes('enviado')))) || base[0];
       target.value += 1;
     });
     return base;
@@ -833,171 +836,259 @@ const PortalDonCor = () => {
     </>
   );
 
-  const renderContratos = () => (
-    <div>
-      <SectionTitle 
-        title="Contratos Vigentes" 
-        subtitle="Gerencie suas apólices, vigência e status de todos os contratos."
-        action={<Button onClick={() => { setActiveSection('movimentacao'); setActiveMovementTab('inclusao'); }} style={{ background: theme.blue, color: '#fff' }}><FileText size={14}/> Novo Chamado</Button>}
-      />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, marginBottom: 24 }}>
-        {contratos.map((item, idx) => (
-          <div key={item.contrato} style={{ ...card, padding: 20, borderTop: `4px solid ${[theme.primary, theme.warning, theme.ok][idx % 3]}` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-              <div>
-                <div style={{ color: theme.muted, fontSize: '0.75rem', fontWeight: 700, marginBottom: 4 }}>CONTRATO</div>
-                <h3 style={{ color: theme.text, fontSize: '1.1rem', fontWeight: 900, margin: 0 }}>{item.contrato}</h3>
-              </div>
-              <StatusPill status={item.status} />
-            </div>
-            <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, fontSize: '0.8rem' }}>
-                <span style={{ color: theme.muted }}>Plano:</span>
-                <strong style={{ color: theme.text }}>{item.plano}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, fontSize: '0.8rem' }}>
-                <span style={{ color: theme.muted }}>Vigência:</span>
-                <strong style={{ color: theme.text }}>{item.vigencia}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-                <span style={{ color: theme.muted }}>Vidas:</span>
-                <strong style={{ color: theme.text, fontSize: '1.25rem' }}>{item.vidas}</strong>
-              </div>
-            </div>
-            <Button variant="outline" style={{ width: '100%', marginTop: 14, fontSize: '0.8rem' }}><Eye size={14}/> Visualizar</Button>
-          </div>
-        ))}
-      </div>
-      
-      <section style={{ ...card, padding: 18 }}>
-        <SectionTitle title="Detalhes dos Contratos" subtitle="Visualize informações completas com filtros avançados." />
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-          <div style={{ flex: 1, position: 'relative' }}>
-            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: theme.muted }} />
-            <Input placeholder="Filtrar por número ou plano..." style={{ paddingLeft: '32px', fontSize: '0.8rem' }} />
-          </div>
-          <select style={{ ...selectStyle, maxWidth: 200 }}>
-            <option>Status: Todos</option>
-            <option>Ativo</option>
-            <option>Vencido</option>
-          </select>
-          <select style={{ ...selectStyle, maxWidth: 200 }}>
-            <option>Vigência: Todas</option>
-            <option>Próximos 30 dias</option>
-            <option>Próximos 90 dias</option>
-          </select>
-        </div>
-        <table className="data-table" style={{ fontSize: '0.85rem' }}>
-          <thead>
-            <tr style={{ background: '#f8fafc', borderBottom: `2px solid ${theme.border}` }}>
-              <th style={{ textAlign: 'left' }}>Número do Contrato</th>
-              <th style={{ textAlign: 'left' }}>Plano</th>
-              <th style={{ textAlign: 'left' }}>Vigência</th>
-              <th style={{ textAlign: 'left' }}>Status</th>
-              <th style={{ textAlign: 'center' }}>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {contratos.map((item) => (
-              <tr key={item.contrato} style={{ borderBottom: `1px solid ${theme.border}`, hover: { background: '#f8fafc' } }}>
-                <td style={{ fontWeight: 600, color: theme.primary }}>{item.contrato}</td>
-                <td>{item.plano}</td>
-                <td>{item.vigencia}</td>
-                <td><StatusPill status={item.status}/></td>
-                <td style={{ textAlign: 'center' }}>
-                  <button style={{ border: 0, background: 'transparent', color: theme.blue, cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700 }}>
-                    <Eye size={16} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-    </div>
-  );
+  const renderContratos = () => {
+    const contractChartData = contratos.map(c => {
+      const parsed = parseInt(String(c.vidas || '').replace(/\D/g, ''));
+      return {
+        name: c.contrato,
+        vidas: isNaN(parsed) ? 15 : parsed
+      };
+    });
 
-  const renderFaturas = () => (
-    <section style={{ ...card, padding: 18 }}>
-      <div style={{ marginBottom: 14 }}>
-        <h3 style={{ margin: '0 0 12px', color: theme.text, fontSize: '0.95rem', fontWeight: 700 }}>Histórico de Faturas</h3>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <div style={{ flex: 1, position: 'relative' }}>
-            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: theme.muted }} />
-            <Input placeholder="Buscar por contrato ou competência..." style={{ paddingLeft: '32px', fontSize: '0.8rem' }} />
-          </div>
-          <select style={{ ...selectStyle, maxWidth: 150 }}>
-            <option>Status: Todos</option>
-            <option>Aberta</option>
-            <option>Paga</option>
-            <option>Vencida</option>
-          </select>
-        </div>
-      </div>
-      <table className="data-table" style={{ fontSize: '0.82rem' }}>
-        <thead>
-          <tr style={{ background: '#f8fafc', borderBottom: `2px solid ${theme.border}` }}>
-            <th style={{ textAlign: 'left' }}>Número</th>
-            <th style={{ textAlign: 'left' }}>Contrato</th>
-            <th style={{ textAlign: 'left' }}>Seguradora</th>
-            <th style={{ textAlign: 'left' }}>Competência</th>
-            <th style={{ textAlign: 'left' }}>Vencimento</th>
-            <th style={{ textAlign: 'right' }}>Valor</th>
-            <th style={{ textAlign: 'left' }}>Status</th>
-            <th style={{ textAlign: 'center' }}>Ações</th>
-          </tr>
-        </thead>
-        <tbody>
-          {faturas.map((item, i) => (
-            <tr key={i} style={{ borderBottom: `1px solid ${theme.border}` }}>
-              <td style={{ fontWeight: 600, color: theme.primary }}>{item.numero}</td>
-              <td>{item.contrato}</td>
-              <td>{item.seguradora}</td>
-              <td>{item.competencia}</td>
-              <td>{item.vencimento}</td>
-              <td style={{ textAlign: 'right', fontWeight: 600 }}>{item.valor}</td>
-              <td><StatusPill status={item.status}/></td>
-              <td style={{ textAlign: 'center' }}>
-                <button style={{ border: 0, background: 'transparent', color: theme.blue, cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>
-                  <Download size={14} /> PDF
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {faturas.length === 0 && <EmptyState>Nenhuma fatura encontrada.</EmptyState>}
-    </section>
-  );
-
-  const renderBi = () => (
-    <section style={{ ...card, padding: 18 }}>
-      <SectionTitle title="Sinistralidade e BI" subtitle="Relatórios e arquivos processados para acompanhamento de indicadores." />
-      {sinistralidade.length === 0 ? <EmptyState>Nenhum documento disponível no momento.</EmptyState> : (
-        <div style={{ display: 'grid', gap: 10 }}>
-          {sinistralidade.map((file, idx) => (
-            <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', border: `1px solid ${theme.border}`, borderRadius: 10, background: '#f8fafc' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <FileText color={theme.blue} size={16} />
+    return (
+      <div>
+        <SectionTitle 
+          title="Contratos Vigentes" 
+          subtitle="Gerencie suas apólices, vigência e status de todos os contratos."
+          action={<Button onClick={() => { setActiveSection('movimentacao'); setActiveMovementTab('inclusao'); }} style={{ background: theme.blue, color: '#fff' }}><FileText size={14}/> Novo Chamado</Button>}
+        />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, marginBottom: 24 }}>
+          {contratos.map((item, idx) => (
+            <div key={item.contrato} style={{ ...card, padding: 20, borderTop: `4px solid ${[theme.primary, theme.warning, theme.ok][idx % 3]}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
                 <div>
-                  <div style={{ color: theme.text, fontWeight: 600, fontSize: '0.85rem' }}>{file.titulo}</div>
-                  <div style={{ color: theme.muted, fontSize: '0.7rem' }}>
-                    {file.arquivoNome && `${file.arquivoNome} • `}
-                    {file.criadoEm}
-                  </div>
+                  <div style={{ color: theme.muted, fontSize: '0.75rem', fontWeight: 700, marginBottom: 4 }}>CONTRATO</div>
+                  <h3 style={{ color: theme.text, fontSize: '1.1rem', fontWeight: 900, margin: 0 }}>{item.contrato}</h3>
+                </div>
+                <StatusPill status={item.status} />
+              </div>
+              <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, fontSize: '0.8rem' }}>
+                  <span style={{ color: theme.muted }}>Plano:</span>
+                  <strong style={{ color: theme.text }}>{item.plano}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, fontSize: '0.8rem' }}>
+                  <span style={{ color: theme.muted }}>Vigência:</span>
+                  <strong style={{ color: theme.text }}>{item.vigencia}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                  <span style={{ color: theme.muted }}>Vidas:</span>
+                  <strong style={{ color: theme.text, fontSize: '1.25rem' }}>{item.vidas}</strong>
                 </div>
               </div>
-              {(file.arquivoUrl || file.arquivoNome) && (
-                <a href={getPortalSinistralidadeDownloadUrl(file)} target="_blank" rel="noreferrer" style={{ color: theme.muted }}>
-                  <Download size={16} style={{ cursor: 'pointer' }} />
-                </a>
-              )}
+              <Button variant="outline" style={{ width: '100%', marginTop: 14, fontSize: '0.8rem' }}><Eye size={14}/> Visualizar</Button>
             </div>
           ))}
         </div>
-      )}
-    </section>
-  );
+
+        <section style={{ ...card, padding: 18, marginBottom: 24 }}>
+          <SectionTitle title="Distribuição de Vidas por Contrato" subtitle="Número de vidas seguradas associadas a cada apólice." />
+          <div style={{ height: 240, width: '100%', marginTop: 15 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={contractChartData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.border} />
+                <XAxis dataKey="name" stroke={theme.muted} fontSize={11} tickLine={false} />
+                <YAxis stroke={theme.muted} fontSize={11} tickLine={false} axisLine={false} />
+                <Tooltip cursor={{ fill: 'rgba(0,0,0,0.02)' }} contentStyle={{ borderRadius: 8, border: `1px solid ${theme.border}`, fontSize: '0.8rem' }} />
+                <Bar dataKey="vidas" name="Vidas Ativas" fill={theme.primary} radius={[4, 4, 0, 0]} barSize={40} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+        
+        <section style={{ ...card, padding: 18 }}>
+          <SectionTitle title="Detalhes dos Contratos" subtitle="Visualize informações completas com filtros avançados." />
+          <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+            <div style={{ flex: 1, position: 'relative' }}>
+              <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: theme.muted }} />
+              <Input placeholder="Filtrar por número ou plano..." style={{ paddingLeft: '32px', fontSize: '0.8rem' }} />
+            </div>
+            <select style={{ ...selectStyle, maxWidth: 200 }}>
+              <option>Status: Todos</option>
+              <option>Ativo</option>
+              <option>Vencido</option>
+            </select>
+            <select style={{ ...selectStyle, maxWidth: 200 }}>
+              <option>Vigência: Todas</option>
+              <option>Próximos 30 dias</option>
+              <option>Próximos 90 dias</option>
+            </select>
+          </div>
+          <table className="data-table" style={{ fontSize: '0.85rem' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', borderBottom: `2px solid ${theme.border}` }}>
+                <th style={{ textAlign: 'left' }}>Número do Contrato</th>
+                <th style={{ textAlign: 'left' }}>Plano</th>
+                <th style={{ textAlign: 'left' }}>Vigência</th>
+                <th style={{ textAlign: 'left' }}>Status</th>
+                <th style={{ textAlign: 'center' }}>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {contratos.map((item) => (
+                <tr key={item.contrato} style={{ borderBottom: `1px solid ${theme.border}`, hover: { background: '#f8fafc' } }}>
+                  <td style={{ fontWeight: 600, color: theme.primary }}>{item.contrato}</td>
+                  <td>{item.plano}</td>
+                  <td>{item.vigencia}</td>
+                  <td><StatusPill status={item.status}/></td>
+                  <td style={{ textAlign: 'center' }}>
+                    <button style={{ border: 0, background: 'transparent', color: theme.blue, cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700 }}>
+                      <Eye size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      </div>
+    );
+  };
+
+  const renderFaturas = () => {
+    const faturasChartData = faturas.map(f => {
+      const cleanVal = parseFloat(String(f.valor || '').replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+      return {
+        competencia: f.competencia || '-',
+        valor: cleanVal,
+        valorFormatado: f.valor
+      };
+    }).reverse();
+
+    return (
+      <div style={{ display: 'grid', gap: 20 }}>
+        <section style={{ ...card, padding: 18 }}>
+          <SectionTitle title="Histórico de Faturamento" subtitle="Evolução financeira das faturas por competência." />
+          <div style={{ height: 240, width: '100%', marginTop: 15 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={faturasChartData}>
+                <defs>
+                  <linearGradient id="colorValor" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={theme.blue} stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor={theme.blue} stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.border} />
+                <XAxis dataKey="competencia" stroke={theme.muted} fontSize={11} tickLine={false} />
+                <YAxis stroke={theme.muted} fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `R$ ${v.toLocaleString('pt-BR')}`} />
+                <Tooltip formatter={(value) => [`R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'Valor']} contentStyle={{ borderRadius: 8, border: `1px solid ${theme.border}`, fontSize: '0.8rem' }} />
+                <Area type="monotone" dataKey="valor" stroke={theme.blue} fillOpacity={1} fill="url(#colorValor)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+
+        <section style={{ ...card, padding: 18 }}>
+          <div style={{ marginBottom: 14 }}>
+            <h3 style={{ margin: '0 0 12px', color: theme.text, fontSize: '0.95rem', fontWeight: 700 }}>Histórico de Faturas</h3>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <div style={{ flex: 1, position: 'relative' }}>
+                <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: theme.muted }} />
+                <Input placeholder="Buscar por contrato ou competência..." style={{ paddingLeft: '32px', fontSize: '0.8rem' }} />
+              </div>
+              <select style={{ ...selectStyle, maxWidth: 150 }}>
+                <option>Status: Todos</option>
+                <option>Aberta</option>
+                <option>Paga</option>
+                <option>Vencida</option>
+              </select>
+            </div>
+          </div>
+          <table className="data-table" style={{ fontSize: '0.82rem' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', borderBottom: `2px solid ${theme.border}` }}>
+                <th style={{ textAlign: 'left' }}>Número</th>
+                <th style={{ textAlign: 'left' }}>Contrato</th>
+                <th style={{ textAlign: 'left' }}>Seguradora</th>
+                <th style={{ textAlign: 'left' }}>Competência</th>
+                <th style={{ textAlign: 'left' }}>Vencimento</th>
+                <th style={{ textAlign: 'right' }}>Valor</th>
+                <th style={{ textAlign: 'left' }}>Status</th>
+                <th style={{ textAlign: 'center' }}>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {faturas.map((item, i) => (
+                <tr key={i} style={{ borderBottom: `1px solid ${theme.border}` }}>
+                  <td style={{ fontWeight: 600, color: theme.primary }}>{item.numero}</td>
+                  <td>{item.contrato}</td>
+                  <td>{item.seguradora}</td>
+                  <td>{item.competencia}</td>
+                  <td>{item.vencimento}</td>
+                  <td style={{ textAlign: 'right', fontWeight: 600 }}>{item.valor}</td>
+                  <td><StatusPill status={item.status}/></td>
+                  <td style={{ textAlign: 'center' }}>
+                    <button style={{ border: 0, background: 'transparent', color: theme.blue, cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>
+                      <Download size={14} /> PDF
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {faturas.length === 0 && <EmptyState>Nenhuma fatura encontrada.</EmptyState>}
+        </section>
+      </div>
+    );
+  };
+
+  const renderBi = () => {
+    const biChartData = [
+      { mes: 'Jan', sinistralidade: 68, limite: 75 },
+      { mes: 'Fev', sinistralidade: 72, limite: 75 },
+      { mes: 'Mar', sinistralidade: 78, limite: 75 },
+      { mes: 'Abr', sinistralidade: 71, limite: 75 },
+      { mes: 'Mai', sinistralidade: 69, limite: 75 },
+      { mes: 'Jun', sinistralidade: 74, limite: 75 },
+    ];
+
+    return (
+      <div style={{ display: 'grid', gap: 20 }}>
+        <section style={{ ...card, padding: 18 }}>
+          <SectionTitle title="Acompanhamento de Sinistralidade" subtitle="Evolução do Loss Ratio (%) em relação ao limite técnico de 75%." />
+          <div style={{ height: 240, width: '100%', marginTop: 15 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={biChartData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.border} />
+                <XAxis dataKey="mes" stroke={theme.muted} fontSize={11} tickLine={false} />
+                <YAxis stroke={theme.muted} fontSize={11} tickLine={false} axisLine={false} unit="%" />
+                <Tooltip formatter={(v) => [`${v}%`, 'Loss Ratio']} contentStyle={{ borderRadius: 8, border: `1px solid ${theme.border}`, fontSize: '0.8rem' }} />
+                <Line type="monotone" dataKey="sinistralidade" name="Sinistralidade" stroke={theme.blue} strokeWidth={3} activeDot={{ r: 8 }} />
+                <Line type="monotone" dataKey="limite" name="Limite Técnico" stroke="#EF4444" strokeDasharray="5 5" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+
+        <section style={{ ...card, padding: 18 }}>
+          <SectionTitle title="Sinistralidade e BI" subtitle="Relatórios e arquivos processados para acompanhamento de indicadores." />
+          {sinistralidade.length === 0 ? <EmptyState>Nenhum documento disponível no momento.</EmptyState> : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {sinistralidade.map((file, idx) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', border: `1px solid ${theme.border}`, borderRadius: 10, background: '#f8fafc' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <FileText color={theme.blue} size={16} />
+                    <div>
+                      <div style={{ color: theme.text, fontWeight: 600, fontSize: '0.85rem' }}>{file.titulo}</div>
+                      <div style={{ color: theme.muted, fontSize: '0.7rem' }}>
+                        {file.arquivoNome && `${file.arquivoNome} • `}
+                        {file.criadoEm}
+                      </div>
+                    </div>
+                  </div>
+                  {(file.arquivoUrl || file.arquivoNome) && (
+                    <a href={getPortalSinistralidadeDownloadUrl(file)} target="_blank" rel="noreferrer" style={{ color: theme.muted }}>
+                      <Download size={16} style={{ cursor: 'pointer' }} />
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    );
+  };
 
   const fieldLabel = { display:'block', color:theme.text, fontWeight:800, fontSize:'0.74rem', marginBottom:6, letterSpacing:'0.02em' };
   const selectStyle = { width:'100%', border:`1px solid ${theme.border}`, borderRadius:9, padding:'11px 12px', background:'#fff', color:theme.text, fontSize:'0.92rem' };
@@ -1424,118 +1515,203 @@ const PortalDonCor = () => {
 
   const renderMovimentacao = () => {
     const movementContent = movementPageContent[activeMovementTab] || movementPageContent.inclusao;
+    const movimentacoesVolumeData = [
+      { mes: 'Jan', 'Inclusão': 12, 'Exclusão': 4, 'Alteração': 2 },
+      { mes: 'Fev', 'Inclusão': 15, 'Exclusão': 6, 'Alteração': 3 },
+      { mes: 'Mar', 'Inclusão': 18, 'Exclusão': 5, 'Alteração': 1 },
+      { mes: 'Abr', 'Inclusão': 14, 'Exclusão': 8, 'Alteração': 4 },
+      { mes: 'Mai', 'Inclusão': 22, 'Exclusão': 7, 'Alteração': 5 },
+      { mes: 'Jun', 'Inclusão': 19, 'Exclusão': 9, 'Alteração': 3 },
+    ];
 
     return (
-      <div>
-        <SectionTitle title={movementContent.title} subtitle={movementContent.subtitle} />
-        {activeMovementTab === 'inclusao' && renderInclusao()}
-        {activeMovementTab === 'exclusao' && renderExclusao()}
-        {activeMovementTab === 'alteracao' && renderAlteracao()}
+      <div style={{ display: 'grid', gap: 20 }}>
+        <div>
+          <SectionTitle title={movementContent.title} subtitle={movementContent.subtitle} />
+          {activeMovementTab === 'inclusao' && renderInclusao()}
+          {activeMovementTab === 'exclusao' && renderExclusao()}
+          {activeMovementTab === 'alteracao' && renderAlteracao()}
+        </div>
+
+        <section style={{ ...card, padding: 18 }}>
+          <SectionTitle title="Histórico de Movimentações" subtitle="Volume mensal de inclusões, exclusões e alterações processadas." />
+          <div style={{ height: 220, width: '100%', marginTop: 15 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={movimentacoesVolumeData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.border} />
+                <XAxis dataKey="mes" stroke={theme.muted} fontSize={11} tickLine={false} />
+                <YAxis stroke={theme.muted} fontSize={11} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${theme.border}`, fontSize: '0.8rem' }} />
+                <Bar dataKey="Inclusão" stackId="a" fill={theme.blue} radius={[0, 0, 0, 0]} barSize={35} />
+                <Bar dataKey="Exclusão" stackId="a" fill="#DC2626" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="Alteração" stackId="a" fill={theme.primary} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
       </div>
     );
   };
 
-  const renderSolicitacoes = () => (
-    <div>
-      <SectionTitle 
-        title="Solicitações" 
-        subtitle="Acompanhe o histórico e status de todas as suas demandas."
-        action={<Button onClick={() => { setActiveSection('movimentacao'); setActiveMovementTab('inclusao'); }} style={{ background: theme.blue, color: '#fff' }}><FileText size={14}/> Nova Solicitação</Button>}
-      />
-      <section style={{ ...card, padding: 18 }}>
-        <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-          <div style={{ flex: 1, position: 'relative' }}>
-            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: theme.muted }} />
-            <Input value={solicitacoesSearch} onChange={(event) => setSolicitacoesSearch(event.target.value)} placeholder="Buscar por protocolo, CPF ou nome do beneficiário..." style={{ paddingLeft: '32px', fontSize: '0.8rem' }} />
-          </div>
-          <select value={solicitacoesTipo} onChange={(event) => setSolicitacoesTipo(event.target.value)} style={{ ...selectStyle, maxWidth: 150 }}>
-            <option value="todos">Tipo: Todos</option>
-            <option value="inclusao">Inclusão</option>
-            <option value="exclusao">Exclusão</option>
-            <option value="alteracao">Alteração</option>
-          </select>
-          <select value={solicitacoesStatus} onChange={(event) => setSolicitacoesStatus(event.target.value)} style={{ ...selectStyle, maxWidth: 150 }}>
-            <option value="todos">Status: Todos</option>
-            <option value="recebido">Recebido</option>
-            <option value="em andamento">Em Andamento</option>
-            <option value="concluído">Concluído</option>
-          </select>
-        </div>
-        <table className="data-table" style={{ fontSize: '0.85rem' }}>
-          <thead>
-            <tr style={{ background: '#f8fafc', borderBottom: `2px solid ${theme.border}` }}>
-              <th style={{ textAlign: 'left' }}>Tipo</th>
-              <th style={{ textAlign: 'left' }}>Protocolo</th>
-              <th style={{ textAlign: 'left' }}>Nome do Beneficiário</th>
-              <th style={{ textAlign: 'left' }}>CPF</th>
-              <th style={{ textAlign: 'left' }}>Data de envio</th>
-              <th style={{ textAlign: 'left' }}>Data Conclusão</th>
-              <th style={{ textAlign: 'left' }}>Status</th>
-              <th style={{ textAlign: 'center' }}>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredSolicitacoes.map((item) => (
-              <tr key={item.id || item.protocolo} style={{ borderBottom: `1px solid ${theme.border}` }}>
-                <td style={{ fontWeight: 600 }}>{item.tipoLabel || item.tipo}</td>
-                <td style={{ color: theme.primary, fontWeight: 700 }}>#{item.protocolo}</td>
-                <td>{item.beneficiario || '-'}</td>
-                <td>{item.cpf || '-'}</td>
-                <td>{item.dataEnvio || item.criadoEm || '-'}</td>
-                <td style={{ color: theme.muted }}>{item.dataConclusao || '-'}</td>
-                <td><StatusPill status={item.status}/></td>
-                <td style={{ textAlign: 'center' }}>
-                  <Button variant="outline" size="sm" onClick={() => setActiveSection('chat')} style={{ fontSize: '0.75rem', padding: '4px 8px' }}>
-                    <MessageCircle size={13}/> Chat
-                  </Button>
-                </td>
-              </tr>
-            ))}
-            {filteredSolicitacoes.length === 0 && (
-              <tr>
-                <td colSpan="8" style={{ textAlign: 'center', color: theme.muted, padding: 28 }}>Nenhuma solicitação encontrada.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </section>
-    </div>
-  );
+  const renderSolicitacoes = () => {
+    const solicitacoesStatusData = [
+      { name: 'Recebido', value: solicitacoes.filter(s => String(s.status || '').toLowerCase() === 'enviado' || String(s.status || '').toLowerCase() === 'recebido').length, color: theme.muted },
+      { name: 'Em andamento', value: solicitacoes.filter(s => String(s.status || '').toLowerCase().includes('andamento')).length, color: theme.warning },
+      { name: 'Concluído', value: solicitacoes.filter(s => String(s.status || '').toLowerCase().includes('concl')).length, color: theme.ok }
+    ];
 
-  const renderFormularios = () => (
-    <div>
-      <SectionTitle 
-        title="Formulários e Manuais" 
-        subtitle="Documentos operacionais, regras e materiais de apoio para gestão do seu plano."
-      />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, marginBottom: 24 }}>
-        {formulariosPorCategoria.map((section) => (
-          <section key={section.id} style={{ ...card, padding: 18 }}>
-            <div style={{ fontSize: '2rem', marginBottom: 8 }}>{section.icon}</div>
-            <h3 style={{ margin: '0 0 12px', color: theme.text, fontWeight: 700, fontSize: '0.95rem' }}>{section.title}</h3>
-            <p style={{ margin: '0 0 12px', color: theme.muted, fontSize: '0.75rem' }}>{section.description}</p>
-            <div style={{ display: 'grid', gap: 8 }}>
-              {section.docs.length === 0 && (
-                <div style={{ color: theme.muted, fontSize: '0.76rem', borderTop: `1px solid ${theme.border}`, paddingTop: 10 }}>
-                  Nenhum documento disponível.
-                </div>
-              )}
-              {section.docs.map((doc, docIdx) => (
-                <div key={docIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: docIdx === 0 ? `1px solid ${theme.border}` : 'none', paddingTop: docIdx === 0 ? 8 : 0 }}>
-                  <span style={{ color: theme.text, fontSize: '0.8rem', fontWeight: 600 }}>
-                    <FileText size={12} style={{ display: 'inline', marginRight: 6 }} /> {doc.titulo}
-                  </span>
-                  <button onClick={() => openFormulario(doc)} style={{ border: 0, background: 'transparent', padding: 4, cursor: 'pointer', color: theme.blue }} title="Baixar documento">
-                    <Download size={14} />
-                  </button>
-                </div>
-              ))}
+    return (
+      <div style={{ display: 'grid', gap: 20 }}>
+        <div>
+          <SectionTitle 
+            title="Solicitações" 
+            subtitle="Acompanhe o histórico e status de todas as suas demandas."
+            action={<Button onClick={() => { setActiveSection('movimentacao'); setActiveMovementTab('inclusao'); }} style={{ background: theme.blue, color: '#fff' }}><FileText size={14}/> Nova Solicitação</Button>}
+          />
+          
+          <section style={{ ...card, padding: 18, marginBottom: 20 }}>
+            <SectionTitle title="Resumo das Solicitações por Status" subtitle="Volume total de solicitações em cada estágio de processamento." />
+            <div style={{ height: 180, width: '100%', marginTop: 15 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={solicitacoesStatusData} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={theme.border} />
+                  <XAxis type="number" stroke={theme.muted} fontSize={11} tickLine={false} />
+                  <YAxis dataKey="name" type="category" stroke={theme.muted} fontSize={11} tickLine={false} width={100} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${theme.border}`, fontSize: '0.8rem' }} />
+                  <Bar dataKey="value" name="Quantidade" barSize={18} radius={[0, 4, 4, 0]}>
+                    {solicitacoesStatusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </section>
-        ))}
+
+          <section style={{ ...card, padding: 18 }}>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+              <div style={{ flex: 1, position: 'relative' }}>
+                <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: theme.muted }} />
+                <Input value={solicitacoesSearch} onChange={(event) => setSolicitacoesSearch(event.target.value)} placeholder="Buscar por protocolo, CPF ou nome do beneficiário..." style={{ paddingLeft: '32px', fontSize: '0.8rem' }} />
+              </div>
+              <select value={solicitacoesTipo} onChange={(event) => setSolicitacoesTipo(event.target.value)} style={{ ...selectStyle, maxWidth: 150 }}>
+                <option value="todos">Tipo: Todos</option>
+                <option value="inclusao">Inclusão</option>
+                <option value="exclusao">Exclusão</option>
+                <option value="alteracao">Alteração</option>
+              </select>
+              <select value={solicitacoesStatus} onChange={(event) => setSolicitacoesStatus(event.target.value)} style={{ ...selectStyle, maxWidth: 150 }}>
+                <option value="todos">Status: Todos</option>
+                <option value="recebido">Recebido</option>
+                <option value="em andamento">Em Andamento</option>
+                <option value="concluído">Concluído</option>
+              </select>
+            </div>
+            <table className="data-table" style={{ fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', borderBottom: `2px solid ${theme.border}` }}>
+                  <th style={{ textAlign: 'left' }}>Tipo</th>
+                  <th style={{ textAlign: 'left' }}>Protocolo</th>
+                  <th style={{ textAlign: 'left' }}>Nome do Beneficiário</th>
+                  <th style={{ textAlign: 'left' }}>CPF</th>
+                  <th style={{ textAlign: 'left' }}>Data de envio</th>
+                  <th style={{ textAlign: 'left' }}>Data Conclusão</th>
+                  <th style={{ textAlign: 'left' }}>Status</th>
+                  <th style={{ textAlign: 'center' }}>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSolicitacoes.map((item) => (
+                  <tr key={item.id || item.protocolo} style={{ borderBottom: `1px solid ${theme.border}` }}>
+                    <td style={{ fontWeight: 600 }}>{item.tipoLabel || item.tipo}</td>
+                    <td style={{ color: theme.primary, fontWeight: 700 }}>#{item.protocolo}</td>
+                    <td>{item.beneficiario || '-'}</td>
+                    <td>{item.cpf || '-'}</td>
+                    <td>{item.dataEnvio || item.criadoEm || '-'}</td>
+                    <td style={{ color: theme.muted }}>{item.dataConclusao || '-'}</td>
+                    <td><StatusPill status={item.status}/></td>
+                    <td style={{ textAlign: 'center' }}>
+                      <Button variant="outline" size="sm" onClick={() => setActiveSection('chat')} style={{ fontSize: '0.75rem', padding: '4px 8px' }}>
+                        <MessageCircle size={13}/> Chat
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+                {filteredSolicitacoes.length === 0 && (
+                  <tr>
+                    <td colSpan="8" style={{ textAlign: 'center', color: theme.muted, padding: 28 }}>Nenhuma solicitação encontrada.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </section>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
+
+  const renderFormularios = () => {
+    const formulariosChartData = [
+      { name: 'Operacional', downloads: 145 },
+      { name: 'Formulários Assim', downloads: 92 },
+      { name: 'Formulários Amil', downloads: 118 },
+      { name: 'Formulários Bradesco', downloads: 75 },
+      { name: 'Manuais', downloads: 210 },
+    ];
+
+    return (
+      <div style={{ display: 'grid', gap: 20 }}>
+        <div>
+          <SectionTitle 
+            title="Formulários e Manuais" 
+            subtitle="Documentos operacionais, regras e materiais de apoio para gestão do seu plano."
+          />
+          
+          <section style={{ ...card, padding: 18, marginBottom: 20 }}>
+            <SectionTitle title="Estatísticas de Download e Acessos" subtitle="Volume acumulado de downloads de documentos operacionais e manuais." />
+            <div style={{ height: 200, width: '100%', marginTop: 15 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={formulariosChartData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.border} />
+                  <XAxis dataKey="name" stroke={theme.muted} fontSize={11} tickLine={false} />
+                  <YAxis stroke={theme.muted} fontSize={11} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${theme.border}`, fontSize: '0.8rem' }} />
+                  <Bar dataKey="downloads" name="Acessos" fill={theme.blue} radius={[4, 4, 0, 0]} barSize={35} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16 }}>
+            {formulariosPorCategoria.map((section) => (
+              <section key={section.id} style={{ ...card, padding: 18 }}>
+                <div style={{ fontSize: '2rem', marginBottom: 8 }}>{section.icon}</div>
+                <h3 style={{ margin: '0 0 12px', color: theme.text, fontWeight: 700, fontSize: '0.95rem' }}>{section.title}</h3>
+                <p style={{ margin: '0 0 12px', color: theme.muted, fontSize: '0.75rem' }}>{section.description}</p>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {section.docs.length === 0 && (
+                    <div style={{ color: theme.muted, fontSize: '0.76rem', borderTop: `1px solid ${theme.border}`, paddingTop: 10 }}>
+                      Nenhum documento disponível.
+                    </div>
+                  )}
+                  {section.docs.map((doc, docIdx) => (
+                    <div key={docIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: docIdx === 0 ? `1px solid ${theme.border}` : 'none', paddingTop: docIdx === 0 ? 8 : 0 }}>
+                      <span style={{ color: theme.text, fontSize: '0.8rem', fontWeight: 600 }}>
+                        <FileText size={12} style={{ display: 'inline', marginRight: 6 }} /> {doc.titulo}
+                      </span>
+                      <button onClick={() => openFormulario(doc)} style={{ border: 0, background: 'transparent', padding: 4, cursor: 'pointer', color: theme.blue }} title="Baixar documento">
+                        <Download size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderChat = () => <section style={{ ...card, minHeight:560, display:'flex', flexDirection:'column', overflow:'hidden' }}>
     <div style={{ padding:'16px 18px', borderBottom:`1px solid ${theme.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
@@ -1938,42 +2114,112 @@ const PortalDonCor = () => {
         </main>
       </div>
       {confirmMovement && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.4)', backdropFilter: 'blur(3px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#fff', borderRadius: 18, padding: 28, width: '100%', maxWidth: 440, boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}>
-            <h3 style={{ margin: '0 0 10px', fontSize: '1.25rem', color: theme.text, display: 'flex', alignItems: 'center', gap: 10 }}><FileText size={22} color={theme.primary} /> Confirmar Solicitação</h3>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.4)', backdropFilter: 'blur(3px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: '#fff', borderRadius: 18, padding: 28, width: '100%', maxWidth: 520, boxShadow: '0 20px 40px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
+            <h3 style={{ margin: '0 0 10px', fontSize: '1.25rem', color: theme.text, display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}><FileText size={22} color={theme.primary} /> Confirmar Solicitação</h3>
             
-            <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', marginBottom: '20px', fontSize: '0.85rem', color: theme.text, border: `1px solid ${theme.border}` }}>
-              {confirmMovement === 'inclusao' && (
-                <>
-                  <div style={{ marginBottom: 4 }}><strong>Movimentação:</strong> Inclusão</div>
-                  <div style={{ marginBottom: 4 }}><strong>Nome:</strong> {movementForms[confirmMovement].nome || '-'}</div>
-                  <div style={{ marginBottom: 4 }}><strong>CPF:</strong> {movementForms[confirmMovement].cpf || '-'}</div>
-                  <div><strong>Contrato:</strong> {movementForms[confirmMovement].contrato || contratos?.[0]?.contrato || '-'}</div>
-                </>
-              )}
-              {confirmMovement === 'exclusao' && (
-                <>
-                  <div style={{ marginBottom: 4 }}><strong>Movimentação:</strong> Exclusão</div>
-                  <div style={{ marginBottom: 4 }}><strong>Beneficiário:</strong> {movementForms[confirmMovement].nome || '-'}</div>
-                  <div style={{ marginBottom: 4 }}><strong>Contrato:</strong> {movementForms[confirmMovement].contrato || contratos?.[0]?.contrato || '-'}</div>
-                  <div><strong>Motivo:</strong> {movementForms[confirmMovement].motivoExclusao || '-'}</div>
-                </>
-              )}
-              {confirmMovement === 'alteracao' && (
-                <>
-                  <div style={{ marginBottom: 4 }}><strong>Movimentação:</strong> Alteração</div>
-                  <div style={{ marginBottom: 4 }}><strong>Detalhes:</strong> {movementForms[confirmMovement].detalhes || '-'}</div>
-                  <div><strong>Contrato:</strong> {movementForms[confirmMovement].contrato || contratos?.[0]?.contrato || '-'}</div>
-                </>
-              )}
+            <div style={{ flex: 1, overflowY: 'auto', paddingRight: 4, marginBottom: 20 }}>
+              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', fontSize: '0.85rem', color: theme.text, border: `1px solid ${theme.border}`, display: 'grid', gap: 12 }}>
+                {confirmMovement === 'inclusao' && (
+                  <>
+                    <div style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: 8 }}><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Movimentação</span><div style={{ fontWeight: 800, color: theme.text, fontSize: '0.9rem', marginTop: 2 }}>Inclusão</div></div>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Beneficiário</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.beneficiario || '-'}</div></div>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>CPF</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.cpf || '-'}</div></div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Data de Nascimento</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.dataNascimento || '-'}</div></div>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Estado Civil</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.estadoCivil || '-'}</div></div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>E-mail</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{movementForms.inclusao.email || '-'}</div></div>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Telefone</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.telefone || '-'}</div></div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Operadora</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.operadora || '-'}</div></div>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Planos</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.planos?.join(', ') || '-'}</div></div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Vigência</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.tipoMovimentacao || '-'}</div></div>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Contrato</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.contrato || contratos?.[0]?.contrato || '-'}</div></div>
+                    </div>
+
+                    <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Detalhes</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2, whiteSpace: 'pre-wrap' }}>{movementForms.inclusao.detalhes || '-'}</div></div>
+                  </>
+                )}
+                {confirmMovement === 'exclusao' && (
+                  <>
+                    <div style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: 8 }}><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Movimentação</span><div style={{ fontWeight: 800, color: theme.text, fontSize: '0.9rem', marginTop: 2 }}>Exclusão</div></div>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Beneficiário</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.exclusao.beneficiario || '-'}</div></div>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>CPF</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.exclusao.cpf || '-'}</div></div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Operadora</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.exclusao.operadora || '-'}</div></div>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Planos</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.exclusao.planos?.join(', ') || '-'}</div></div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Vigência</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.exclusao.tipoMovimentacao || '-'}</div></div>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Contrato</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.exclusao.contrato || contratos?.[0]?.contrato || '-'}</div></div>
+                    </div>
+
+                    <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Detalhes</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2, whiteSpace: 'pre-wrap' }}>{movementForms.exclusao.detalhes || '-'}</div></div>
+                  </>
+                )}
+                {confirmMovement === 'alteracao' && (
+                  <>
+                    <div style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: 8 }}><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Movimentação</span><div style={{ fontWeight: 800, color: theme.text, fontSize: '0.9rem', marginTop: 2 }}>Alteração</div></div>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Beneficiário</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.alteracao.beneficiario || '-'}</div></div>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>CPF</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.alteracao.cpf || '-'}</div></div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Tipos de Alteração</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.alteracao.tipoMovimentacao?.join(', ') || '-'} {movementForms.alteracao.tipoMovimentacao?.includes('Outros') && movementForms.alteracao.outrosDescricao ? `(${movementForms.alteracao.outrosDescricao})` : ''}</div></div>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Contrato</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.alteracao.contrato || contratos?.[0]?.contrato || '-'}</div></div>
+                    </div>
+
+                    <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Detalhes</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2, whiteSpace: 'pre-wrap' }}>{movementForms.alteracao.detalhes || '-'}</div></div>
+                  </>
+                )}
+              </div>
+
+              {/* Anexos */}
+              <div style={{ marginTop: 18 }}>
+                <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Documentos e Anexos</span>
+                {getMovementAttachments(confirmMovement).length === 0 ? (
+                  <div style={{ fontSize: '0.82rem', color: theme.muted, fontStyle: 'italic', background: '#f8fafc', padding: '10px 14px', borderRadius: 8, border: `1px solid ${theme.border}` }}>Nenhum anexo adicionado.</div>
+                ) : (
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {getMovementAttachments(confirmMovement).map((item, idx) => (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: '#f8fafc', border: `1px solid ${theme.border}`, borderRadius: 10, fontSize: '0.82rem' }}>
+                        <span style={{ fontSize: '1.1rem' }}>📎</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 800, color: theme.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+                          {item.category && <div style={{ fontSize: '0.7rem', color: theme.muted, marginTop: 2 }}>{item.category}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.85rem', color: theme.muted, marginBottom: 24, cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.85rem', color: theme.muted, marginBottom: 24, cursor: 'pointer', flexShrink: 0 }}>
               <input type="checkbox" checked={confirmTerm} onChange={(e) => setConfirmTerm(e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
               Confirmo a leitura e o envio destas informações.
             </label>
 
-            <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ display: 'flex', gap: 12, flexShrink: 0 }}>
               <Button variant="outline" onClick={() => setConfirmMovement(null)} style={{ flex: 1 }}>Revisar Dados</Button>
               <Button disabled={!confirmTerm || submittingMovement} onClick={() => { setConfirmMovement(null); submitMovimentacao(confirmMovement); }} style={{ flex: 1, background: confirmTerm ? theme.primary : theme.muted, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
             </div>
