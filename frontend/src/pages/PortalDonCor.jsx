@@ -78,14 +78,17 @@ const defaultMovementForms = {
     operadora: '',
     planos: ['Saúde'],
     beneficiario: '',
+    nomeMae: '',
     cpf: '',
     dataNascimento: '',
     estadoCivil: '',
+    parentesco: 'Titular',
     email: '',
     telefone: '',
     detalhes: '',
     tipoMovimentacao: 'No vencimento',
     outrosDescricao: '',
+    outraOperadora: '',
   },
   exclusao: {
     operadora: '',
@@ -95,6 +98,7 @@ const defaultMovementForms = {
     detalhes: '',
     tipoMovimentacao: 'No vencimento',
     outrosDescricao: '',
+    outraOperadora: '',
   },
   alteracao: {
     planos: [],
@@ -174,6 +178,9 @@ const PortalDonCor = () => {
   const [activeMovementTab, setActiveMovementTab] = useState('inclusao');
   const [confirmMovement, setConfirmMovement] = useState(null);
   const [confirmTerm, setConfirmTerm] = useState(false);
+  const [validationErrors, setValidationErrors] = useState(null);
+  const [attemptedSubmit, setAttemptedSubmit] = useState({ inclusao: false, exclusao: false, alteracao: false });
+  const [showValidationModal, setShowValidationModal] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
   const [esqueciEmail, setEsqueciEmail] = useState('');
   const [esqueciSenha, setEsqueciSenha] = useState('');
@@ -576,6 +583,107 @@ const PortalDonCor = () => {
   const resetMovementForm = (section) => {
     setMovementForms((current) => ({ ...current, [section]: defaultMovementForms[section] }));
     setMovementAttachments((current) => ({ ...current, [section]: defaultMovementAttachments[section] }));
+    setAttemptedSubmit((prev) => ({ ...prev, [section]: false }));
+    setValidationErrors((prev) => (prev?.section === section ? null : prev));
+  };
+
+  const validateMovementForm = (section) => {
+    const missingFields = [];
+    const form = movementForms[section];
+    const attachments = movementAttachments[section];
+
+    if (section === 'inclusao') {
+      if (!form.operadora) missingFields.push('Operadora');
+      if (form.operadora === 'Outra' && !form.outraOperadora?.trim()) missingFields.push('Nome da outra Operadora');
+      if (!form.planos || form.planos.length === 0) missingFields.push('Pelo menos um Plano (Saúde/Dental)');
+      if (!form.beneficiario?.trim()) missingFields.push('Nome Completo do Beneficiário');
+      if (!form.nomeMae?.trim()) missingFields.push('Nome da Mãe');
+      if (!form.cpf?.trim()) missingFields.push('CPF');
+      if (!form.dataNascimento) missingFields.push('Data de Nascimento');
+      if (!form.estadoCivil) missingFields.push('Estado Civil');
+      if (!form.parentesco) missingFields.push('Parentesco');
+      if (!form.email?.trim()) missingFields.push('E-mail');
+      if (!form.telefone?.trim()) missingFields.push('Telefone');
+      if (!form.detalhes?.trim()) missingFields.push('Detalhes da Inclusão');
+
+      // Attachments check
+      const requiredDocs = ['RG / CPF', 'Comprovante de Residência', 'CTPS / eSocial', 'Formulário Assinado'];
+      requiredDocs.forEach(doc => {
+        const att = attachments?.[doc];
+        if (!att || !att.name || att.size === 0) {
+          missingFields.push(`Anexo: ${doc}`);
+        }
+      });
+      if (attachments?.['Outros'] && !form.outrosDescricao?.trim()) {
+        missingFields.push('Descrição do anexo Outros');
+      }
+    } else if (section === 'exclusao') {
+      if (!form.operadora) missingFields.push('Operadora');
+      if (form.operadora === 'Outra' && !form.outraOperadora?.trim()) missingFields.push('Nome da outra Operadora');
+      if (!form.planos || form.planos.length === 0) missingFields.push('Pelo menos um Plano (Saúde/Dental)');
+      if (!form.beneficiario?.trim()) missingFields.push('Nome Completo');
+      if (!form.cpf?.trim()) missingFields.push('CPF');
+      if (!form.detalhes?.trim()) missingFields.push('Detalhes da Exclusão');
+
+      // Attachments check
+      const requiredDocs = ['Termo de Rescisão', 'Formulário de Exclusão Assinado'];
+      requiredDocs.forEach(doc => {
+        const att = attachments?.[doc];
+        if (!att || !att.name || att.size === 0) {
+          missingFields.push(`Anexo: ${doc}`);
+        }
+      });
+      if (attachments?.['Outros'] && !form.outrosDescricao?.trim()) {
+        missingFields.push('Descrição do anexo Outros');
+      }
+    } else if (section === 'alteracao') {
+      if (!form.planos || form.planos.length === 0) missingFields.push('Selecione pelo menos um Contrato/Plano');
+      if (!form.beneficiario?.trim()) missingFields.push('Nome Completo');
+      if (!form.cpf?.trim()) missingFields.push('CPF');
+      if (!form.detalhes?.trim()) missingFields.push('Detalhes da Alteração');
+      
+      // Support files list attachments
+      if (!attachments || attachments.length === 0) {
+        missingFields.push('Anexo de apoio (Selecione pelo menos um arquivo)');
+      }
+    }
+
+    return missingFields;
+  };
+
+  const isFieldInvalid = (section, fieldName) => {
+    if (!attemptedSubmit[section]) return false;
+    const form = movementForms[section];
+    if (fieldName === 'planos') {
+      return !form.planos || form.planos.length === 0;
+    }
+    if (fieldName === 'outraOperadora') {
+      return form.operadora === 'Outra' && (!form.outraOperadora || !form.outraOperadora.trim());
+    }
+    const val = form[fieldName];
+    return !val || (typeof val === 'string' && !val.trim());
+  };
+
+  const isAttachmentInvalid = (section, docName) => {
+    if (!attemptedSubmit[section]) return false;
+    if (section === 'alteracao') {
+      return !movementAttachments.alteracao || movementAttachments.alteracao.length === 0;
+    }
+    const att = movementAttachments[section]?.[docName];
+    return !att || !att.name || att.size === 0;
+  };
+
+  const handleTrySubmit = (section) => {
+    setAttemptedSubmit((prev) => ({ ...prev, [section]: true }));
+    const missing = validateMovementForm(section);
+    if (missing.length > 0) {
+      setValidationErrors({ section, fields: missing });
+      setShowValidationModal(true);
+      return;
+    }
+    setValidationErrors(null);
+    setConfirmMovement(section);
+    setConfirmTerm(false);
   };
 
   const getMovementAttachments = (section) => {
@@ -591,6 +699,7 @@ const PortalDonCor = () => {
     const form = movementForms[section];
     const contrato = form.contrato || payload?.parceiro?.contratos?.[0] || contratos?.[0]?.contrato || '';
     setSubmittingMovement(true);
+    const resolvedOperadora = form.operadora === 'Outra' ? (form.outraOperadora || 'Outra') : form.operadora;
     try {
       const saved = await createPortalDonCorMovimentacao({
         tipo: section,
@@ -598,6 +707,7 @@ const PortalDonCor = () => {
         empresa,
         contrato,
         ...form,
+        operadora: resolvedOperadora,
         anexos: getMovementAttachments(section),
       });
       setSolicitacoes((items) => [saved, ...items]);
@@ -1049,6 +1159,22 @@ const PortalDonCor = () => {
     const attachments = movementAttachments.inclusao;
     return (
     <div style={{ display: 'grid', gridTemplateColumns: '2fr 0.95fr', gap: 22 }}>
+      {validationErrors && validationErrors.section === 'inclusao' && (
+        <div style={{ gridColumn: '1 / -1', background: '#FEF2F2', border: '2px solid #EF4444', borderRadius: 12, padding: 20, boxShadow: '0 4px 12px rgba(239, 68, 68, 0.1)' }}>
+          <h4 style={{ color: '#991B1B', fontWeight: 900, fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 8px' }}>
+            ⚠️ ATENÇÃO: Informações Pendentes
+          </h4>
+          <p style={{ color: '#7F1D1D', fontSize: '0.88rem', margin: 0, fontWeight: 700 }}>
+            Não foi possível prosseguir com o envio. Por favor, preencha todos os campos obrigatórios e anexe os documentos destacados em vermelho abaixo:
+          </p>
+          <ul style={{ margin: '12px 0 0', paddingLeft: 20, color: '#7F1D1D', fontSize: '0.84rem', fontWeight: 600, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px 16px' }}>
+            {validationErrors.fields.map((err, i) => (
+              <li key={i} style={{ listStyleType: 'disc' }}>{err}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gap: 22 }}>
         <section style={{ ...card, padding: 24 }}>
           <h3 style={{ color: theme.primary, margin: '0 0 14px', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1057,20 +1183,70 @@ const PortalDonCor = () => {
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
             <div>
               <label style={fieldLabel}>Operadora *</label>
-              <select style={selectStyle} value={form.operadora} onChange={(event) => updateMovementField('inclusao', 'operadora', event.target.value)}>
+              <select
+                style={{
+                  ...selectStyle,
+                  border: isFieldInvalid('inclusao', 'operadora') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                  boxShadow: isFieldInvalid('inclusao', 'operadora') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+                value={form.operadora}
+                onChange={(event) => updateMovementField('inclusao', 'operadora', event.target.value)}
+              >
                 <option value="">Selecione a Operadora</option>
                 <option>Assim Saúde</option>
                 <option>Amil</option>
                 <option>SulAmérica</option>
                 <option>Bradesco Saúde</option>
+                <option value="Outra">Outra</option>
               </select>
+              {isFieldInvalid('inclusao', 'operadora') && (
+                <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                  ⚠️ Selecione uma Operadora.
+                </span>
+              )}
+              {form.operadora === 'Outra' && (
+                <div style={{ marginTop: 14 }}>
+                  <label style={fieldLabel}>Nome da Operadora *</label>
+                  <Input
+                    placeholder="Digite o nome da outra operadora"
+                    value={form.outraOperadora || ''}
+                    onChange={(event) => updateMovementField('inclusao', 'outraOperadora', event.target.value)}
+                    style={{
+                      border: isFieldInvalid('inclusao', 'outraOperadora') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                      boxShadow: isFieldInvalid('inclusao', 'outraOperadora') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                      transition: 'all 0.2s ease',
+                      fontSize: '0.85rem'
+                    }}
+                  />
+                  {isFieldInvalid('inclusao', 'outraOperadora') && (
+                    <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                      ⚠️ Digite o nome da outra Operadora.
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             <div>
               <label style={fieldLabel}>Plano *</label>
-              <div style={{ display: 'flex', gap: 18, marginTop: 12 }}>
+              <div style={{
+                display: 'flex',
+                gap: 18,
+                marginTop: 12,
+                border: isFieldInvalid('inclusao', 'planos') ? '2px solid #EF4444' : 'none',
+                padding: isFieldInvalid('inclusao', 'planos') ? '6px 12px' : '0',
+                borderRadius: 8,
+                background: isFieldInvalid('inclusao', 'planos') ? '#FEF2F2' : 'none',
+                transition: 'all 0.2s ease'
+              }}>
                 <label style={checkboxRow}><input type="checkbox" checked={form.planos.includes('Saúde')} onChange={() => toggleMovementArrayValue('inclusao', 'planos', 'Saúde')} /> Saúde</label>
                 <label style={checkboxRow}><input type="checkbox" checked={form.planos.includes('Dental')} onChange={() => toggleMovementArrayValue('inclusao', 'planos', 'Dental')} /> Dental</label>
               </div>
+              {isFieldInvalid('inclusao', 'planos') && (
+                <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                  ⚠️ Selecione pelo menos um Plano.
+                </span>
+              )}
             </div>
           </div>
         </section>
@@ -1082,33 +1258,159 @@ const PortalDonCor = () => {
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={fieldLabel}>Nome Completo *</label>
-              <Input placeholder="Nome completo do beneficiário" value={form.beneficiario} onChange={(event) => updateMovementField('inclusao', 'beneficiario', event.target.value)} />
+              <Input
+                placeholder="Nome completo do beneficiário"
+                value={form.beneficiario}
+                onChange={(event) => updateMovementField('inclusao', 'beneficiario', event.target.value)}
+                style={{
+                  border: isFieldInvalid('inclusao', 'beneficiario') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                  boxShadow: isFieldInvalid('inclusao', 'beneficiario') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+              />
+              {isFieldInvalid('inclusao', 'beneficiario') && (
+                <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                  ⚠️ O preenchimento do Nome Completo é obrigatório.
+                </span>
+              )}
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={fieldLabel}>Nome da Mãe *</label>
+              <Input
+                placeholder="Nome completo da mãe"
+                value={form.nomeMae || ''}
+                onChange={(event) => updateMovementField('inclusao', 'nomeMae', event.target.value)}
+                style={{
+                  border: isFieldInvalid('inclusao', 'nomeMae') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                  boxShadow: isFieldInvalid('inclusao', 'nomeMae') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+              />
+              {isFieldInvalid('inclusao', 'nomeMae') && (
+                <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                  ⚠️ O preenchimento do Nome da Mãe é obrigatório.
+                </span>
+              )}
             </div>
             <div>
               <label style={fieldLabel}>CPF *</label>
-              <Input placeholder="000.000.000-00" value={form.cpf} onChange={(event) => updateMovementField('inclusao', 'cpf', event.target.value)} />
+              <Input
+                placeholder="000.000.000-00"
+                value={form.cpf}
+                onChange={(event) => updateMovementField('inclusao', 'cpf', event.target.value)}
+                style={{
+                  border: isFieldInvalid('inclusao', 'cpf') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                  boxShadow: isFieldInvalid('inclusao', 'cpf') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+              />
+              {isFieldInvalid('inclusao', 'cpf') && (
+                <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                  ⚠️ O preenchimento do CPF é obrigatório.
+                </span>
+              )}
             </div>
             <div>
               <label style={fieldLabel}>Data de Nascimento *</label>
-              <Input type="date" value={form.dataNascimento} onChange={(event) => updateMovementField('inclusao', 'dataNascimento', event.target.value)} />
+              <Input
+                type="date"
+                value={form.dataNascimento}
+                onChange={(event) => updateMovementField('inclusao', 'dataNascimento', event.target.value)}
+                style={{
+                  border: isFieldInvalid('inclusao', 'dataNascimento') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                  boxShadow: isFieldInvalid('inclusao', 'dataNascimento') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+              />
+              {isFieldInvalid('inclusao', 'dataNascimento') && (
+                <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                  ⚠️ A Data de Nascimento é obrigatória.
+                </span>
+              )}
             </div>
             <div>
               <label style={fieldLabel}>Estado Civil *</label>
-              <select style={selectStyle} value={form.estadoCivil} onChange={(event) => updateMovementField('inclusao', 'estadoCivil', event.target.value)}>
+              <select
+                style={{
+                  ...selectStyle,
+                  border: isFieldInvalid('inclusao', 'estadoCivil') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                  boxShadow: isFieldInvalid('inclusao', 'estadoCivil') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+                value={form.estadoCivil}
+                onChange={(event) => updateMovementField('inclusao', 'estadoCivil', event.target.value)}
+              >
                 <option value="">Selecione</option>
                 <option>Solteiro(a)</option>
                 <option>Casado(a)</option>
                 <option>Divorciado(a)</option>
                 <option>Viúvo(a)</option>
               </select>
+              {isFieldInvalid('inclusao', 'estadoCivil') && (
+                <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                  ⚠️ Selecione o Estado Civil.
+                </span>
+              )}
+            </div>
+            <div>
+              <label style={fieldLabel}>Parentesco *</label>
+              <select
+                style={{
+                  ...selectStyle,
+                  border: isFieldInvalid('inclusao', 'parentesco') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                  boxShadow: isFieldInvalid('inclusao', 'parentesco') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+                value={form.parentesco || 'Titular'}
+                onChange={(event) => updateMovementField('inclusao', 'parentesco', event.target.value)}
+              >
+                <option>Titular</option>
+                <option>Cônjuge</option>
+                <option>Filho(a)</option>
+                <option>Dependente</option>
+              </select>
+              {isFieldInvalid('inclusao', 'parentesco') && (
+                <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                  ⚠️ Selecione o Parentesco.
+                </span>
+              )}
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={fieldLabel}>E-mail *</label>
-              <Input placeholder="email@exemplo.com" type="email" value={form.email} onChange={(event) => updateMovementField('inclusao', 'email', event.target.value)} />
+              <Input
+                placeholder="email@exemplo.com"
+                type="email"
+                value={form.email}
+                onChange={(event) => updateMovementField('inclusao', 'email', event.target.value)}
+                style={{
+                  border: isFieldInvalid('inclusao', 'email') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                  boxShadow: isFieldInvalid('inclusao', 'email') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+              />
+              {isFieldInvalid('inclusao', 'email') && (
+                <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                  ⚠️ O preenchimento do E-mail é obrigatório.
+                </span>
+              )}
             </div>
             <div>
               <label style={fieldLabel}>Telefone *</label>
-              <Input placeholder="(11) 90000-0000" value={form.telefone} onChange={(event) => updateMovementField('inclusao', 'telefone', event.target.value)} />
+              <Input
+                placeholder="(11) 90000-0000"
+                value={form.telefone}
+                onChange={(event) => updateMovementField('inclusao', 'telefone', event.target.value)}
+                style={{
+                  border: isFieldInvalid('inclusao', 'telefone') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                  boxShadow: isFieldInvalid('inclusao', 'telefone') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+              />
+              {isFieldInvalid('inclusao', 'telefone') && (
+                <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                  ⚠️ O preenchimento do Telefone é obrigatório.
+                </span>
+              )}
             </div>
           </div>
         </section>
@@ -1122,19 +1424,26 @@ const PortalDonCor = () => {
             <textarea
               value={form.detalhes}
               onChange={(event) => updateMovementField('inclusao', 'detalhes', event.target.value)}
-              placeholder="Informe observações, condições ou instruções adicionais para esta inclusão..."
+              placeholder="Informe observações, conditions ou instruções adicionais para esta inclusão..."
               style={{
                 width: '100%',
                 minHeight: 128,
-                border: `1px solid ${theme.border}`,
+                border: isFieldInvalid('inclusao', 'detalhes') ? '2.5px solid #EF4444' : `1px solid ${theme.border}`,
+                boxShadow: isFieldInvalid('inclusao', 'detalhes') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
                 borderRadius: 10,
                 padding: 14,
                 fontFamily: 'inherit',
                 fontSize: '0.92rem',
                 color: theme.text,
-                resize: 'vertical'
+                resize: 'vertical',
+                transition: 'all 0.2s ease'
               }}
             />
+            {isFieldInvalid('inclusao', 'detalhes') && (
+              <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                ⚠️ O preenchimento dos Detalhes da Inclusão é obrigatório.
+              </span>
+            )}
           </div>
         </section>
       </div>
@@ -1172,7 +1481,16 @@ const PortalDonCor = () => {
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 14, display: 'grid', gap: 12 }}>
             {['RG / CPF', 'Comprovante de Residência', 'CTPS / eSocial', 'Formulário Assinado', 'Outros'].map((doc) => (
               <div key={doc} style={{ display: 'grid', gap: 8 }}>
-                <label style={{ ...checkboxRow, border: `1px solid ${theme.border}`, padding: '12px 14px', borderRadius: 10, justifyContent: 'space-between', cursor: 'pointer' }}>
+                <label style={{
+                  ...checkboxRow,
+                  border: isAttachmentInvalid('inclusao', doc) ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                  background: isAttachmentInvalid('inclusao', doc) ? '#FEF2F2' : '#fff',
+                  padding: '12px 14px',
+                  borderRadius: 10,
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}>
                   <span>
                     <input type="checkbox" checked={!!attachments[doc]} onChange={(event) => updateChecklistAttachment('inclusao', doc, event.target.checked ? null : undefined)} style={{ marginRight: 10 }} />
                     {doc}
@@ -1183,9 +1501,28 @@ const PortalDonCor = () => {
                     <Input type="file" onChange={(event) => updateChecklistAttachment('inclusao', doc, event.target.files?.[0])} style={{ maxWidth: 112, fontSize: '0.68rem', padding: 4 }} />
                   </span>
                 </label>
+                {isAttachmentInvalid('inclusao', doc) && (
+                  <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 2, display: 'block', paddingLeft: 6 }}>
+                    ⚠️ Documento obrigatório não anexado.
+                  </span>
+                )}
                 {doc === 'Outros' && !!attachments[doc] && (
                   <div style={{ paddingLeft: 6 }}>
-                    <Input placeholder="Especifique qual anexo..." value={form.outrosDescricao || ''} onChange={(event) => updateMovementField('inclusao', 'outrosDescricao', event.target.value)} />
+                    <Input
+                      placeholder="Especifique qual anexo..."
+                      value={form.outrosDescricao || ''}
+                      onChange={(event) => updateMovementField('inclusao', 'outrosDescricao', event.target.value)}
+                      style={{
+                        border: isFieldInvalid('inclusao', 'outrosDescricao') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                        boxShadow: isFieldInvalid('inclusao', 'outrosDescricao') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                        transition: 'all 0.2s ease'
+                      }}
+                    />
+                    {isFieldInvalid('inclusao', 'outrosDescricao') && (
+                      <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                        ⚠️ Descreva o tipo do anexo "Outros".
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -1195,7 +1532,7 @@ const PortalDonCor = () => {
 
         <div style={{ display: 'flex', gap: 10 }}>
           <Button variant="outline" onClick={() => resetMovementForm('inclusao')} style={{ flex: 1 }}>Cancelar</Button>
-          <Button disabled={submittingMovement} onClick={() => { setConfirmMovement('inclusao'); setConfirmTerm(false); }} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
+          <Button disabled={submittingMovement} onClick={() => handleTrySubmit('inclusao')} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
         </div>
       </div>
     </div>
@@ -1207,6 +1544,22 @@ const PortalDonCor = () => {
     const attachments = movementAttachments.exclusao;
     return (
     <div style={{ display: 'grid', gridTemplateColumns: '2fr 0.95fr', gap: 22 }}>
+      {validationErrors && validationErrors.section === 'exclusao' && (
+        <div style={{ gridColumn: '1 / -1', background: '#FEF2F2', border: '2px solid #EF4444', borderRadius: 12, padding: 20, boxShadow: '0 4px 12px rgba(239, 68, 68, 0.1)' }}>
+          <h4 style={{ color: '#991B1B', fontWeight: 900, fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 8px' }}>
+            ⚠️ ATENÇÃO: Informações Pendentes
+          </h4>
+          <p style={{ color: '#7F1D1D', fontSize: '0.88rem', margin: 0, fontWeight: 700 }}>
+            Não foi possível prosseguir com o envio. Por favor, preencha todos os campos obrigatórios e anexe os documentos destacados em vermelho abaixo:
+          </p>
+          <ul style={{ margin: '12px 0 0', paddingLeft: 20, color: '#7F1D1D', fontSize: '0.84rem', fontWeight: 600, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px 16px' }}>
+            {validationErrors.fields.map((err, i) => (
+              <li key={i} style={{ listStyleType: 'disc' }}>{err}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gap: 22 }}>
         <section style={{ ...card, padding: 24 }}>
           <h3 style={{ color: theme.primary, margin: '0 0 14px', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1215,19 +1568,69 @@ const PortalDonCor = () => {
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
             <div>
               <label style={fieldLabel}>Operadora *</label>
-              <select style={selectStyle} value={form.operadora} onChange={(event) => updateMovementField('exclusao', 'operadora', event.target.value)}>
+              <select
+                style={{
+                  ...selectStyle,
+                  border: isFieldInvalid('exclusao', 'operadora') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                  boxShadow: isFieldInvalid('exclusao', 'operadora') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+                value={form.operadora}
+                onChange={(event) => updateMovementField('exclusao', 'operadora', event.target.value)}
+              >
                 <option value="">Selecione a operadora</option>
                 <option>Assim Saúde</option>
                 <option>Amil</option>
                 <option>SulAmérica</option>
+                <option value="Outra">Outra</option>
               </select>
+              {isFieldInvalid('exclusao', 'operadora') && (
+                <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                  ⚠️ Selecione uma Operadora.
+                </span>
+              )}
+              {form.operadora === 'Outra' && (
+                <div style={{ marginTop: 14 }}>
+                  <label style={fieldLabel}>Nome da Operadora *</label>
+                  <Input
+                    placeholder="Digite o nome da outra operadora"
+                    value={form.outraOperadora || ''}
+                    onChange={(event) => updateMovementField('exclusao', 'outraOperadora', event.target.value)}
+                    style={{
+                      border: isFieldInvalid('exclusao', 'outraOperadora') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                      boxShadow: isFieldInvalid('exclusao', 'outraOperadora') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                      transition: 'all 0.2s ease',
+                      fontSize: '0.85rem'
+                    }}
+                  />
+                  {isFieldInvalid('exclusao', 'outraOperadora') && (
+                    <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                      ⚠️ Digite o nome da outra Operadora.
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             <div>
               <label style={fieldLabel}>Plano *</label>
-              <div style={{ display: 'flex', gap: 18, marginTop: 12 }}>
+              <div style={{
+                display: 'flex',
+                gap: 18,
+                marginTop: 12,
+                border: isFieldInvalid('exclusao', 'planos') ? '2px solid #EF4444' : 'none',
+                padding: isFieldInvalid('exclusao', 'planos') ? '6px 12px' : '0',
+                borderRadius: 8,
+                background: isFieldInvalid('exclusao', 'planos') ? '#FEF2F2' : 'none',
+                transition: 'all 0.2s ease'
+              }}>
                 <label style={checkboxRow}><input type="checkbox" checked={form.planos.includes('Dental')} onChange={() => toggleMovementArrayValue('exclusao', 'planos', 'Dental')} /> Dental</label>
                 <label style={checkboxRow}><input type="checkbox" checked={form.planos.includes('Saúde')} onChange={() => toggleMovementArrayValue('exclusao', 'planos', 'Saúde')} /> Saúde</label>
               </div>
+              {isFieldInvalid('exclusao', 'planos') && (
+                <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                  ⚠️ Selecione pelo menos um Plano.
+                </span>
+              )}
             </div>
           </div>
         </section>
@@ -1239,11 +1642,39 @@ const PortalDonCor = () => {
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={fieldLabel}>Nome Completo *</label>
-              <Input placeholder="Nome do beneficiário" value={form.beneficiario} onChange={(event) => updateMovementField('exclusao', 'beneficiario', event.target.value)} />
+              <Input
+                placeholder="Nome do beneficiário"
+                value={form.beneficiario}
+                onChange={(event) => updateMovementField('exclusao', 'beneficiario', event.target.value)}
+                style={{
+                  border: isFieldInvalid('exclusao', 'beneficiario') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                  boxShadow: isFieldInvalid('exclusao', 'beneficiario') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+              />
+              {isFieldInvalid('exclusao', 'beneficiario') && (
+                <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                  ⚠️ O preenchimento do Nome Completo é obrigatório.
+                </span>
+              )}
             </div>
             <div>
               <label style={fieldLabel}>CPF *</label>
-              <Input placeholder="000.000.000-00" value={form.cpf} onChange={(event) => updateMovementField('exclusao', 'cpf', event.target.value)} />
+              <Input
+                placeholder="000.000.000-00"
+                value={form.cpf}
+                onChange={(event) => updateMovementField('exclusao', 'cpf', event.target.value)}
+                style={{
+                  border: isFieldInvalid('exclusao', 'cpf') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                  boxShadow: isFieldInvalid('exclusao', 'cpf') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+              />
+              {isFieldInvalid('exclusao', 'cpf') && (
+                <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                  ⚠️ O preenchimento do CPF é obrigatório.
+                </span>
+              )}
             </div>
           </div>
         </section>
@@ -1261,18 +1692,24 @@ const PortalDonCor = () => {
               style={{
                 width: '100%',
                 minHeight: 128,
-                border: `1px solid ${theme.border}`,
+                border: isFieldInvalid('exclusao', 'detalhes') ? '2.5px solid #EF4444' : `1px solid ${theme.border}`,
+                boxShadow: isFieldInvalid('exclusao', 'detalhes') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
                 borderRadius: 10,
                 padding: 14,
                 fontFamily: 'inherit',
                 fontSize: '0.92rem',
                 color: theme.text,
-                resize: 'vertical'
+                resize: 'vertical',
+                transition: 'all 0.2s ease'
               }}
             />
+            {isFieldInvalid('exclusao', 'detalhes') && (
+              <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                ⚠️ O preenchimento dos Detalhes da Exclusão é obrigatório.
+              </span>
+            )}
           </div>
         </section>
-
       </div>
 
       <div style={{ display: 'grid', gap: 22, alignContent: 'start' }}>
@@ -1308,7 +1745,16 @@ const PortalDonCor = () => {
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 14, display: 'grid', gap: 12 }}>
             {['Termo de Rescisão', 'Formulário de Exclusão Assinado', 'Outros'].map((doc) => (
               <div key={doc} style={{ display: 'grid', gap: 8 }}>
-                <label style={{ ...checkboxRow, border: `1px solid ${theme.border}`, padding: '12px 14px', borderRadius: 10, justifyContent: 'space-between', cursor: 'pointer' }}>
+                <label style={{
+                  ...checkboxRow,
+                  border: isAttachmentInvalid('exclusao', doc) ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                  background: isAttachmentInvalid('exclusao', doc) ? '#FEF2F2' : '#fff',
+                  padding: '12px 14px',
+                  borderRadius: 10,
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}>
                   <span>
                     <input type="checkbox" checked={!!attachments[doc]} onChange={(event) => updateChecklistAttachment('exclusao', doc, event.target.checked ? null : undefined)} style={{ marginRight: 10 }} />
                     {doc}
@@ -1319,9 +1765,28 @@ const PortalDonCor = () => {
                     <Input type="file" onChange={(event) => updateChecklistAttachment('exclusao', doc, event.target.files?.[0])} style={{ maxWidth: 112, fontSize: '0.68rem', padding: 4 }} />
                   </span>
                 </label>
+                {isAttachmentInvalid('exclusao', doc) && (
+                  <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 2, display: 'block', paddingLeft: 6 }}>
+                    ⚠️ Documento obrigatório não anexado.
+                  </span>
+                )}
                 {doc === 'Outros' && !!attachments[doc] && (
                   <div style={{ paddingLeft: 6 }}>
-                    <Input placeholder="Especifique qual anexo..." value={form.outrosDescricao || ''} onChange={(event) => updateMovementField('exclusao', 'outrosDescricao', event.target.value)} />
+                    <Input
+                      placeholder="Especifique qual anexo..."
+                      value={form.outrosDescricao || ''}
+                      onChange={(event) => updateMovementField('exclusao', 'outrosDescricao', event.target.value)}
+                      style={{
+                        border: isFieldInvalid('exclusao', 'outrosDescricao') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                        boxShadow: isFieldInvalid('exclusao', 'outrosDescricao') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                        transition: 'all 0.2s ease'
+                      }}
+                    />
+                    {isFieldInvalid('exclusao', 'outrosDescricao') && (
+                      <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                        ⚠️ Descreva o tipo do anexo "Outros".
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -1331,7 +1796,7 @@ const PortalDonCor = () => {
 
         <div style={{ display: 'flex', gap: 10 }}>
           <Button variant="outline" onClick={() => resetMovementForm('exclusao')} style={{ flex: 1 }}>Cancelar</Button>
-          <Button disabled={submittingMovement} onClick={() => { setConfirmMovement('exclusao'); setConfirmTerm(false); }} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
+          <Button disabled={submittingMovement} onClick={() => handleTrySubmit('exclusao')} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
         </div>
       </div>
     </div>
@@ -1343,12 +1808,39 @@ const PortalDonCor = () => {
     const attachments = movementAttachments.alteracao;
     return (
     <div style={{ display: 'grid', gridTemplateColumns: '2fr 0.95fr', gap: 22 }}>
+      {validationErrors && validationErrors.section === 'alteracao' && (
+        <div style={{ gridColumn: '1 / -1', background: '#FEF2F2', border: '2px solid #EF4444', borderRadius: 12, padding: 20, boxShadow: '0 4px 12px rgba(239, 68, 68, 0.1)' }}>
+          <h4 style={{ color: '#991B1B', fontWeight: 900, fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 8px' }}>
+            ⚠️ ATENÇÃO: Informações Pendentes
+          </h4>
+          <p style={{ color: '#7F1D1D', fontSize: '0.88rem', margin: 0, fontWeight: 700 }}>
+            Não foi possível prosseguir com o envio. Por favor, preencha todos os campos obrigatórios e anexe os documentos destacados em vermelho abaixo:
+          </p>
+          <ul style={{ margin: '12px 0 0', paddingLeft: 20, color: '#7F1D1D', fontSize: '0.84rem', fontWeight: 600, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px 16px' }}>
+            {validationErrors.fields.map((err, i) => (
+              <li key={i} style={{ listStyleType: 'disc' }}>{err}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gap: 22 }}>
         <section style={{ ...card, padding: 24 }}>
           <h3 style={{ color: theme.primary, margin: '0 0 14px', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: 10 }}>
             <Building2 size={20}/> Dados do Contrato
           </h3>
-          <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div style={{
+            borderTop: `1px solid ${theme.border}`,
+            paddingTop: 18,
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 16,
+            border: isFieldInvalid('alteracao', 'planos') ? '2px solid #EF4444' : 'none',
+            padding: isFieldInvalid('alteracao', 'planos') ? '16px' : '18px 0 0',
+            borderRadius: isFieldInvalid('alteracao', 'planos') ? 12 : 0,
+            background: isFieldInvalid('alteracao', 'planos') ? '#FEF2F2' : 'none',
+            transition: 'all 0.2s ease'
+          }}>
             {contratos.length === 0 ? (
               <div style={{ color: theme.muted, fontSize: '0.9rem', gridColumn: '1 / -1' }}>Nenhum contrato encontrado.</div>
             ) : contratos.map((item, idx) => (
@@ -1365,6 +1857,11 @@ const PortalDonCor = () => {
               </label>
             ))}
           </div>
+          {isFieldInvalid('alteracao', 'planos') && (
+            <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+              ⚠️ Selecione pelo menos um Contrato/Plano para alteração.
+            </span>
+          )}
         </section>
 
         <section style={{ ...card, padding: 24 }}>
@@ -1374,11 +1871,39 @@ const PortalDonCor = () => {
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={fieldLabel}>Nome Completo *</label>
-              <Input placeholder="Nome do beneficiário" value={form.beneficiario} onChange={(event) => updateMovementField('alteracao', 'beneficiario', event.target.value)} />
+              <Input
+                placeholder="Nome do beneficiário"
+                value={form.beneficiario}
+                onChange={(event) => updateMovementField('alteracao', 'beneficiario', event.target.value)}
+                style={{
+                  border: isFieldInvalid('alteracao', 'beneficiario') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                  boxShadow: isFieldInvalid('alteracao', 'beneficiario') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+              />
+              {isFieldInvalid('alteracao', 'beneficiario') && (
+                <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                  ⚠️ O preenchimento do Nome Completo é obrigatório.
+                </span>
+              )}
             </div>
             <div>
               <label style={fieldLabel}>CPF *</label>
-              <Input placeholder="000.000.000-00" value={form.cpf} onChange={(event) => updateMovementField('alteracao', 'cpf', event.target.value)} />
+              <Input
+                placeholder="000.000.000-00"
+                value={form.cpf}
+                onChange={(event) => updateMovementField('alteracao', 'cpf', event.target.value)}
+                style={{
+                  border: isFieldInvalid('alteracao', 'cpf') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                  boxShadow: isFieldInvalid('alteracao', 'cpf') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+              />
+              {isFieldInvalid('alteracao', 'cpf') && (
+                <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                  ⚠️ O preenchimento do CPF é obrigatório.
+                </span>
+              )}
             </div>
           </div>
         </section>
@@ -1396,15 +1921,22 @@ const PortalDonCor = () => {
               style={{
                 width: '100%',
                 minHeight: 128,
-                border: `1px solid ${theme.border}`,
+                border: isFieldInvalid('alteracao', 'detalhes') ? '2.5px solid #EF4444' : `1px solid ${theme.border}`,
+                boxShadow: isFieldInvalid('alteracao', 'detalhes') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
                 borderRadius: 10,
                 padding: 14,
                 fontFamily: 'inherit',
                 fontSize: '0.92rem',
                 color: theme.text,
-                resize: 'vertical'
+                resize: 'vertical',
+                transition: 'all 0.2s ease'
               }}
             />
+            {isFieldInvalid('alteracao', 'detalhes') && (
+              <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                ⚠️ O preenchimento da descrição da alteração é obrigatório.
+              </span>
+            )}
           </div>
         </section>
       </div>
@@ -1415,19 +1947,49 @@ const PortalDonCor = () => {
             <RefreshCw size={20}/> Tipo de Solicitação
           </h3>
           <div style={{ display: 'grid', gap: 12 }}>
-            {['Alteração Cadastral', 'Upgrade', 'Downgrade', 'Outros'].map((tipo, index) => (
-              <div key={tipo} style={{ display: 'grid', gap: 8 }}>
-                <label style={{ ...radioCard, alignItems: 'center', cursor: 'pointer', background: index === 0 ? '#fff' : '#f8faff' }}>
-                  <input type="checkbox" checked={form.tipoMovimentacao.includes(tipo)} onChange={() => toggleMovementArrayValue('alteracao', 'tipoMovimentacao', tipo)} />
-                  <span style={{ fontWeight: 700, color: theme.text, fontSize: '0.88rem' }}>{tipo}</span>
-                </label>
-                {tipo === 'Outros' && form.tipoMovimentacao.includes(tipo) && (
-                  <div style={{ paddingLeft: 6 }}>
-                    <Input placeholder="Especifique o tipo de solicitação..." value={form.outrosDescricao || ''} onChange={(event) => updateMovementField('alteracao', 'outrosDescricao', event.target.value)} />
-                  </div>
-                )}
-              </div>
-            ))}
+            {['Alteração Cadastral', 'Upgrade', 'Downgrade', 'Outros'].map((tipo) => {
+              const isSelected = form.tipoMovimentacao.includes(tipo);
+              return (
+                <div key={tipo} style={{ display: 'grid', gap: 8 }}>
+                  <label style={{ 
+                    ...radioCard, 
+                    alignItems: 'center', 
+                    cursor: 'pointer', 
+                    border: isSelected ? `1.5px solid ${theme.primary}` : `1px solid ${theme.border}`,
+                    background: isSelected ? '#fff' : '#f8faff',
+                    transition: 'all 0.2s ease'
+                  }}>
+                    <input 
+                      type="radio" 
+                      name="tipoMovimentacao-alteracao"
+                      checked={isSelected} 
+                      onChange={() => updateMovementField('alteracao', 'tipoMovimentacao', [tipo])} 
+                      style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                    />
+                    <span style={{ fontWeight: 700, color: theme.text, fontSize: '0.88rem' }}>{tipo}</span>
+                  </label>
+                  {tipo === 'Outros' && isSelected && (
+                    <div style={{ paddingLeft: 6 }}>
+                      <Input
+                        placeholder="Especifique o tipo de solicitação..."
+                        value={form.outrosDescricao || ''}
+                        onChange={(event) => updateMovementField('alteracao', 'outrosDescricao', event.target.value)}
+                        style={{
+                          border: isFieldInvalid('alteracao', 'outrosDescricao') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                          boxShadow: isFieldInvalid('alteracao', 'outrosDescricao') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                          transition: 'all 0.2s ease'
+                        }}
+                      />
+                      {isFieldInvalid('alteracao', 'outrosDescricao') && (
+                        <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                          ⚠️ Por favor, especifique a descrição para "Outros".
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </section>
 
@@ -1436,12 +1998,27 @@ const PortalDonCor = () => {
             <Paperclip size={20}/> Anexos
           </h3>
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 14 }}>
-            <label style={{ border:'2px dashed #d5dcec', borderRadius:12, background:'#f8faff', padding:28, textAlign:'center', color:theme.text, display:'block', cursor:'pointer' }}>
-              <UploadCloud size={26} color={theme.muted}/>
-              <div style={{ marginTop:8, fontWeight:800 }}>Selecione arquivos de apoio</div>
-              <div style={{ color:theme.muted, fontSize:'0.82rem', marginTop:4 }}>PDF, imagens ou documentos do pedido</div>
-              <Input type="file" multiple onChange={(event) => updateAlteracaoAttachments(event.target.files)} style={{ marginTop:12 }} />
+            <label style={{
+              border: isAttachmentInvalid('alteracao', '') ? '2px dashed #EF4444' : '2px dashed #d5dcec',
+              borderRadius: 12,
+              background: isAttachmentInvalid('alteracao', '') ? '#FEF2F2' : '#f8faff',
+              padding: 28,
+              textAlign: 'center',
+              color: theme.text,
+              display: 'block',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}>
+              <UploadCloud size={26} color={isAttachmentInvalid('alteracao', '') ? '#EF4444' : theme.muted}/>
+              <div style={{ marginTop: 8, fontWeight: 800, color: isAttachmentInvalid('alteracao', '') ? '#EF4444' : theme.text }}>Selecione arquivos de apoio</div>
+              <div style={{ color: isAttachmentInvalid('alteracao', '') ? '#B91C1C' : theme.muted, fontSize: '0.82rem', marginTop: 4 }}>PDF, imagens ou documentos do pedido</div>
+              <Input type="file" multiple onChange={(event) => updateAlteracaoAttachments(event.target.files)} style={{ marginTop: 12 }} />
             </label>
+            {isAttachmentInvalid('alteracao', '') && (
+              <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block', textAlign: 'center' }}>
+                ⚠️ Anexo obrigatório. Selecione pelo menos um arquivo de apoio.
+              </span>
+            )}
             <div style={{ marginTop: 14, display: 'grid', gap: 8 }}>
               {attachments.length === 0 ? <div style={{ color: theme.muted, fontSize: '0.78rem' }}>Nenhum anexo selecionado.</div> : attachments.map((file) => (
                 <div key={`${file.name}-${file.size}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${theme.border}`, borderRadius: 10, padding: '10px 12px', background: '#fff' }}>
@@ -1454,7 +2031,7 @@ const PortalDonCor = () => {
 
         <div style={{ display: 'flex', gap: 10 }}>
           <Button variant="outline" onClick={() => resetMovementForm('alteracao')} style={{ flex: 1 }}>Cancelar</Button>
-          <Button disabled={submittingMovement} onClick={() => { setConfirmMovement('alteracao'); setConfirmTerm(false); }} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
+          <Button disabled={submittingMovement} onClick={() => handleTrySubmit('alteracao')} style={{ flex: 1, background: theme.primary, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
         </div>
       </div>
     </div>
@@ -1523,36 +2100,34 @@ const PortalDonCor = () => {
             <table className="data-table" style={{ fontSize: '0.85rem' }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: `2px solid ${theme.border}` }}>
-                  <th style={{ textAlign: 'left' }}>Tipo</th>
                   <th style={{ textAlign: 'left' }}>Protocolo</th>
-                  <th style={{ textAlign: 'left' }}>Nome do Beneficiário</th>
-                  <th style={{ textAlign: 'left' }}>CPF</th>
-                  <th style={{ textAlign: 'left' }}>Data de envio</th>
-                  <th style={{ textAlign: 'left' }}>Data Conclusão</th>
+                  <th style={{ textAlign: 'left' }}>Empresa</th>
+                  <th style={{ textAlign: 'left' }}>Data</th>
+                  <th style={{ textAlign: 'left' }}>Tipo</th>
+                  <th style={{ textAlign: 'left' }}>Beneficiário</th>
                   <th style={{ textAlign: 'left' }}>Status</th>
-                  <th style={{ textAlign: 'center' }}>Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredSolicitacoes.map((item) => (
                   <tr key={item.id || item.protocolo} style={{ borderBottom: `1px solid ${theme.border}` }}>
-                    <td style={{ fontWeight: 600 }}>{item.tipoLabel || item.tipo}</td>
-                    <td style={{ color: theme.primary, fontWeight: 700 }}>#{item.protocolo}</td>
-                    <td>{item.beneficiario || '-'}</td>
-                    <td>{item.cpf || '-'}</td>
-                    <td>{item.dataEnvio || item.criadoEm || '-'}</td>
-                    <td style={{ color: theme.muted }}>{item.dataConclusao || '-'}</td>
-                    <td><StatusPill status={item.status}/></td>
-                    <td style={{ textAlign: 'center' }}>
-                      <Button variant="outline" size="sm" onClick={() => setActiveSection('chat')} style={{ fontSize: '0.75rem', padding: '4px 8px' }}>
-                        <MessageCircle size={13}/> Chat
-                      </Button>
+                    <td style={{ color: theme.primary, fontWeight: 700 }}>{item.protocolo}</td>
+                    <td>
+                      <div style={{ fontWeight: 600, color: theme.text }}>{item.empresa || '-'}</div>
+                      <div style={{ fontSize: '0.72rem', color: theme.muted }}>{item.documento || '-'}</div>
                     </td>
+                    <td style={{ color: theme.text }}>{item.dataEnvio || item.criadoEm || '-'}</td>
+                    <td style={{ fontWeight: 600, color: theme.text }}>{item.tipoLabel || item.tipo}</td>
+                    <td>
+                      <div style={{ fontWeight: 600, color: theme.text }}>{item.beneficiario || '-'}</div>
+                      <div style={{ fontSize: '0.72rem', color: theme.muted }}>{item.cpf || '-'}</div>
+                    </td>
+                    <td><StatusPill status={item.status}/></td>
                   </tr>
                 ))}
                 {filteredSolicitacoes.length === 0 && (
                   <tr>
-                    <td colSpan="8" style={{ textAlign: 'center', color: theme.muted, padding: 28 }}>Nenhuma solicitação encontrada.</td>
+                    <td colSpan="6" style={{ textAlign: 'center', color: theme.muted, padding: 28 }}>Nenhuma solicitação encontrada.</td>
                   </tr>
                 )}
               </tbody>
@@ -2024,12 +2599,17 @@ const PortalDonCor = () => {
                     
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                       <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Beneficiário</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.beneficiario || '-'}</div></div>
-                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>CPF</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.cpf || '-'}</div></div>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Nome da Mãe</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.nomeMae || '-'}</div></div>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>CPF</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.cpf || '-'}</div></div>
                       <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Data de Nascimento</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.dataNascimento || '-'}</div></div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                       <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Estado Civil</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.estadoCivil || '-'}</div></div>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Parentesco</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.parentesco || 'Titular'}</div></div>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -2038,7 +2618,7 @@ const PortalDonCor = () => {
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Operadora</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.operadora || '-'}</div></div>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Operadora</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.operadora === 'Outra' ? (movementForms.inclusao.outraOperadora || 'Outra') : (movementForms.inclusao.operadora || '-')}</div></div>
                       <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Planos</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.planos?.join(', ') || '-'}</div></div>
                     </div>
 
@@ -2060,7 +2640,7 @@ const PortalDonCor = () => {
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Operadora</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.exclusao.operadora || '-'}</div></div>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Operadora</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.exclusao.operadora === 'Outra' ? (movementForms.exclusao.outraOperadora || 'Outra') : (movementForms.exclusao.operadora || '-')}</div></div>
                       <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Planos</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.exclusao.planos?.join(', ') || '-'}</div></div>
                     </div>
 
@@ -2121,6 +2701,49 @@ const PortalDonCor = () => {
               <Button variant="outline" onClick={() => setConfirmMovement(null)} style={{ flex: 1 }}>Revisar Dados</Button>
               <Button disabled={!confirmTerm || submittingMovement} onClick={() => { setConfirmMovement(null); submitMovimentacao(confirmMovement); }} style={{ flex: 1, background: confirmTerm ? theme.primary : theme.muted, color: '#fff' }}>{submittingMovement ? 'Enviando...' : 'Enviar Solicitação'}</Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showValidationModal && validationErrors && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: 32, width: '100%', maxWidth: 500, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', border: '2px solid #EF4444' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+              <span style={{ fontSize: '2.5rem' }}>⚠️</span>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 900, color: '#991B1B' }}>Informações Faltantes!</h3>
+                <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: '#B91C1C', fontWeight: 700 }}>Não foi possível enviar a solicitação.</p>
+              </div>
+            </div>
+            
+            <p style={{ fontSize: '0.9rem', color: '#4B5563', lineHeight: 1.5, marginBottom: 16, fontWeight: 600 }}>
+              Os seguintes campos obrigatórios ou anexos estão em branco ou não foram fornecidos:
+            </p>
+
+            <div style={{ 
+              maxHeight: '220px', 
+              overflowY: 'auto', 
+              background: '#FEF2F2', 
+              borderRadius: 12, 
+              padding: '14px 18px', 
+              border: '1px solid #FEE2E2',
+              marginBottom: 24
+            }}>
+              <ul style={{ margin: 0, paddingLeft: 18, color: '#991B1B', fontSize: '0.86rem', display: 'grid', gap: 8 }}>
+                {validationErrors.fields.map((err, i) => (
+                  <li key={i} style={{ fontWeight: 700, listStyleType: 'disc' }}>
+                    {err}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <Button 
+              onClick={() => setShowValidationModal(false)} 
+              style={{ width: '100%', background: '#EF4444', color: '#fff', fontWeight: 900, height: 46, borderRadius: 12, transition: 'all 0.2s ease' }}
+            >
+              Entendido, Corrigir Agora
+            </Button>
           </div>
         </div>
       )}

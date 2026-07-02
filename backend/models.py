@@ -52,6 +52,9 @@ class InclusaoBase(BaseModel):
     telefone: str = ""
     email: str = ""
     parentesco: str = "Titular"
+    estadoCivil: str = ""
+    plano: str = ""
+    nomeMae: str = ""
 
 
 class Inclusao(InclusaoBase):

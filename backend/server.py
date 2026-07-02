@@ -178,14 +178,59 @@ async def dashboard_stats():
 
 @api_router.get("/dashboard/chart-data")
 async def dashboard_chart_data():
-    return [
-        {"mes": "Jan", "inclusoes": 45, "exclusoes": 12, "transferencias": 8},
-        {"mes": "Fev", "inclusoes": 52, "exclusoes": 18, "transferencias": 5},
-        {"mes": "Mar", "inclusoes": 38, "exclusoes": 15, "transferencias": 12},
-        {"mes": "Abr", "inclusoes": 67, "exclusoes": 22, "transferencias": 9},
-        {"mes": "Mai", "inclusoes": 55, "exclusoes": 14, "transferencias": 7},
-        {"mes": "Jun", "inclusoes": 71, "exclusoes": 19, "transferencias": 11},
-    ]
+    inclusoes = await db.inclusoes.find({}, {"dataSolicitacao": 1, "_id": 0}).to_list(10000)
+    exclusoes = await db.exclusoes.find({}, {"dataSolicitacao": 1, "_id": 0}).to_list(10000)
+    transferencias = await db.transferencias.find({}, {"dataSolicitacao": 1, "_id": 0}).to_list(10000)
+
+    if not inclusoes and not exclusoes and not transferencias:
+        return []
+
+    MONTHS_PT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+    current_month = datetime.now().month
+
+    months_indices = []
+    for i in range(5, -1, -1):
+        m = current_month - i
+        if m <= 0:
+            m += 12
+        months_indices.append(m)
+
+    chart_dict = {m: {"mes": MONTHS_PT[m-1], "inclusoes": 0, "exclusoes": 0, "transferencias": 0} for m in months_indices}
+
+    for inc in inclusoes:
+        dt_str = inc.get("dataSolicitacao") or ""
+        try:
+            parts = dt_str.split("/")
+            if len(parts) >= 2:
+                m_idx = int(parts[1])
+                if m_idx in chart_dict:
+                    chart_dict[m_idx]["inclusoes"] += 1
+        except Exception:
+            pass
+
+    for exc in exclusoes:
+        dt_str = exc.get("dataSolicitacao") or ""
+        try:
+            parts = dt_str.split("/")
+            if len(parts) >= 2:
+                m_idx = int(parts[1])
+                if m_idx in chart_dict:
+                    chart_dict[m_idx]["exclusoes"] += 1
+        except Exception:
+            pass
+
+    for trf in transferencias:
+        dt_str = trf.get("dataSolicitacao") or ""
+        try:
+            parts = dt_str.split("/")
+            if len(parts) >= 2:
+                m_idx = int(parts[1])
+                if m_idx in chart_dict:
+                    chart_dict[m_idx]["transferencias"] += 1
+        except Exception:
+            pass
+
+    return [chart_dict[m] for m in months_indices]
 
 
 @api_router.get("/dashboard/seguradoras")
@@ -236,8 +281,34 @@ async def dashboard_saldo_vidas():
 
 @api_router.get("/tarefas-pendentes")
 async def get_tarefas_pendentes():
-    items = await db.tarefas_pendentes.find({}, _proj()).to_list(100)
-    return items
+    query = {"status": {"$regex": "^(Pendente|Em Análise|em análise|pendente)$", "$options": "i"}}
+    
+    inclusoes = await db.inclusoes.find(query, _proj()).to_list(100)
+    for x in inclusoes:
+        x["tipo"] = "Inclusão"
+        x["protocolo"] = x.get("protocolo") or ""
+        x["beneficiario"] = x.get("beneficiario") or ""
+        x["dataSolicitacao"] = x.get("dataSolicitacao") or ""
+        x["status"] = x.get("status") or "Pendente"
+
+    exclusoes = await db.exclusoes.find(query, _proj()).to_list(100)
+    for x in exclusoes:
+        x["tipo"] = "Exclusão"
+        x["protocolo"] = x.get("protocolo") or ""
+        x["beneficiario"] = x.get("beneficiario") or ""
+        x["dataSolicitacao"] = x.get("dataSolicitacao") or ""
+        x["status"] = x.get("status") or "Pendente"
+
+    transferencias = await db.transferencias.find(query, _proj()).to_list(100)
+    for x in transferencias:
+        x["tipo"] = "Transferência"
+        x["protocolo"] = x.get("protocolo") or ""
+        x["beneficiario"] = x.get("beneficiario") or ""
+        x["dataSolicitacao"] = x.get("dataSolicitacao") or ""
+        x["status"] = x.get("status") or "Pendente"
+
+    all_pending = inclusoes + exclusoes + transferencias
+    return all_pending
 
 
 @api_router.get("/movimentacoes-recentes")
@@ -382,6 +453,14 @@ async def get_inclusao(item_id: str):
     return item
 
 
+@api_router.put("/inclusoes/{item_id}")
+async def update_inclusao(item_id: str, data: dict):
+    result = await db.inclusoes.update_one({"id": item_id}, {"$set": data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Inclusão não encontrada")
+    return await db.inclusoes.find_one({"id": item_id}, _proj())
+
+
 # ═══════════════════════════════════════════════════════════════
 #  EXCLUSÕES
 # ═══════════════════════════════════════════════════════════════
@@ -409,6 +488,14 @@ async def create_exclusao(data: ExclusaoCreate):
     return obj.model_dump()
 
 
+@api_router.put("/exclusoes/{item_id}")
+async def update_exclusao(item_id: str, data: dict):
+    result = await db.exclusoes.update_one({"id": item_id}, {"$set": data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Exclusão não encontrada")
+    return await db.exclusoes.find_one({"id": item_id}, _proj())
+
+
 # ═══════════════════════════════════════════════════════════════
 #  TRANSFERÊNCIAS
 # ═══════════════════════════════════════════════════════════════
@@ -433,6 +520,14 @@ async def create_transferencia(data: TransferenciaCreate):
     obj.dataSolicitacao = datetime.now().strftime("%d/%m/%Y")
     await db.transferencias.insert_one(obj.model_dump())
     return obj.model_dump()
+
+
+@api_router.put("/transferencias/{item_id}")
+async def update_transferencia(item_id: str, data: dict):
+    result = await db.transferencias.update_one({"id": item_id}, {"$set": data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Transferência não encontrada")
+    return await db.transferencias.find_one({"id": item_id}, _proj())
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { fetchTransferencias, createTransferencia } from '../services/api';
+import { fetchTransferencias, createTransferencia, updateTransferencia } from '../services/api';
 import { ArrowLeftRight, Search, Filter, Loader2 } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
@@ -13,6 +13,11 @@ const Transferencia = () => {
   const [showNew, setShowNew] = useState(false);
   const [formData, setFormData] = useState({ contratoOrigem:'', contratoDestino:'', beneficiario:'', cpf:'' });
   const [saving, setSaving] = useState(false);
+
+  // Confirmar Efetivação
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -28,7 +33,29 @@ const Transferencia = () => {
     setSaving(false);
   };
 
-  const getStatusBadge = (s) => ({'Aprovado':'badge-aprovado','Pendente':'badge-pendente','Em Análise':'badge-analise'}[s]||'badge-pendente');
+  const handleConfirmEfetivar = (item) => {
+    setSelectedItem(item);
+    setShowConfirm(true);
+  };
+
+  const handleEfetivar = async () => {
+    if (!selectedItem) return;
+    setActionLoading(true);
+    try {
+      await updateTransferencia(selectedItem.id, {
+        ...selectedItem,
+        status: 'Concluído'
+      });
+      setShowConfirm(false);
+      setSelectedItem(null);
+      loadData();
+    } catch (e) {
+      console.error("Erro ao efetivar:", e);
+    }
+    setActionLoading(false);
+  };
+
+  const getStatusBadge = (s) => ({'Aprovado':'badge-aprovado','Efetivado':'badge-aprovado','Concluído':'badge-aprovado','Pendente':'badge-pendente','Em Análise':'badge-analise'}[s]||'badge-pendente');
 
   return (
     <div className="animate-fade-in">
@@ -47,7 +74,7 @@ const Transferencia = () => {
 
       <div style={{ background:'#fff', borderRadius:'8px', boxShadow:'0 1px 3px rgba(0,0,0,0.06)', overflow:'hidden', marginTop:showFilters?'0':'12px' }}>
         {loading ? <div style={{display:'flex',justifyContent:'center',padding:'40px'}}><Loader2 size={24} style={{color:'#8e44ad',animation:'spin 1s linear infinite'}}/></div> : (
-          <table className="data-table"><thead><tr><th>Protocolo</th><th>Contrato Origem</th><th>Contrato Destino</th><th>Beneficiário</th><th>CPF</th><th>Solicitação</th><th>Status</th></tr></thead>
+          <table className="data-table"><thead><tr><th>Protocolo</th><th>Contrato Origem</th><th>Contrato Destino</th><th>Beneficiário</th><th>CPF</th><th>Solicitação</th><th>Status</th><th style={{ textAlign: 'center' }}>Ações</th></tr></thead>
             <tbody>{data.map((item,i)=>(<tr key={i}>
               <td style={{fontWeight:600,color:'#8e44ad'}}>{item.protocolo}</td>
               <td style={{color:'#e63757',fontWeight:500}}>{item.contratoOrigem}</td>
@@ -55,6 +82,18 @@ const Transferencia = () => {
               <td style={{fontWeight:500}}>{item.beneficiario}</td>
               <td style={{fontSize:'0.75rem',color:'#5E6E82'}}>{item.cpf}</td><td>{item.dataSolicitacao}</td>
               <td><span className={getStatusBadge(item.status)}>{item.status}</span></td>
+              <td style={{ textAlign: 'center' }}>
+                {item.status !== 'Concluído' && item.status !== 'Aprovado' ? (
+                  <Button 
+                    onClick={() => handleConfirmEfetivar(item)} 
+                    style={{ background: '#27ae60', color: '#fff', fontSize: '0.72rem', padding: '4px 8px', height: 'auto', fontWeight: 600 }}
+                  >
+                    ✅ Efetivar
+                  </Button>
+                ) : (
+                  <span style={{ fontSize: '0.72rem', color: '#27ae60', fontWeight: 600 }}>Concluído</span>
+                )}
+              </td>
             </tr>))}</tbody>
           </table>
         )}
@@ -72,6 +111,28 @@ const Transferencia = () => {
         </div>
         <DialogFooter><Button variant="outline" onClick={()=>setShowNew(false)}>Cancelar</Button><Button style={{background:'#8e44ad',color:'#fff'}} onClick={handleCreate} disabled={saving}>{saving?'Salvando...':'Solicitar Transferência'}</Button></DialogFooter>
       </DialogContent></Dialog>
+
+      {/* Dialog de Confirmação para Efetivar */}
+      <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
+        <DialogContent style={{ maxWidth: '400px' }}>
+          <DialogHeader>
+            <DialogTitle>⚠️ Confirmar Efetivação</DialogTitle>
+          </DialogHeader>
+          <div style={{ padding: '8px 0', fontSize: '0.9rem', color: '#344050' }}>
+            Tem certeza de que deseja efetivar a transferência do beneficiário <strong>{selectedItem?.beneficiario}</strong>?
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConfirm(false)}>Cancelar</Button>
+            <Button 
+              style={{ background: '#27ae60', color: '#fff', fontWeight: 'bold' }} 
+              onClick={handleEfetivar} 
+              disabled={actionLoading}
+            >
+              {actionLoading ? 'Processando...' : 'Confirmar Efetivação ✅'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

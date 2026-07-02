@@ -170,6 +170,9 @@ export const createInclusao = (data) =>
 export const getInclusao = (id) =>
   api.get(`/inclusoes/${id}`).then((r) => r.data);
 
+export const updateInclusao = (id, data) =>
+  api.put(`/inclusoes/${id}`, data).then((r) => r.data);
+
 // ─── Exclusões ────────────────────────────────────
 export const fetchExclusoes = (search = "", status = "todos") =>
   getArray("/exclusoes", { params: { search, status } });
@@ -177,12 +180,18 @@ export const fetchExclusoes = (search = "", status = "todos") =>
 export const createExclusao = (data) =>
   api.post("/exclusoes", data).then((r) => r.data);
 
+export const updateExclusao = (id, data) =>
+  api.put(`/exclusoes/${id}`, data).then((r) => r.data);
+
 // ─── Transferências ───────────────────────────────
 export const fetchTransferencias = (search = "") =>
   getArray("/transferencias", { params: { search } });
 
 export const createTransferencia = (data) =>
   api.post("/transferencias", data).then((r) => r.data);
+
+export const updateTransferencia = (id, data) =>
+  api.put(`/transferencias/${id}`, data).then((r) => r.data);
 
 // ─── Faturas ──────────────────────────────────────
 export const fetchFaturas = (search = "", status = "todos") =>

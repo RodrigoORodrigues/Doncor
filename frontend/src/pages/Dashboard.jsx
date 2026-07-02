@@ -36,9 +36,9 @@ const Dashboard = () => {
 
   const statCards = stats ? [
     { label: 'Contratos Vigentes', value: stats.totalContratos?.toLocaleString('pt-BR') || '0', icon: FileText, color: '#1a3a52', change: '+12', up: true, tag: 'Ativos' },
+    { label: 'Vidas Ativas', value: stats.vidasAtivas?.toLocaleString('pt-BR') || '0', icon: Users, color: '#27ae60', change: '+89', up: true, tag: 'Total' },
     { label: 'Faturas em Aberto', value: stats.faturasPendentes || '0', icon: Receipt, color: '#e6832a', change: '+2', up: true, tag: 'Venc. Próx.' },
     { label: 'Solicitações Pendentes', value: stats.movimentacoesPendentes || '0', icon: Clock, color: '#2a5fcf', change: '-5', up: false, tag: 'Urgente' },
-    { label: 'Vidas Ativas', value: stats.vidasAtivas?.toLocaleString('pt-BR') || '0', icon: Users, color: '#27ae60', change: '+89', up: true, tag: 'Total' },
   ] : [];
 
   const pieData = seguradoras.map(s => ({ name: s.nome, value: s.vidas }));
@@ -83,18 +83,24 @@ const Dashboard = () => {
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', marginBottom: '24px' }}>
         <div style={{ background: '#fff', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
           <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1a3a52', marginBottom: '16px' }}>Movimentações Mensais</h3>
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f2f5" />
-              <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#6c7680' }} />
-              <YAxis tick={{ fontSize: 11, fill: '#6c7680' }} />
-              <Tooltip contentStyle={{ fontSize: '0.75rem', borderRadius: '6px', border: '1px solid #e3e6f0' }} />
-              <Legend wrapperStyle={{ fontSize: '0.72rem' }} />
-              <Bar dataKey="inclusoes" name="Inclusões" fill="#27ae60" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="exclusoes" name="Exclusões" fill="#e63757" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="transferencias" name="Transferências" fill="#2a5fcf" radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {chartData && chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f2f5" />
+                <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#6c7680' }} />
+                <YAxis tick={{ fontSize: 11, fill: '#6c7680' }} />
+                <Tooltip contentStyle={{ fontSize: '0.75rem', borderRadius: '6px', border: '1px solid #e3e6f0' }} />
+                <Legend wrapperStyle={{ fontSize: '0.72rem' }} />
+                <Bar dataKey="inclusoes" name="Inclusões" fill="#27ae60" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="exclusoes" name="Exclusões" fill="#e63757" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="transferencias" name="Transferências" fill="#2a5fcf" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6c7680', fontSize: '0.85rem' }}>
+              Nenhum registro de movimentação encontrado. Os dados serão exibidos quando houver movimentações.
+            </div>
+          )}
         </div>
         <div style={{ background: '#fff', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
           <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1a3a52', marginBottom: '16px' }}>Vidas por Seguradora</h3>
@@ -131,10 +137,35 @@ const Dashboard = () => {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
         <div style={{ background: '#fff', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
-          <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1a3a52', marginBottom: '12px' }}>Demandas Pendentes</h3>
-          <table className="data-table"><thead><tr><th>Tipo</th><th>Descrição</th><th>Prazo</th><th>Prioridade</th><th>Status</th></tr></thead>
-            <tbody>{tarefas.map((t, i) => (<tr key={i}><td style={{fontWeight:500}}>{t.tipo}</td><td>{t.descricao}</td><td>{t.prazo}</td><td><span className={getPrioridadeBadge(t.prioridade)}>{t.prioridade}</span></td><td><span className={getStatusBadge(t.status)}>{t.status}</span></td></tr>))}</tbody>
-          </table>
+          <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1a3a52', marginBottom: '12px' }}>Solicitações Pendentes</h3>
+          {tarefas && tarefas.length > 0 ? (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Tipo</th>
+                  <th>Protocolo</th>
+                  <th>Beneficiário</th>
+                  <th>Data</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tarefas.map((t, i) => (
+                  <tr key={i}>
+                    <td style={{ fontWeight: 500 }}>{t.tipo}</td>
+                    <td style={{ color: '#2a5fcf', fontWeight: 500 }}>{t.protocolo}</td>
+                    <td>{t.beneficiario}</td>
+                    <td>{t.dataSolicitacao}</td>
+                    <td><span className={getStatusBadge(t.status)}>{t.status}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6c7680', fontSize: '0.85rem' }}>
+              Nenhuma solicitação pendente encontrada.
+            </div>
+          )}
         </div>
         <div style={{ background: '#fff', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
           <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1a3a52', marginBottom: '12px' }}>Movimentações Recentes</h3>
