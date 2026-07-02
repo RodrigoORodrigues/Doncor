@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Shield, Download, Plus, Search, Eye, X, Check } from 'lucide-react';
+import { Shield, Download, Plus, Search, Eye, X, Check, Trash2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { fetchLgpdConfig, saveLgpdConfig, fetchLgpdAceites } from '../services/api';
+import { fetchLgpdConfig, saveLgpdConfig, fetchLgpdAceites, deleteLgpdAceite } from '../services/api';
 
 const theme = {
   navy: '#0F172A',
@@ -107,6 +107,17 @@ export default function LgpdGovernance() {
       alert('Nova versão de termos LGPD publicada com sucesso! Todos os clientes deverão aceitar esta nova versão no próximo acesso.');
     } catch (err) {
       alert('Erro ao salvar nova versão dos termos.');
+    }
+  };
+
+  const handleDeleteAceite = async (id) => {
+    if (!id) return;
+    if (!window.confirm('Tem certeza de que deseja excluir este registro de aceite permanentemente?')) return;
+    try {
+      await deleteLgpdAceite(id);
+      setLgpdAceitesList(prev => prev.filter(item => item.id !== id));
+    } catch (err) {
+      alert('Erro ao excluir o registro de aceite.');
     }
   };
 
@@ -239,7 +250,7 @@ export default function LgpdGovernance() {
                     <td style={{ padding: '14px 16px' }}><span style={{ background: '#f1f5f9', padding: '4px 8px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 700, color: '#475569' }}>{item.versao}</span></td>
                     <td style={{ padding: '14px 16px' }}>{item.criadoEm || item.createdAt}</td>
                     <td style={{ padding: '14px 16px', color: theme.muted }}>{item.ip}</td>
-                    <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                    <td style={{ padding: '14px 16px', textAlign: 'center', display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center' }}>
                       <button 
                         onClick={() => setSelectedAceite(item)}
                         style={{ border: 0, background: '#eff6ff', color: theme.blue, cursor: 'pointer', padding: '6px 12px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 6 }}
@@ -247,6 +258,15 @@ export default function LgpdGovernance() {
                         onMouseLeave={(e) => e.currentTarget.style.background = '#eff6ff'}
                       >
                         <Eye size={13}/> Detalhes
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteAceite(item.id)}
+                        style={{ border: 0, background: '#fef2f2', color: '#ef4444', cursor: 'pointer', padding: '6px 12px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#fee2e2'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = '#fef2f2'}
+                        title="Excluir do sistema"
+                      >
+                        <Trash2 size={13}/> Excluir
                       </button>
                     </td>
                   </tr>

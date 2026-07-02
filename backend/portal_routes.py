@@ -895,6 +895,13 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
         items = sorted(items, key=lambda x: x.get("createdAt") or "", reverse=True)
         return items
 
+    @app.delete("/api/portal-doncor/lgpd/aceites/{item_id}")
+    async def delete_lgpd_aceite(item_id: str):
+        result = await db.lgpd_aceites.delete_one({"id": item_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Aceite não encontrado")
+        return {"ok": True, "deleted": item_id}
+
     @app.post("/api/portal-doncor/lgpd/aceitar")
     async def post_lgpd_aceitar(payload: Dict[str, Any] = Body(...)):
         documento = payload.get("documento")
@@ -1172,6 +1179,13 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
         await db.portal_solicitacoes.replace_one({"id": item_id}, item)
         item.pop("_id", None)
         return item
+
+    @app.delete("/api/portal-doncor/solicitacoes/{item_id}")
+    async def delete_portal_solicitacao(item_id: str):
+        result = await db.portal_solicitacoes.delete_one({"id": item_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
+        return {"ok": True, "deleted": item_id}
 
     @app.get("/api/portal-doncor/chat")
     async def portal_doncor_chat(documento: str = "", empresa: str = "", limit: int = Query(default=100, ge=1, le=300)):

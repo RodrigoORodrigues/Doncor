@@ -330,6 +330,7 @@ export const fetchPortalDonCorSinistralidade = (documento) => getArray("/portal-
 export const fetchPortalDonCorSolicitacoes = ({ documento = "", search = "", tipo = "todos", status = "todos" } = {}) =>
   getArray("/portal-doncor/solicitacoes", { params: { documento, search, tipo, status } });
 export const updatePortalDonCorSolicitacao = (id, data) => api.patch(`/portal-doncor/solicitacoes/${id}`, data).then((r) => r.data);
+export const deletePortalDonCorSolicitacao = (id) => api.delete(`/portal-doncor/solicitacoes/${id}`).then((r) => r.data);
 export const createPortalDonCorMovimentacao = (data) => api.post("/portal-doncor/movimentacoes", data).then((r) => r.data);
 export const fetchPortalDonCorChat = ({ documento = "", empresa = "" } = {}) =>
   getArray("/portal-doncor/chat", { params: { documento, empresa } });
@@ -339,6 +340,7 @@ export const markPortalDonCorChatRead = (data) => api.patch("/portal-doncor/chat
 export const fetchLgpdConfig = () => api.get("/portal-doncor/lgpd/config").then((r) => r.data);
 export const saveLgpdConfig = (data) => api.post("/portal-doncor/lgpd/nova-versao", data).then((r) => r.data);
 export const fetchLgpdAceites = () => api.get("/portal-doncor/lgpd/aceites").then((r) => r.data);
+export const deleteLgpdAceite = (id) => api.delete(`/portal-doncor/lgpd/aceites/${id}`).then((r) => r.data);
 export const aceitarLgpd = (data) => api.post("/portal-doncor/lgpd/aceitar", data).then((r) => r.data);
 
 export default api;

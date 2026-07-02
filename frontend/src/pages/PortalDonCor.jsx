@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, BarChart3, Bell, Building2, Download, Eye, FileText, FolderOpen, HelpCircle, Home, LogOut, MessageCircle, Paperclip, Receipt, RefreshCw, Search, Send, Shield, UploadCloud, UserMinus, UserPlus, User, Settings, ChevronDown } from 'lucide-react';
+import { Activity, BarChart3, Bell, Building2, Download, Eye, FileText, FolderOpen, HelpCircle, Home, LogOut, MessageCircle, Paperclip, Receipt, RefreshCw, Search, Send, Shield, UploadCloud, UserMinus, UserPlus, User, Settings, ChevronDown, Trash2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, AreaChart, Area, Cell } from 'recharts';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -10,6 +10,7 @@ import {
   fetchPortalDonCorFormularios,
   fetchPortalDonCorSolicitacoes,
   createPortalDonCorMovimentacao,
+  deletePortalDonCorSolicitacao,
   fetchPortalDonCorChat,
   getPortalFormularioDownloadUrl,
   sendPortalDonCorChat,
@@ -494,6 +495,18 @@ const PortalDonCor = () => {
     setDocumento('');
     setSenha('');
     setShowPassBox(false);
+  };
+
+  const handleDeleteSolicitacao = async (id) => {
+    if (!id) return;
+    if (!window.confirm('Tem certeza de que deseja excluir esta solicitação permanentemente?')) return;
+    try {
+      await deletePortalDonCorSolicitacao(id);
+      setSolicitacoes(prev => prev.filter(item => item.id !== id));
+      alert('Solicitação excluída com sucesso.');
+    } catch (err) {
+      alert('Erro ao excluir a solicitação.');
+    }
   };
 
   const handleChangePass = async () => {
@@ -2097,41 +2110,66 @@ const PortalDonCor = () => {
                 <option value="concluído">Concluído</option>
               </select>
             </div>
-            <table className="data-table" style={{ fontSize: '0.85rem' }}>
-              <thead>
-                <tr style={{ background: '#f8fafc', borderBottom: `2px solid ${theme.border}` }}>
-                  <th style={{ textAlign: 'left' }}>Protocolo</th>
-                  <th style={{ textAlign: 'left' }}>Empresa</th>
-                  <th style={{ textAlign: 'left' }}>Data</th>
-                  <th style={{ textAlign: 'left' }}>Tipo</th>
-                  <th style={{ textAlign: 'left' }}>Beneficiário</th>
-                  <th style={{ textAlign: 'left' }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSolicitacoes.map((item) => (
-                  <tr key={item.id || item.protocolo} style={{ borderBottom: `1px solid ${theme.border}` }}>
-                    <td style={{ color: theme.primary, fontWeight: 700 }}>{item.protocolo}</td>
-                    <td>
-                      <div style={{ fontWeight: 600, color: theme.text }}>{item.empresa || '-'}</div>
-                      <div style={{ fontSize: '0.72rem', color: theme.muted }}>{item.documento || '-'}</div>
-                    </td>
-                    <td style={{ color: theme.text }}>{item.dataEnvio || item.criadoEm || '-'}</td>
-                    <td style={{ fontWeight: 600, color: theme.text }}>{item.tipoLabel || item.tipo}</td>
-                    <td>
-                      <div style={{ fontWeight: 600, color: theme.text }}>{item.beneficiario || '-'}</div>
-                      <div style={{ fontSize: '0.72rem', color: theme.muted }}>{item.cpf || '-'}</div>
-                    </td>
-                    <td><StatusPill status={item.status}/></td>
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <table className="data-table" style={{ fontSize: '0.8rem', minWidth: '1300px', borderCollapse: 'collapse', width: '100%' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: `2px solid ${theme.border}` }}>
+                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Protocolo</th>
+                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Contrato</th>
+                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Empresa</th>
+                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Beneficiário</th>
+                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Nome da Mãe</th>
+                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>CPF</th>
+                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Nascimento</th>
+                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Telefone</th>
+                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>E-mail</th>
+                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Parentesco</th>
+                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Estado Civil</th>
+                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Solicitação</th>
+                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Status</th>
+                    <th style={{ textAlign: 'center', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Ações</th>
                   </tr>
-                ))}
-                {filteredSolicitacoes.length === 0 && (
-                  <tr>
-                    <td colSpan="6" style={{ textAlign: 'center', color: theme.muted, padding: 28 }}>Nenhuma solicitação encontrada.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filteredSolicitacoes.map((item) => (
+                    <tr key={item.id || item.protocolo} style={{ borderBottom: `1px solid ${theme.border}` }}>
+                      <td style={{ color: theme.primary, fontWeight: 800, padding: '12px 10px' }}>{item.protocolo}</td>
+                      <td style={{ color: theme.text, padding: '12px 10px' }}>{item.contrato || '-'}</td>
+                      <td style={{ padding: '12px 10px' }}>
+                        <div style={{ fontWeight: 600, color: theme.text }}>{item.empresa || '-'}</div>
+                        <div style={{ fontSize: '0.72rem', color: theme.muted }}>{item.documento || '-'}</div>
+                      </td>
+                      <td style={{ fontWeight: 600, color: theme.text, padding: '12px 10px' }}>{item.beneficiario || '-'}</td>
+                      <td style={{ color: theme.text, padding: '12px 10px' }}>{item.nomeMae || '-'}</td>
+                      <td style={{ color: theme.text, padding: '12px 10px', whiteSpace: 'nowrap' }}>{item.cpf || '-'}</td>
+                      <td style={{ color: theme.text, padding: '12px 10px', whiteSpace: 'nowrap' }}>{item.dataNascimento || '-'}</td>
+                      <td style={{ color: theme.text, padding: '12px 10px', whiteSpace: 'nowrap' }}>{item.telefone || '-'}</td>
+                      <td style={{ color: theme.text, padding: '12px 10px' }}>{item.email || '-'}</td>
+                      <td style={{ color: theme.text, padding: '12px 10px' }}>{item.parentesco || '-'}</td>
+                      <td style={{ color: theme.text, padding: '12px 10px' }}>{item.estadoCivil || '-'}</td>
+                      <td style={{ fontWeight: 600, color: theme.text, padding: '12px 10px' }}>{item.tipoLabel || item.tipo || '-'}</td>
+                      <td style={{ padding: '12px 10px' }}><StatusPill status={item.status}/></td>
+                      <td style={{ textAlign: 'center', padding: '10px' }}>
+                        <button 
+                          onClick={() => handleDeleteSolicitacao(item.id)}
+                          style={{ border: 0, background: '#fef2f2', color: '#ef4444', cursor: 'pointer', padding: '6px 12px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = '#fee2e2'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = '#fef2f2'}
+                          title="Excluir do sistema"
+                        >
+                          <Trash2 size={13}/> Excluir
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredSolicitacoes.length === 0 && (
+                    <tr>
+                      <td colSpan="14" style={{ textAlign: 'center', color: theme.muted, padding: 28 }}>Nenhuma solicitação encontrada.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </section>
         </div>
       </div>
