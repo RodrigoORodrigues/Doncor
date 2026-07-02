@@ -881,21 +881,6 @@ const PortalDonCor = () => {
           ))}
         </div>
 
-        <section style={{ ...card, padding: 18, marginBottom: 24 }}>
-          <SectionTitle title="Distribuição de Vidas por Contrato" subtitle="Número de vidas seguradas associadas a cada apólice." />
-          <div style={{ height: 240, width: '100%', marginTop: 15 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={contractChartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.border} />
-                <XAxis dataKey="name" stroke={theme.muted} fontSize={11} tickLine={false} />
-                <YAxis stroke={theme.muted} fontSize={11} tickLine={false} axisLine={false} />
-                <Tooltip cursor={{ fill: 'rgba(0,0,0,0.02)' }} contentStyle={{ borderRadius: 8, border: `1px solid ${theme.border}`, fontSize: '0.8rem' }} />
-                <Bar dataKey="vidas" name="Vidas Ativas" fill={theme.primary} radius={[4, 4, 0, 0]} barSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-        
         <section style={{ ...card, padding: 18 }}>
           <SectionTitle title="Detalhes dos Contratos" subtitle="Visualize informações completas com filtros avançados." />
           <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
@@ -957,27 +942,6 @@ const PortalDonCor = () => {
 
     return (
       <div style={{ display: 'grid', gap: 20 }}>
-        <section style={{ ...card, padding: 18 }}>
-          <SectionTitle title="Histórico de Faturamento" subtitle="Evolução financeira das faturas por competência." />
-          <div style={{ height: 240, width: '100%', marginTop: 15 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={faturasChartData}>
-                <defs>
-                  <linearGradient id="colorValor" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={theme.blue} stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor={theme.blue} stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.border} />
-                <XAxis dataKey="competencia" stroke={theme.muted} fontSize={11} tickLine={false} />
-                <YAxis stroke={theme.muted} fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `R$ ${v.toLocaleString('pt-BR')}`} />
-                <Tooltip formatter={(value) => [`R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'Valor']} contentStyle={{ borderRadius: 8, border: `1px solid ${theme.border}`, fontSize: '0.8rem' }} />
-                <Area type="monotone" dataKey="valor" stroke={theme.blue} fillOpacity={1} fill="url(#colorValor)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-
         <section style={{ ...card, padding: 18 }}>
           <div style={{ marginBottom: 14 }}>
             <h3 style={{ margin: '0 0 12px', color: theme.text, fontSize: '0.95rem', fontWeight: 700 }}>Histórico de Faturas</h3>
@@ -1044,22 +1008,6 @@ const PortalDonCor = () => {
 
     return (
       <div style={{ display: 'grid', gap: 20 }}>
-        <section style={{ ...card, padding: 18 }}>
-          <SectionTitle title="Acompanhamento de Sinistralidade" subtitle="Evolução do Loss Ratio (%) em relação ao limite técnico de 75%." />
-          <div style={{ height: 240, width: '100%', marginTop: 15 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={biChartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.border} />
-                <XAxis dataKey="mes" stroke={theme.muted} fontSize={11} tickLine={false} />
-                <YAxis stroke={theme.muted} fontSize={11} tickLine={false} axisLine={false} unit="%" />
-                <Tooltip formatter={(v) => [`${v}%`, 'Loss Ratio']} contentStyle={{ borderRadius: 8, border: `1px solid ${theme.border}`, fontSize: '0.8rem' }} />
-                <Line type="monotone" dataKey="sinistralidade" name="Sinistralidade" stroke={theme.blue} strokeWidth={3} activeDot={{ r: 8 }} />
-                <Line type="monotone" dataKey="limite" name="Limite Técnico" stroke="#EF4444" strokeDasharray="5 5" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-
         <section style={{ ...card, padding: 18 }}>
           <SectionTitle title="Sinistralidade e BI" subtitle="Relatórios e arquivos processados para acompanhamento de indicadores." />
           {sinistralidade.length === 0 ? <EmptyState>Nenhum documento disponível no momento.</EmptyState> : (
@@ -1533,22 +1481,6 @@ const PortalDonCor = () => {
           {activeMovementTab === 'alteracao' && renderAlteracao()}
         </div>
 
-        <section style={{ ...card, padding: 18 }}>
-          <SectionTitle title="Histórico de Movimentações" subtitle="Volume mensal de inclusões, exclusões e alterações processadas." />
-          <div style={{ height: 220, width: '100%', marginTop: 15 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={movimentacoesVolumeData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.border} />
-                <XAxis dataKey="mes" stroke={theme.muted} fontSize={11} tickLine={false} />
-                <YAxis stroke={theme.muted} fontSize={11} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${theme.border}`, fontSize: '0.8rem' }} />
-                <Bar dataKey="Inclusão" stackId="a" fill={theme.blue} radius={[0, 0, 0, 0]} barSize={35} />
-                <Bar dataKey="Exclusão" stackId="a" fill="#DC2626" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="Alteração" stackId="a" fill={theme.primary} radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
       </div>
     );
   };
@@ -1569,25 +1501,6 @@ const PortalDonCor = () => {
             action={<Button onClick={() => { setActiveSection('movimentacao'); setActiveMovementTab('inclusao'); }} style={{ background: theme.blue, color: '#fff' }}><FileText size={14}/> Nova Solicitação</Button>}
           />
           
-          <section style={{ ...card, padding: 18, marginBottom: 20 }}>
-            <SectionTitle title="Resumo das Solicitações por Status" subtitle="Volume total de solicitações em cada estágio de processamento." />
-            <div style={{ height: 180, width: '100%', marginTop: 15 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={solicitacoesStatusData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={theme.border} />
-                  <XAxis type="number" stroke={theme.muted} fontSize={11} tickLine={false} />
-                  <YAxis dataKey="name" type="category" stroke={theme.muted} fontSize={11} tickLine={false} width={100} />
-                  <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${theme.border}`, fontSize: '0.8rem' }} />
-                  <Bar dataKey="value" name="Quantidade" barSize={18} radius={[0, 4, 4, 0]}>
-                    {solicitacoesStatusData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
-
           <section style={{ ...card, padding: 18 }}>
             <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
               <div style={{ flex: 1, position: 'relative' }}>
@@ -1667,21 +1580,6 @@ const PortalDonCor = () => {
             subtitle="Documentos operacionais, regras e materiais de apoio para gestão do seu plano."
           />
           
-          <section style={{ ...card, padding: 18, marginBottom: 20 }}>
-            <SectionTitle title="Estatísticas de Download e Acessos" subtitle="Volume acumulado de downloads de documentos operacionais e manuais." />
-            <div style={{ height: 200, width: '100%', marginTop: 15 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={formulariosChartData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.border} />
-                  <XAxis dataKey="name" stroke={theme.muted} fontSize={11} tickLine={false} />
-                  <YAxis stroke={theme.muted} fontSize={11} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${theme.border}`, fontSize: '0.8rem' }} />
-                  <Bar dataKey="downloads" name="Acessos" fill={theme.blue} radius={[4, 4, 0, 0]} barSize={35} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
-
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16 }}>
             {formulariosPorCategoria.map((section) => (
               <section key={section.id} style={{ ...card, padding: 18 }}>
