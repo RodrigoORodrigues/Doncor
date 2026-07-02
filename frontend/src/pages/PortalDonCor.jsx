@@ -794,14 +794,6 @@ const PortalDonCor = () => {
     );
   }
 
-  if (needsLgpdAcceptance) {
-    return renderLgpdAcceptanceScreen();
-  }
-
-  if (needsPasswordChange) {
-    return renderPasswordChangeScreen();
-  }
-
   const renderDashboard = () => (
     <>
       <SectionTitle title={`Bem-vindo ao seu Portal, ${empresa}`} subtitle="Resumo das operações ativas por seção." action={<Button onClick={() => { setActiveSection('movimentacao'); setActiveMovementTab('inclusao'); }} style={{ background: theme.blue, color: '#fff', display: 'flex', gap: 8 }}><FileText size={15}/>Novo chamado</Button>} />
@@ -1815,6 +1807,14 @@ const PortalDonCor = () => {
       </div>
     );
   };
+
+  if (needsLgpdAcceptance) {
+    return renderLgpdAcceptanceScreen();
+  }
+
+  if (needsPasswordChange) {
+    return renderPasswordChangeScreen();
+  }
 
   const renderLgpdGovernance = () => {
     const filteredLogs = lgpdAceitesList.filter(item => {
