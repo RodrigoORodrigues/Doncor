@@ -67,21 +67,54 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <div
-          title="Sistema Online"
+        <button
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
-            background: '#ECFDF5',
-            border: '1px solid #A7F3D0',
-            borderRadius: '9999px',
-            padding: '4px 10px'
+            justifyContent: 'center',
+            width: '35px',
+            height: '35px',
+            background: 'transparent',
+            border: '1px solid #d8e2ef',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            color: '#5E6E82',
+            transition: 'all 0.2s'
           }}
+          title="Latência do Sistema"
         >
-          <div className="animate-pulse" style={{ width: '8px', height: '8px', backgroundColor: '#10b981', borderRadius: '50%' }} />
-          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#059669' }}>Online</span>
-        </div>
+          <div style={{
+            width: '16px',
+            height: '16px',
+            borderLeft: '2px solid #666',
+            borderRight: '2px solid #666',
+            borderBottom: '2px solid #666',
+            display: 'flex',
+            alignItems: 'flex-end',
+            justifyContent: 'flex-end'
+          }}>
+            <div style={{ width: '100%', height: '100%', backgroundColor: '#27ae60' }} />
+          </div>
+        </button>
+
+        <button
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '35px',
+            height: '35px',
+            background: 'transparent',
+            border: '1px solid #d8e2ef',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            color: '#5E6E82',
+            transition: 'all 0.2s'
+          }}
+          title="Exibir Tour"
+        >
+          <Lightbulb size={16} />
+        </button>
 
         <div style={{ width: '1px', height: '24px', background: 'rgba(44,123,229,0.2)', margin: '0 4px' }} />
 

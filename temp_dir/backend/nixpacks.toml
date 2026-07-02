@@ -1,0 +1,37 @@
+[phases.setup]
+# Dependências Linux necessárias para o Chromium/Playwright no Railway/Nixpacks.
+# Este arquivo cobre o caso em que a Railway ignora o Dockerfile.rpa e usa Nixpacks.
+nixPkgs = [
+  "python311",
+  "gcc",
+  "glib",
+  "nss",
+  "nspr",
+  "dbus",
+  "atk",
+  "at-spi2-atk",
+  "cups",
+  "expat",
+  "libxcb",
+  "xorg.libX11",
+  "xorg.libXcomposite",
+  "xorg.libXdamage",
+  "xorg.libXext",
+  "xorg.libXfixes",
+  "xorg.libXrandr",
+  "libxkbcommon",
+  "at-spi2-core",
+  "mesa",
+  "cairo",
+  "pango",
+  "alsa-lib"
+]
+
+[phases.install]
+cmds = [
+  "pip install --no-cache-dir -r requirements.txt",
+  "python -m playwright install chromium"
+]
+
+[start]
+cmd = "sh start.sh"

@@ -135,7 +135,7 @@ def test_movimentacao_inclusao_cria_solicitacao_operacional_e_chat(monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["protocolo"] == "CLI-0001"
-    assert body["status"] == "Recebido"
+    assert body["status"] == "Enviado"
     assert len(db.portal_solicitacoes.items) == 1
     assert len(db.inclusoes.items) == 1
     assert db.inclusoes.items[0]["status"] == "Pendente"

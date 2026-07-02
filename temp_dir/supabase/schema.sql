@@ -126,27 +126,6 @@ create table if not exists public.portal_formularios (
   updated_at timestamptz not null default now()
 );
 
-create table if not exists public.portal_sinistralidade (
-  id text primary key,
-  payload jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists public.lgpd_config (
-  id text primary key,
-  payload jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists public.lgpd_aceites (
-  id text primary key,
-  payload jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
 create table if not exists public.robo_config (
   id text primary key default 'default',
   payload jsonb not null default '{}'::jsonb,
@@ -205,9 +184,6 @@ create index if not exists portal_parceiros_payload_gin on public.portal_parceir
 create index if not exists portal_chat_payload_gin on public.portal_chat using gin (payload);
 create index if not exists portal_solicitacoes_payload_gin on public.portal_solicitacoes using gin (payload);
 create index if not exists portal_formularios_payload_gin on public.portal_formularios using gin (payload);
-create index if not exists portal_sinistralidade_payload_gin on public.portal_sinistralidade using gin (payload);
-create index if not exists lgpd_config_payload_gin on public.lgpd_config using gin (payload);
-create index if not exists lgpd_aceites_payload_gin on public.lgpd_aceites using gin (payload);
 create index if not exists boletos_baixados_payload_gin on public.boletos_baixados using gin (payload);
 create index if not exists robo_arquivos_payload_gin on public.robo_arquivos using gin (payload);
 create index if not exists robo_diagnosticos_payload_gin on public.robo_diagnosticos using gin (payload);
@@ -221,7 +197,6 @@ begin
     'contratos_adesao', 'contratos_empresarial', 'inclusoes', 'exclusoes', 'transferencias',
     'faturas', 'comissoes', 'seguradoras', 'produtos', 'colaboradores', 'tarefas_pendentes',
     'movimentacoes_recentes', 'portal_parceiros', 'portal_chat', 'portal_solicitacoes', 'portal_formularios',
-    'portal_sinistralidade', 'lgpd_config', 'lgpd_aceites',
     'robo_config', 'robo_estado', 'robo_execucoes_log', 'boletos_baixados', 'robo_arquivos', 'robo_diagnosticos'
   ]
   loop
@@ -248,9 +223,6 @@ alter table public.portal_parceiros disable row level security;
 alter table public.portal_chat disable row level security;
 alter table public.portal_solicitacoes disable row level security;
 alter table public.portal_formularios disable row level security;
-alter table public.portal_sinistralidade disable row level security;
-alter table public.lgpd_config disable row level security;
-alter table public.lgpd_aceites disable row level security;
 alter table public.robo_config disable row level security;
 alter table public.robo_estado disable row level security;
 alter table public.robo_execucoes_log disable row level security;
