@@ -26,6 +26,7 @@ import PortalParceiros from "./pages/PortalParceiros";
 import PortalFormularios from "./pages/PortalFormularios";
 import PortalSolicitacoes from "./pages/PortalSolicitacoes";
 import PortalSinistralidade from "./pages/PortalSinistralidade";
+import LgpdGovernance from "./pages/LgpdGovernance";
 import { Loader2 } from "lucide-react";
 
 const DEFAULT_ACCESS = "dashboard";
@@ -304,6 +305,7 @@ const pageComponents = {
   "portal-solicitacoes": PortalSolicitacoes,
   "portal-formularios": PortalFormularios,
   "portal-sinistralidade": PortalSinistralidade,
+  "lgpd-governance": LgpdGovernance,
   relatorios: Relatorios,
   robo: Robo,
   "robo-config": RoboConfig,
@@ -320,7 +322,13 @@ function MainApp({ session, onLogout, accessByRole, onAccessChange }) {
   const [activeTab, setActiveTab] = useState(DEFAULT_ACCESS);
 
   const role = session?.role || 'Diretoria';
-  const allowedPages = useMemo(() => accessByRole[role] || accessByRole.Diretoria || [], [accessByRole, role]);
+  const allowedPages = useMemo(() => {
+    const base = accessByRole[role] || accessByRole.Diretoria || [];
+    if (role === 'Master') {
+      return [...base, 'lgpd-governance'];
+    }
+    return base;
+  }, [accessByRole, role]);
 
   const openTab = useCallback((item) => {
     if (!allowedPages.includes(item.page) && item.page !== 'dashboard') return;

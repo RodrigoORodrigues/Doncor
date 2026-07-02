@@ -262,7 +262,7 @@ const PortalDonCor = () => {
   }, [session, perfilForm]);
 
   const filteredMenuItems = useMemo(() => {
-    const base = [
+    return [
       { id: 'dashboard', label: 'Dashboard', icon: Home },
       { id: 'contratos', label: 'Contratos', icon: FolderOpen },
       { id: 'faturas', label: 'Faturas', icon: Receipt },
@@ -272,11 +272,7 @@ const PortalDonCor = () => {
       { id: 'formularios', label: 'Formulários e Manuais', icon: FileText },
       { id: 'chat', label: 'Chat', icon: MessageCircle },
     ];
-    if (isDonfim) {
-      base.push({ id: 'lgpd', label: 'Governança LGPD', icon: '🛡️' });
-    }
-    return base;
-  }, [isDonfim]);
+  }, []);
 
   const isLengthValid = newPass.length >= 8;
   const containsSpecialChar = /[^A-Za-z0-9]/.test(newPass);
@@ -1816,240 +1812,6 @@ const PortalDonCor = () => {
     return renderPasswordChangeScreen();
   }
 
-  const renderLgpdGovernance = () => {
-    const filteredLogs = lgpdAceitesList.filter(item => {
-      if (!lgpdSearchText) return true;
-      const term = lgpdSearchText.toLowerCase();
-      return (
-        item.usuario?.toLowerCase().includes(term) ||
-        item.empresa?.toLowerCase().includes(term) ||
-        item.versao?.toLowerCase().includes(term) ||
-        item.hash?.toLowerCase().includes(term)
-      );
-    });
-
-    const uniqueUsersCount = new Set(lgpdAceitesList.map(item => item.documento)).size;
-
-    return (
-      <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 900, color: theme.text, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span>🛡️</span> Governança LGPD e Termos Aceitos
-            </h1>
-            <p style={{ margin: '6px 0 0', color: theme.muted, fontSize: '0.88rem' }}>
-              Auditabilidade e controle de consentimento dos usuários da plataforma.
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <Button 
-              onClick={handleExportLgpd} 
-              style={{ background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', fontWeight: 800 }}
-            >
-              📥 Exportar
-            </Button>
-            <Button 
-              onClick={() => {
-                setNovaVersaoText(lgpdText);
-                setNovaVersaoLabel((parseFloat(lgpdVersion) + 0.1).toFixed(1));
-                setShowNovaVersaoModal(true);
-              }} 
-              style={{ background: theme.blue, color: '#fff', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', fontWeight: 800 }}
-            >
-              ➕ Nova Versão
-            </Button>
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 20 }}>
-          <div style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ fontSize: '2.5rem' }}>💚</div>
-            <div>
-              <div style={{ color: theme.muted, fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase' }}>Total de Aceites</div>
-              <div style={{ fontSize: '1.8rem', fontWeight: 900, color: theme.text, marginTop: 4 }}>{lgpdAceitesList.length}</div>
-            </div>
-          </div>
-
-          <div style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ fontSize: '2.5rem' }}>📜</div>
-            <div>
-              <div style={{ color: theme.muted, fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase' }}>Versão Ativa</div>
-              <div style={{ fontSize: '1.8rem', fontWeight: 900, color: theme.text, marginTop: 4 }}>v{lgpdVersion}</div>
-            </div>
-          </div>
-
-          <div style={{ ...card, padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ fontSize: '2.5rem' }}>👥</div>
-            <div>
-              <div style={{ color: theme.muted, fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase' }}>Usuários Únicos</div>
-              <div style={{ fontSize: '1.8rem', fontWeight: 900, color: theme.text, marginTop: 4 }}>{uniqueUsersCount || lgpdAceitesList.length}</div>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ ...card, padding: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 900, color: theme.text }}>Registro de Atividades</h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 340 }}>
-              <span style={{ color: theme.muted }}>🔍</span>
-              <Input 
-                placeholder="Buscar por usuário, hash, versão..." 
-                value={lgpdSearchText} 
-                onChange={(e) => setLgpdSearchText(e.target.value)} 
-                style={{ flex: 1 }}
-              />
-            </div>
-          </div>
-
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: `2px solid ${theme.border}`, color: theme.muted, fontSize: '0.8rem', fontWeight: 800 }}>
-                  <th style={{ padding: '12px 16px' }}>USUÁRIO</th>
-                  <th style={{ padding: '12px 16px' }}>EMPRESA</th>
-                  <th style={{ padding: '12px 16px' }}>VERSÃO</th>
-                  <th style={{ padding: '12px 16px' }}>DATA/HORA</th>
-                  <th style={{ padding: '12px 16px' }}>IP</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'center' }}>AÇÕES</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredLogs.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} style={{ padding: '24px 16px', textAlign: 'center', color: theme.muted, fontSize: '0.9rem' }}>
-                      Nenhum aceite correspondente encontrado.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredLogs.map((item, index) => (
-                    <tr key={item.id || index} style={{ borderBottom: `1px solid ${theme.border}`, fontSize: '0.88rem', color: theme.text }} onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                      <td style={{ padding: '14px 16px', fontWeight: 800 }}>{item.usuario}</td>
-                      <td style={{ padding: '14px 16px' }}>{item.empresa || 'Todas'}</td>
-                      <td style={{ padding: '14px 16px' }}><span style={{ background: '#f1f5f9', padding: '4px 8px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 700, color: '#475569' }}>{item.versao}</span></td>
-                      <td style={{ padding: '14px 16px' }}>{item.criadoEm || item.createdAt}</td>
-                      <td style={{ padding: '14px 16px', color: theme.muted }}>{item.ip}</td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                        <button 
-                          onClick={() => setSelectedAceite(item)}
-                          style={{ border: 0, background: '#eff6ff', color: theme.blue, cursor: 'pointer', padding: '6px 12px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = '#dbeafe'}
-                          onMouseLeave={(e) => e.currentTarget.style.background = '#eff6ff'}
-                        >
-                          👁️ Detalhes
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {selectedAceite && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}>
-            <div style={{ background: '#fff', borderRadius: 20, padding: 30, width: '100%', maxWidth: 600, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: `1px solid ${theme.border}`, paddingBottom: 14 }}>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: theme.text }}>Comprovante de Aceite LGPD</h3>
-                <button onClick={() => setSelectedAceite(null)} style={{ border: 0, background: 'transparent', fontSize: '1.5rem', cursor: 'pointer', color: theme.muted }}>&times;</button>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20, fontSize: '0.88rem' }}>
-                <div>
-                  <div style={{ color: theme.muted, fontWeight: 700 }}>Usuário:</div>
-                  <div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{selectedAceite.usuario}</div>
-                </div>
-                <div>
-                  <div style={{ color: theme.muted, fontWeight: 700 }}>Documento:</div>
-                  <div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{selectedAceite.documento}</div>
-                </div>
-                <div>
-                  <div style={{ color: theme.muted, fontWeight: 700 }}>Empresa:</div>
-                  <div style={{ color: theme.text, marginTop: 2 }}>{selectedAceite.empresa || 'Todas'}</div>
-                </div>
-                <div>
-                  <div style={{ color: theme.muted, fontWeight: 700 }}>Versão Aceita:</div>
-                  <div style={{ color: theme.text, marginTop: 2 }}>{selectedAceite.versao}</div>
-                </div>
-                <div>
-                  <div style={{ color: theme.muted, fontWeight: 700 }}>Data e Hora:</div>
-                  <div style={{ color: theme.text, marginTop: 2 }}>{selectedAceite.criadoEm || selectedAceite.createdAt}</div>
-                </div>
-                <div>
-                  <div style={{ color: theme.muted, fontWeight: 700 }}>Endereço IP:</div>
-                  <div style={{ color: theme.text, marginTop: 2 }}>{selectedAceite.ip}</div>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ color: theme.muted, fontWeight: 700, fontSize: '0.88rem', marginBottom: 6 }}>Hash de Consentimento:</div>
-                <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 8, padding: '10px 12px', fontSize: '0.8rem', fontFamily: 'monospace', color: '#475569', wordBreak: 'break-all' }}>
-                  {selectedAceite.hash}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <Button onClick={() => setSelectedAceite(null)} style={{ background: theme.blue, color: '#fff', fontWeight: 800 }}>
-                  Fechar Comprovante
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showNovaVersaoModal && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}>
-            <div style={{ background: '#fff', borderRadius: 20, padding: 30, width: '100%', maxWidth: 680, boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottom: `1px solid ${theme.border}`, paddingBottom: 14 }}>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: theme.text }}>Publicar Nova Versão dos Termos LGPD</h3>
-                <button onClick={() => setShowNovaVersaoModal(false)} style={{ border: 0, background: 'transparent', fontSize: '1.5rem', cursor: 'pointer', color: theme.muted }}>&times;</button>
-              </div>
-
-              <form onSubmit={handleSaveNovaVersao}>
-                <div style={{ display: 'grid', gap: 16, marginBottom: 20 }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 800, color: theme.text, marginBottom: 6 }}>Identificador de Versão</label>
-                    <Input 
-                      value={novaVersaoLabel} 
-                      onChange={(e) => setNovaVersaoLabel(e.target.value)} 
-                      placeholder="Ex: 1.1" 
-                      required 
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 800, color: theme.text, marginBottom: 6 }}>Texto dos Termos LGPD</label>
-                    <textarea 
-                      value={novaVersaoText} 
-                      onChange={(e) => setNovaVersaoText(e.target.value)} 
-                      rows={8}
-                      style={{ width: '100%', border: `1px solid ${theme.border}`, borderRadius: 10, padding: 12, fontSize: '0.88rem', color: theme.text, resize: 'vertical' }}
-                      placeholder="Escreva os termos legais..." 
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-                  <button 
-                    type="button" 
-                    onClick={() => setShowNovaVersaoModal(false)} 
-                    style={{ padding: '10px 16px', border: '1px solid #cbd5e1', borderRadius: 10, background: 'transparent', color: theme.muted, cursor: 'pointer' }}
-                  >
-                    Cancelar
-                  </button>
-                  <Button type="submit" style={{ background: theme.blue, color: '#fff', fontWeight: 800 }}>
-                    Publicar Termos
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const renderActiveSection = () => {
     switch (activeSection) {
       case 'perfil': return renderPerfil();
@@ -2061,9 +1823,6 @@ const PortalDonCor = () => {
       case 'solicitacoes': return renderSolicitacoes();
       case 'formularios': return renderFormularios();
       case 'chat': return renderChat();
-      case 'lgpd': 
-        if (!isDonfim) return renderDashboard();
-        return renderLgpdGovernance();
       default: return renderDashboard();
     }
   };

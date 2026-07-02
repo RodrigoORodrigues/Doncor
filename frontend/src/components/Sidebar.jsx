@@ -4,14 +4,14 @@ import {
   Users, Handshake, UserPlus, UserMinus, ArrowLeftRight,
   Receipt, DollarSign, Building2, Package, UserCog,
   BarChart3, Download, LayoutDashboard,
-  Menu, Bot, Settings, User, HelpCircle, MessageCircle, UserCheck, FileText
+  Menu, Bot, Settings, User, HelpCircle, MessageCircle, UserCheck, FileText, Shield
 } from 'lucide-react';
 import DoncorLogo from './DoncorLogo';
 
 const iconMap = {
   Users, Handshake, UserPlus, UserMinus, ArrowLeftRight,
   Receipt, DollarSign, Building2, Package, UserCog,
-  BarChart3, Download, LayoutDashboard, Menu, Bot, Settings, User, HelpCircle, MessageCircle, UserCheck, FileText
+  BarChart3, Download, LayoutDashboard, Menu, Bot, Settings, User, HelpCircle, MessageCircle, UserCheck, FileText, Shield
 };
 
 const buildStrictMenuItems = () => {
@@ -45,6 +45,7 @@ const buildStrictMenuItems = () => {
           { id: 'portal-formularios', label: 'Formulários e Manuais', icon: 'FileText', page: 'portal-formularios' },
           { id: 'portal-sinistralidade', label: 'Sinistralidade e BI', icon: 'BarChart2', page: 'portal-sinistralidade' },
           { id: 'chat', label: 'Chat', icon: 'MessageCircle', page: 'chat' },
+          { id: 'lgpd-governance', label: 'Governança LGPD', icon: 'Shield', page: 'lgpd-governance' },
         ],
       });
       return;

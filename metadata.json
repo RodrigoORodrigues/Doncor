@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Don Cor",
+  "description": "Portal de Gestão de Apólices e Benefícios da Don Cor e painel do cliente.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
