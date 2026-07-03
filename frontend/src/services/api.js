@@ -330,6 +330,7 @@ export const fetchPortalDonCorSinistralidade = (documento) => getArray("/portal-
 export const fetchPortalDonCorSolicitacoes = ({ documento = "", search = "", tipo = "todos", status = "todos" } = {}) =>
   getArray("/portal-doncor/solicitacoes", { params: { documento, search, tipo, status } });
 export const updatePortalDonCorSolicitacao = (id, data) => api.patch(`/portal-doncor/solicitacoes/${id}`, data).then((r) => r.data);
+export const atualizarPerfilPortalDonCor = (data) => api.post("/portal-doncor/atualizar-perfil", data).then((r) => r.data);
 export const deletePortalDonCorSolicitacao = (id) => api.delete(`/portal-doncor/solicitacoes/${id}`).then((r) => r.data);
 export const createPortalDonCorMovimentacao = (data) => api.post("/portal-doncor/movimentacoes", data).then((r) => r.data);
 export const fetchPortalDonCorChat = ({ documento = "", empresa = "" } = {}) =>

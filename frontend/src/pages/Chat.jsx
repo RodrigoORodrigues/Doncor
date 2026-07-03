@@ -188,19 +188,33 @@ const Chat = ({ session }) => {
                 <div style={{ maxWidth:'70%', background:item.direction === 'outgoing' ? '#2C7BE5' : '#fff', color:item.direction === 'outgoing' ? '#fff' : '#344050', border:'1px solid #e3e6f0', borderRadius:'12px', padding:'10px 12px' }}>
                   <div style={{ fontSize:'0.68rem', opacity:0.8, marginBottom:'4px' }}>{item.sender} • {formatDate(item.createdAt)}</div>
                   {item.text && <div style={{ fontSize:'0.88rem', lineHeight:1.35 }}>{item.text}</div>}
-                  {item.attachmentName && (
-                    <div style={{ marginTop:'8px', display:'flex', alignItems:'center', gap:'6px', fontSize:'0.78rem', fontWeight:600 }}>
+                  {item.attachments && item.attachments.length > 0 ? (
+                    <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {item.attachments.map((att, index) => (
+                        <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 600 }}>
+                          <Paperclip size={13}/>
+                          {att.base64 ? (
+                            <a 
+                              href={att.base64.startsWith('data:') ? att.base64 : `data:${att.type || 'application/octet-stream'};base64,${att.base64}`} 
+                              download={att.name} 
+                              style={{ color: 'inherit', textDecoration: 'underline' }}
+                            >
+                              {att.name}
+                            </a>
+                          ) : (
+                            <span>{att.name}</span>
+                          )}
+                          {att.size ? <span>({(att.size / 1024).toFixed(0)} KB)</span> : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : item.attachmentName ? (
+                    <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 600 }}>
                       <Paperclip size={13}/>
-                      {item.attachments?.[0]?.base64 ? (
-                        <a href={item.attachments[0].base64} download={item.attachmentName} style={{ color: 'inherit', textDecoration: 'underline' }}>
-                          {item.attachmentName}
-                        </a>
-                      ) : (
-                        <span>{item.attachmentName}</span>
-                      )}
+                      <span>{item.attachmentName}</span>
                       {formatSize(item.attachmentSize)}
                     </div>
-                  )}
+                  ) : null}
                 </div>
               </div>
             ))}

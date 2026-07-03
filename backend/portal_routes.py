@@ -280,6 +280,7 @@ def _normalize_partner_payload(payload: Dict[str, Any], now_iso: Callable, now_b
         "empresa": str(payload.get("empresa") or payload.get("nome") or payload.get("razaoSocial") or "").strip(),
         "email": str(payload.get("email") or "").strip(),
         "telefone": str(payload.get("telefone") or "").strip(),
+        "logo": str(payload.get("logo") or (existing.get("logo") if existing else "") or "").strip(),
         "contratos": contratos,
         "status": str(payload.get("status") or "Ativo").strip() or "Ativo",
         "observacoes": str(payload.get("observacoes") or payload.get("observação") or "").strip(),
@@ -791,6 +792,7 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
             "contratos": context["contratoNumeros"],
             "primeiroAcesso": first_access,
             "email": partner.get("email") or "",
+            "logo": partner.get("logo") or "",
             "cargo": partner.get("cargo") or ("Master" if str(partner.get("nome")).lower() == "donfim" else "Cliente"),
             "lgpdAceito": bool(partner.get("lgpdAceito", False)),
             "senhaAlterada": bool(partner.get("senhaAlterada", False)),
@@ -1035,6 +1037,45 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
         )
         return {"ok": True, "message": "Senha alterada com sucesso.", "senhaAlterada": True}
 
+    @app.post("/api/portal-doncor/atualizar-perfil")
+    async def portal_doncor_atualizar_perfil(payload: Dict[str, Any] = Body(...)):
+        documento = _digits(payload.get("documento"))
+        if not documento:
+            raise HTTPException(status_code=400, detail="Documento não informado.")
+            
+        partner = await _registered_partner(db, documento)
+        if not partner:
+            raise HTTPException(status_code=404, detail="Perfil do parceiro não cadastrado no Portal.")
+
+        nome = str(payload.get("nome") or "").strip()
+        email = str(payload.get("email") or "").strip()
+        telefone = str(payload.get("telefone") or "").strip()
+        logo = str(payload.get("logo") or "").strip()
+
+        if not nome:
+            raise HTTPException(status_code=400, detail="O nome corporativo / Razão Social é obrigatório.")
+
+        # Update partner details in the DB
+        await db.portal_parceiros.update_one(
+            {"id": partner.get("id")},
+            {"$set": {
+                "nome": nome,
+                "empresa": nome,
+                "email": email,
+                "telefone": telefone,
+                "logo": logo,
+                "updatedAt": now_iso(),
+                "atualizadoEm": now_br(),
+            }}
+        )
+
+        updated_partner = await db.portal_parceiros.find_one({"id": partner.get("id")}, {"_id": 0})
+        return {
+            "ok": True,
+            "message": "Perfil corporativo atualizado com sucesso no banco de dados.",
+            "partner": _public_partner(updated_partner)
+        }
+
     @app.get("/api/portal-doncor/resumo")
     async def portal_doncor_resumo(documento: str = Query(...)):
         return await _portal_payload(db, documento)
@@ -1127,6 +1168,9 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
             "parentesco": payload.get("parentesco") or "Titular",
             "estadoCivil": payload.get("estadoCivil") or "",
             "nomeMae": payload.get("nomeMae") or "",
+            "dataNascimento": str(payload.get("dataNascimento") or "").strip(),
+            "telefone": str(payload.get("telefone") or "").strip(),
+            "email": str(payload.get("email") or "").strip(),
             "detalhes": detalhes,
             "anexos": anexos,
             "status": "Recebido",

@@ -16,15 +16,48 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
   const [saldoVidas, setSaldoVidas] = useState({ percentual_total: 0 });
   const [chatUnread, setChatUnread] = useState(() => Number(localStorage.getItem('doncor_chat_unread') || 0));
   const userName = session?.username || 'Usuário';
+
+  const [brokerProfile, setBrokerProfile] = useState(() => {
+    const cached = localStorage.getItem('doncor_profile_broker');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed.nome) return parsed;
+      } catch (e) {}
+    }
+    return {
+      nome: userName,
+      email: `${userName.toLowerCase()}@doncor.local`,
+      logo: ''
+    };
+  });
+
   const userData = {
-    name: userName,
-    email: `${userName.toLowerCase()}@doncor.local`,
-    role: session?.role || 'Colaborador',
+    name: brokerProfile.nome,
+    email: brokerProfile.email,
     company: 'Don Cor'
   };
 
   useEffect(() => {
     fetchSaldoVidas().then(setSaldoVidas).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      const cached = localStorage.getItem('doncor_profile_broker');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed.nome) {
+            setBrokerProfile(parsed);
+          }
+        } catch (e) {}
+      }
+    };
+    window.addEventListener('doncor-profile-updated', handleProfileUpdate);
+    return () => {
+      window.removeEventListener('doncor-profile-updated', handleProfileUpdate);
+    };
   }, []);
 
   useEffect(() => {
@@ -155,36 +188,84 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
               borderRadius: '6px',
               transition: 'all 0.2s'
             }}>
-              <div style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                background: '#4979bb',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                fontSize: '0.75rem',
-                fontWeight: 600
-              }}>
-                {userData.name.split(' ').map(n => n[0]).slice(0, 2).join('')}
-              </div>
+              {brokerProfile.logo ? (
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: '#fff',
+                  border: '1px solid #d8e2ef',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  padding: '2px'
+                }}>
+                  <img src={brokerProfile.logo} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                </div>
+              ) : (
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: '#4979bb',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  fontSize: '0.75rem',
+                  fontWeight: 600
+                }}>
+                  {userData.name.split(' ').map(n => n[0]).slice(0, 2).join('')}
+                </div>
+              )}
               <div style={{ textAlign: 'left' }}>
                 <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#344050', lineHeight: 1.2 }}>
                   {userData.name.split(' ').slice(0, 2).join(' ')}
-                </div>
-                <div style={{ fontSize: '0.62rem', color: '#8a8d93' }}>
-                  {userData.role}
                 </div>
               </div>
               <ChevronDown size={14} color="#5E6E82" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" style={{ minWidth: '200px' }}>
-            <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f2f5' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#344050' }}>{userData.name}</div>
-              <div style={{ fontSize: '0.7rem', color: '#8a8d93' }}>{userData.email}</div>
-              <div style={{ fontSize: '0.65rem', color: '#8a8d93', marginTop: '2px' }}>{userData.company}</div>
+          <DropdownMenuContent align="end" style={{ minWidth: '220px' }}>
+            <div style={{ padding: '12px', borderBottom: '1px solid #f0f2f5', display: 'flex', gap: '10px', alignItems: 'center' }}>
+              {brokerProfile.logo ? (
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '8px',
+                  background: '#fff',
+                  border: '1px solid #d8e2ef',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  padding: '3px',
+                  flexShrink: 0
+                }}>
+                  <img src={brokerProfile.logo} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                </div>
+              ) : (
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  background: '#e0ebf7',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#2C7BE5',
+                  fontSize: '0.9rem',
+                  fontWeight: 700,
+                  flexShrink: 0
+                }}>
+                  {userData.name.split(' ').map(n => n[0]).slice(0, 2).join('')}
+                </div>
+              )}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#344050', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{userData.name}</div>
+                <div style={{ fontSize: '0.7rem', color: '#8a8d93', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{userData.email}</div>
+              </div>
             </div>
             <DropdownMenuItem
               style={{ cursor: 'pointer', fontSize: '0.8rem' }}

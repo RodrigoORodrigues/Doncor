@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, BarChart3, Bell, Building2, Download, Eye, FileText, FolderOpen, HelpCircle, Home, LogOut, MessageCircle, Paperclip, Receipt, RefreshCw, Search, Send, Shield, UploadCloud, UserMinus, UserPlus, User, Settings, ChevronDown, Trash2 } from 'lucide-react';
+import { Activity, BarChart3, Bell, Building2, Download, Eye, FileText, FolderOpen, HelpCircle, Home, LogOut, MessageCircle, Paperclip, Receipt, RefreshCw, Search, Send, Shield, UploadCloud, UserMinus, UserPlus, User, Settings, ChevronDown, Trash2, Mail, Phone } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, AreaChart, Area, Cell } from 'recharts';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -16,6 +16,7 @@ import {
   sendPortalDonCorChat,
   alterarSenhaPortalDonCor,
   esqueciSenhaPortalDonCor,
+  atualizarPerfilPortalDonCor,
   fetchPortalDonCorSinistralidade,
   getPortalSinistralidadeDownloadUrl,
   fetchLgpdConfig,
@@ -122,6 +123,7 @@ const attachmentMeta = (file, category = '') => ({
   size: file?.size || 0,
   type: file?.type || '',
   category,
+  rawFile: file,
 });
 
 const fileToBase64 = (file) =>
@@ -194,7 +196,7 @@ const PortalDonCor = () => {
   const [passMsg, setPassMsg] = useState('');
 
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [perfilForm, setPerfilForm] = useState({ nome: '', email: '', telefone: '', cargo: '' });
+  const [perfilForm, setPerfilForm] = useState({ nome: '', email: '', telefone: '', cargo: '', logo: '' });
 
   // LGPD Consent and Password Redefinition State Variables
   const [lgpdText, setLgpdText] = useState('');
@@ -223,7 +225,8 @@ const PortalDonCor = () => {
         nome: session.empresa || session.nome || 'Usuário',
         email: session.email || 'Não informado',
         telefone: session.telefone || 'Não informado',
-        cargo: session.cargo || 'Cliente'
+        cargo: session.cargo || 'Cliente',
+        logo: session.logo || ''
       });
     }
   }, [session]);
@@ -258,6 +261,8 @@ const PortalDonCor = () => {
   const [movementAttachments, setMovementAttachments] = useState(defaultMovementAttachments);
   const [submittingMovement, setSubmittingMovement] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
 
   const empresa = session?.empresa || session?.nome || 'Cliente';
 
@@ -714,6 +719,23 @@ const PortalDonCor = () => {
     setSubmittingMovement(true);
     const resolvedOperadora = form.operadora === 'Outra' ? (form.outraOperadora || 'Outra') : form.operadora;
     try {
+      const attachmentsList = getMovementAttachments(section);
+      const attachmentsWithBase64 = await Promise.all(
+        attachmentsList.map(async (att) => {
+          if (att.rawFile && att.rawFile instanceof File) {
+            try {
+              const base64 = await fileToBase64(att.rawFile);
+              const { rawFile, ...rest } = att;
+              return { ...rest, base64 };
+            } catch (err) {
+              console.error('Erro ao converter arquivo para base64:', err);
+            }
+          }
+          const { rawFile, ...rest } = att;
+          return rest;
+        })
+      );
+
       const saved = await createPortalDonCorMovimentacao({
         tipo: section,
         documento: session.documento,
@@ -721,7 +743,7 @@ const PortalDonCor = () => {
         contrato,
         ...form,
         operadora: resolvedOperadora,
-        anexos: getMovementAttachments(section),
+        anexos: attachmentsWithBase64,
       });
       setSolicitacoes((items) => [saved, ...items]);
       setSuccessMsg(`Solicitação ${saved.protocolo} enviada com sucesso.`);
@@ -2127,7 +2149,6 @@ const PortalDonCor = () => {
                     <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Estado Civil</th>
                     <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Solicitação</th>
                     <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Status</th>
-                    <th style={{ textAlign: 'center', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2139,32 +2160,21 @@ const PortalDonCor = () => {
                         <div style={{ fontWeight: 600, color: theme.text }}>{item.empresa || '-'}</div>
                         <div style={{ fontSize: '0.72rem', color: theme.muted }}>{item.documento || '-'}</div>
                       </td>
-                      <td style={{ fontWeight: 600, color: theme.text, padding: '12px 10px' }}>{item.beneficiario || '-'}</td>
-                      <td style={{ color: theme.text, padding: '12px 10px' }}>{item.nomeMae || '-'}</td>
-                      <td style={{ color: theme.text, padding: '12px 10px', whiteSpace: 'nowrap' }}>{item.cpf || '-'}</td>
-                      <td style={{ color: theme.text, padding: '12px 10px', whiteSpace: 'nowrap' }}>{item.dataNascimento || '-'}</td>
-                      <td style={{ color: theme.text, padding: '12px 10px', whiteSpace: 'nowrap' }}>{item.telefone || '-'}</td>
-                      <td style={{ color: theme.text, padding: '12px 10px' }}>{item.email || '-'}</td>
-                      <td style={{ color: theme.text, padding: '12px 10px' }}>{item.parentesco || '-'}</td>
-                      <td style={{ color: theme.text, padding: '12px 10px' }}>{item.estadoCivil || '-'}</td>
+                      <td style={{ fontWeight: 600, color: theme.text, padding: '12px 10px' }}>{item.beneficiario || item.payload?.beneficiario || '-'}</td>
+                      <td style={{ color: theme.text, padding: '12px 10px' }}>{item.nomeMae || item.payload?.nomeMae || '-'}</td>
+                      <td style={{ color: theme.text, padding: '12px 10px', whiteSpace: 'nowrap' }}>{item.cpf || item.payload?.cpf || '-'}</td>
+                      <td style={{ color: theme.text, padding: '12px 10px', whiteSpace: 'nowrap' }}>{item.dataNascimento || item.payload?.dataNascimento || '-'}</td>
+                      <td style={{ color: theme.text, padding: '12px 10px', whiteSpace: 'nowrap' }}>{item.telefone || item.payload?.telefone || '-'}</td>
+                      <td style={{ color: theme.text, padding: '12px 10px' }}>{item.email || item.payload?.email || '-'}</td>
+                      <td style={{ color: theme.text, padding: '12px 10px' }}>{item.parentesco || item.payload?.parentesco || '-'}</td>
+                      <td style={{ color: theme.text, padding: '12px 10px' }}>{item.estadoCivil || item.payload?.estadoCivil || '-'}</td>
                       <td style={{ fontWeight: 600, color: theme.text, padding: '12px 10px' }}>{item.tipoLabel || item.tipo || '-'}</td>
                       <td style={{ padding: '12px 10px' }}><StatusPill status={item.status}/></td>
-                      <td style={{ textAlign: 'center', padding: '10px' }}>
-                        <button 
-                          onClick={() => handleDeleteSolicitacao(item.id)}
-                          style={{ border: 0, background: '#fef2f2', color: '#ef4444', cursor: 'pointer', padding: '6px 12px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = '#fee2e2'}
-                          onMouseLeave={(e) => e.currentTarget.style.background = '#fef2f2'}
-                          title="Excluir do sistema"
-                        >
-                          <Trash2 size={13}/> Excluir
-                        </button>
-                      </td>
                     </tr>
                   ))}
                   {filteredSolicitacoes.length === 0 && (
                     <tr>
-                      <td colSpan="14" style={{ textAlign: 'center', color: theme.muted, padding: 28 }}>Nenhuma solicitação encontrada.</td>
+                      <td colSpan="13" style={{ textAlign: 'center', color: theme.muted, padding: 28 }}>Nenhuma solicitação encontrada.</td>
                     </tr>
                   )}
                 </tbody>
@@ -2235,16 +2245,32 @@ const PortalDonCor = () => {
           <div style={{ maxWidth:'72%', background:item.direction === 'incoming' ? theme.blue : '#fff', color:item.direction === 'incoming' ? '#fff' : theme.text, border:`1px solid ${theme.border}`, borderRadius:14, padding:'10px 12px' }}>
             <div style={{ fontSize:'0.68rem', opacity:0.82, marginBottom:4 }}>{item.sender}</div>
             {item.text && <div style={{ fontSize:'0.88rem', whiteSpace: 'pre-wrap' }}>{item.text}</div>}
-            {item.attachmentName && (
-              <div style={{ marginTop:8, display:'flex', alignItems:'center', gap:6, fontSize:'0.78rem', fontWeight:800 }}>
-                <Paperclip size={13}/>
-                {item.attachments?.[0]?.base64 ? (
-                  <a href={item.attachments[0].base64} download={item.attachmentName} style={{ color: 'inherit', textDecoration: 'underline' }}>{item.attachmentName}</a>
-                ) : (
-                  <span>{item.attachmentName}</span>
-                )}
+            {item.attachments && item.attachments.length > 0 ? (
+              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {item.attachments.map((att, index) => (
+                  <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', fontWeight: 800 }}>
+                    <Paperclip size={13} />
+                    {att.base64 ? (
+                      <a 
+                        href={att.base64.startsWith('data:') ? att.base64 : `data:${att.type || 'application/octet-stream'};base64,${att.base64}`} 
+                        download={att.name} 
+                        style={{ color: 'inherit', textDecoration: 'underline' }}
+                      >
+                        {att.name}
+                      </a>
+                    ) : (
+                      <span>{att.name}</span>
+                    )}
+                    {att.size ? <span style={{ fontSize: '0.7rem', opacity: 0.75 }}>({(att.size / 1024).toFixed(0)} KB)</span> : null}
+                  </div>
+                ))}
               </div>
-            )}
+            ) : item.attachmentName ? (
+              <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', fontWeight: 800 }}>
+                <Paperclip size={13} />
+                <span>{item.attachmentName}</span>
+              </div>
+            ) : null}
           </div>
         </div>
       ))}
@@ -2258,33 +2284,204 @@ const PortalDonCor = () => {
     </div>
   </section>;
 
+  const handleSavePerfil = async () => {
+    setProfileSaving(true);
+    setProfileError('');
+    setSuccessMsg('');
+    try {
+      const response = await atualizarPerfilPortalDonCor({
+        documento: session.documento,
+        nome: perfilForm.nome,
+        email: perfilForm.email,
+        telefone: perfilForm.telefone,
+        logo: perfilForm.logo
+      });
+
+      const updatedSession = {
+        ...session,
+        empresa: perfilForm.nome,
+        nome: perfilForm.nome,
+        email: perfilForm.email,
+        telefone: perfilForm.telefone,
+        logo: perfilForm.logo
+      };
+      setSession(updatedSession);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedSession));
+      setSuccessMsg('Perfil corporativo atualizado com sucesso no banco de dados!');
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (err) {
+      console.error('Erro ao atualizar perfil no banco de dados:', err);
+      setProfileError(err?.response?.data?.detail || 'Erro ao salvar alterações no banco de dados. Tente novamente.');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const handleLogoUpload = async (file) => {
+    if (!file) return;
+    try {
+      const base64 = await fileToBase64(file);
+      setPerfilForm(prev => ({ ...prev, logo: base64 }));
+    } catch (err) {
+      console.error('Erro ao converter logo para base64:', err);
+    }
+  };
+
   const renderPerfil = () => (
-    <section style={{ ...card, padding: 24, maxWidth: 800 }}>
-      <SectionTitle title={<span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><User size={20} color={theme.primary} /> Meu Perfil</span>} />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginTop: 16 }}>
-        <div>
-          <label style={{ ...fieldLabel, marginBottom: 6 }}>Nome</label>
-          <Input value={perfilForm.nome} onChange={(e) => setPerfilForm(prev => ({...prev, nome: e.target.value}))} />
+    <section style={{ ...card, padding: 24, maxWidth: 960 }}>
+      <SectionTitle title={<span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><User size={20} color={theme.primary} /> Meu Perfil Corporativo</span>} />
+      
+      {successMsg && (
+        <div style={{ background: '#ecfdf5', border: '1px solid #bbf7d0', color: '#047857', borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: '0.85rem', fontWeight: 700 }}>
+          {successMsg}
         </div>
-        <div>
-          <label style={{ ...fieldLabel, marginBottom: 6 }}>E-mail</label>
-          <Input value={perfilForm.email} onChange={(e) => setPerfilForm(prev => ({...prev, email: e.target.value}))} />
+      )}
+      
+      {profileError && (
+        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: '0.85rem', fontWeight: 700 }}>
+          {profileError}
         </div>
-        <div>
-          <label style={{ ...fieldLabel, marginBottom: 6 }}>Telefone</label>
-          <Input value={perfilForm.telefone} onChange={(e) => setPerfilForm(prev => ({...prev, telefone: e.target.value}))} />
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 28, marginTop: 20 }}>
+        {/* CARD PERSONALIZADO (PREVIEW) */}
+        <div style={{ 
+          background: `linear-gradient(135deg, ${theme.primary} 0%, #1e3a8a 100%)`, 
+          borderRadius: 20, 
+          padding: 24, 
+          color: '#fff', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          justifyContent: 'space-between', 
+          minHeight: 250, 
+          position: 'relative', 
+          overflow: 'hidden',
+          boxShadow: '0 12px 30px rgba(0,45,105,0.2)'
+        }}>
+          {/* Background decorative shape */}
+          <div style={{ position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: '50%', background: 'rgba(255,255,255,0.03)', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', bottom: -30, left: -30, width: 140, height: 140, borderRadius: '50%', background: 'rgba(255,255,255,0.02)', pointerEvents: 'none' }} />
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', zIndex: 1 }}>
+            <div>
+              <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1.5, opacity: 0.8, fontWeight: 700 }}>Identidade Corporativa</div>
+              <div style={{ fontSize: '1.2rem', fontWeight: 900, marginTop: 4, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 220 }}>{perfilForm.nome || 'Sua Empresa'}</div>
+            </div>
+            
+            {/* Logo Container */}
+            {perfilForm.logo ? (
+              <div style={{ width: 64, height: 64, background: '#fff', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.2)' }}>
+                <img src={perfilForm.logo} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+              </div>
+            ) : (
+              <div style={{ width: 64, height: 64, background: 'rgba(255,255,255,0.1)', borderRadius: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '1px dashed rgba(255,255,255,0.3)', gap: 2 }}>
+                <Building2 size={22} color="rgba(255,255,255,0.7)" />
+                <span style={{ fontSize: '0.55rem', opacity: 0.7 }}>Sem Logo</span>
+              </div>
+            )}
+          </div>
+          
+          <div style={{ marginTop: 28, zIndex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <Mail size={14} style={{ opacity: 0.8 }} />
+              <span style={{ fontSize: '0.8rem', opacity: 0.9, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 260 }}>{perfilForm.email || 'Não informado'}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Phone size={14} style={{ opacity: 0.8 }} />
+              <span style={{ fontSize: '0.8rem', opacity: 0.9 }}>{perfilForm.telefone || 'Não informado'}</span>
+            </div>
+          </div>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 12, marginTop: 16, zIndex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981' }} />
+              <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', fontWeight: 800, color: '#10B981', letterSpacing: 0.5 }}>Portal Autorizado</span>
+            </div>
+            <DoncorLogo size={14} showText={false} animated={false} />
+          </div>
         </div>
-        <div>
-          <label style={{ ...fieldLabel, marginBottom: 6 }}>Cargo</label>
-          <Input value={perfilForm.cargo} onChange={(e) => setPerfilForm(prev => ({...prev, cargo: e.target.value}))} />
+
+        {/* FORMULÁRIO DE EDIÇÃO E UPLOAD */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
+            <div>
+              <label style={{ ...fieldLabel, marginBottom: 6 }}>Razão Social / Nome</label>
+              <Input value={perfilForm.nome} onChange={(e) => setPerfilForm(prev => ({...prev, nome: e.target.value}))} />
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div>
+                <label style={{ ...fieldLabel, marginBottom: 6 }}>E-mail corporativo</label>
+                <Input value={perfilForm.email} onChange={(e) => setPerfilForm(prev => ({...prev, email: e.target.value}))} />
+              </div>
+              <div>
+                <label style={{ ...fieldLabel, marginBottom: 6 }}>Telefone de contato</label>
+                <Input value={perfilForm.telefone} onChange={(e) => setPerfilForm(prev => ({...prev, telefone: e.target.value}))} />
+              </div>
+            </div>
+          </div>
+
+          {/* ÁREA DE UPLOAD DA LOGO */}
+          <div style={{ border: `1px dashed ${theme.border}`, borderRadius: 14, padding: 18, background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 800, color: theme.text }}>Logo da Empresa</div>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <label style={{ 
+                flex: 1,
+                border: '1px dashed #2C7BE5',
+                borderRadius: 10,
+                padding: '16px',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                background: '#fff',
+                transition: 'all 0.2s'
+              }} onMouseEnter={(e) => e.currentTarget.style.borderColor = theme.primary} onMouseLeave={(e) => e.currentTarget.style.borderColor = '#2C7BE5'}>
+                <UploadCloud size={20} color="#2C7BE5" />
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155', textAlign: 'center' }}>Carregar nova logo</span>
+                <span style={{ fontSize: '0.65rem', color: theme.muted }}>PNG, JPG, SVG de até 1MB</span>
+                <input type="file" accept="image/*" onChange={(event) => handleLogoUpload(event.target.files?.[0])} style={{ display: 'none' }} />
+              </label>
+
+              {perfilForm.logo && (
+                <button 
+                  onClick={() => setPerfilForm(prev => ({ ...prev, logo: '' }))}
+                  style={{ 
+                    border: '1px solid #fee2e2', 
+                    background: '#fef2f2', 
+                    color: '#ef4444', 
+                    borderRadius: 10, 
+                    padding: '12px 14px', 
+                    fontSize: '0.72rem', 
+                    fontWeight: 800, 
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 6,
+                    height: '100%',
+                    justifyContent: 'center'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#fee2e2'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = '#fef2f2'}
+                >
+                  <Trash2 size={16} />
+                  Remover logo
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+            <Button onClick={handleSavePerfil} disabled={profileSaving} style={{ background: theme.blue, color: '#fff', display: 'flex', gap: 8, flex: 1, padding: '12px', opacity: profileSaving ? 0.7 : 1 }}>
+              <FileText size={16}/> {profileSaving ? 'Salvando...' : 'Salvar alterações'}
+            </Button>
+          </div>
         </div>
       </div>
-      <Button 
-        onClick={() => { setSuccessMsg('Perfil atualizado com sucesso!'); setTimeout(() => setSuccessMsg(''), 3000); }} 
-        style={{ background: theme.blue, color: '#fff', display: 'flex', gap: 8, marginTop: 24 }}
-      >
-        <FileText size={16}/> Salvar alterações
-      </Button>
     </section>
   );
 
@@ -2518,7 +2715,13 @@ const PortalDonCor = () => {
     <div style={{ minHeight:'100vh', background:theme.bg, display:'grid', gridTemplateColumns:'278px 1fr' }}>
       <aside style={{ background:theme.navy, color:'#fff', padding:20, display:'flex', flexDirection:'column', gap:18 }}>
         <div style={{ display:'flex', alignItems:'center', gap:12, padding:'6px 4px 18px', borderBottom:'1px solid #ffffff1f' }}>
-          <div style={{ display: 'flex', alignItems: 'center' }}><DoncorLogo size={28} showText={true} /></div>
+          {perfilForm.logo ? (
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, minWidth: 34, borderRadius: 8, background: '#fff', padding: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.15)', overflow: 'hidden' }}>
+              <img src={perfilForm.logo} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center' }}><DoncorLogo size={28} showText={true} /></div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', borderLeft: '1px solid #ffffff24', paddingLeft: 10, marginLeft: 4 }}>
             <div style={{ fontWeight:900, fontSize:'0.82rem', color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 }}>{empresa}</div>
             <div style={{ color:'#cbd5e1', fontSize:'0.65rem', fontWeight: 600 }}>Portal do Cliente</div>
@@ -2584,6 +2787,15 @@ const PortalDonCor = () => {
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
                 style={{ border:`1px solid ${theme.border}`, background:'#f8fafc', borderRadius:12, padding:'6px 14px', color:theme.text, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
               >
+                {perfilForm.logo ? (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 6, background: '#fff', padding: 2, border: `1px solid ${theme.border}`, overflow: 'hidden' }}>
+                    <img src={perfilForm.logo} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                  </div>
+                ) : (
+                  <div style={{ background: '#e2e8f0', width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <User size={13} color={theme.primary} />
+                  </div>
+                )}
                 <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
                   <span style={{ fontSize: '0.85rem', fontWeight: 800, color: theme.primary }}>{perfilForm.nome}</span>
                 </div>
@@ -2591,11 +2803,21 @@ const PortalDonCor = () => {
               </button>
               
               {showProfileMenu && (
-                <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 220, background: '#fff', border: `1px solid ${theme.border}`, borderRadius: 12, boxShadow: '0 10px 25px rgba(0,0,0,0.1)', overflow: 'hidden', zIndex: 50 }}>
-                  <div style={{ padding: '16px 16px 12px', borderBottom: `1px solid ${theme.border}`, background: '#f8fafc' }}>
-                    <div style={{ fontWeight: 900, color: theme.primary, fontSize: '0.95rem' }}>{perfilForm.nome}</div>
-                    <div style={{ color: theme.muted, fontSize: '0.75rem', marginTop: 2 }}>{perfilForm.email}</div>
-                    <div style={{ color: theme.muted, fontSize: '0.75rem', marginTop: 2 }}>{perfilForm.cargo}</div>
+                <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 240, background: '#fff', border: `1px solid ${theme.border}`, borderRadius: 12, boxShadow: '0 10px 25px rgba(0,0,0,0.1)', overflow: 'hidden', zIndex: 50 }}>
+                  <div style={{ padding: '16px 16px 12px', borderBottom: `1px solid ${theme.border}`, background: '#f8fafc', display: 'flex', gap: 12, alignItems: 'center' }}>
+                    {perfilForm.logo ? (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 8, background: '#fff', padding: 4, border: `1px solid ${theme.border}`, overflow: 'hidden', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                        <img src={perfilForm.logo} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                      </div>
+                    ) : (
+                      <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#dae8f5', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${theme.border}` }}>
+                        <User size={18} color={theme.blue} />
+                      </div>
+                    )}
+                    <div>
+                      <div style={{ fontWeight: 900, color: theme.primary, fontSize: '0.9rem', lineHeight: 1.2 }}>{perfilForm.nome}</div>
+                      <div style={{ color: theme.muted, fontSize: '0.72rem', marginTop: 2, wordBreak: 'break-all' }}>{perfilForm.email}</div>
+                    </div>
                   </div>
                   <div style={{ padding: '8px' }}>
                     <button onClick={() => { setActiveSection('perfil'); setShowProfileMenu(false); }} style={{ width: '100%', textAlign: 'left', padding: '10px 12px', background: 'transparent', border: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, color: theme.text, fontSize: '0.85rem', borderRadius: 8 }} onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
