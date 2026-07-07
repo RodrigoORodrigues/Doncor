@@ -7,7 +7,7 @@ import { Input } from '../components/ui/input';
 const STORAGE_UNREAD = 'doncor_chat_unread';
 const CHAT_REFRESH_MS = 30000;
 
-const defaultCompanies = ['Tech Solutions Ltda', 'Global Commerce SA', 'Indústria ABC ME'];
+const defaultCompanies = [];
 
 const saveUnread = (count) => {
   localStorage.setItem(STORAGE_UNREAD, String(count));
@@ -154,7 +154,11 @@ const Chat = ({ session }) => {
           <div style={{ fontWeight:700, color:'#344050', marginBottom:'10px', display:'flex', alignItems:'center', gap:'6px' }}>
             <Building2 size={15}/> Empresas
           </div>
-          {companies.map((name) => (
+          {companies.length === 0 ? (
+            <div style={{ padding: '24px 8px', textAlign: 'center', color: '#8a8d93', fontSize: '0.8rem', fontStyle: 'italic' }}>
+              Nenhuma empresa encontrada com histórico de chat.
+            </div>
+          ) : companies.map((name) => (
             <button
               key={name}
               onClick={() => setSelectedCompany(name)}
@@ -172,7 +176,7 @@ const Chat = ({ session }) => {
         <div style={{ background:'#fff', borderRadius:'10px', boxShadow:'0 1px 3px rgba(0,0,0,0.06)', minHeight:'520px', display:'flex', flexDirection:'column' }}>
           <div style={{ padding:'14px 16px', borderBottom:'1px solid #e3e6f0', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
             <div>
-              <div style={{ fontWeight:700, color:'#344050' }}>{selectedCompany}</div>
+              <div style={{ fontWeight:700, color:'#344050' }}>{selectedCompany || "Nenhuma Empresa Selecionada"}</div>
               <div style={{ fontSize:'0.72rem', color:'#8a8d93' }}>Canal exclusivo para mensagens, documentos e avisos</div>
             </div>
             <Button onClick={loadChatData} variant="outline" style={{ fontSize:'0.75rem', display:'flex', gap:'6px' }}>
@@ -224,15 +228,16 @@ const Chat = ({ session }) => {
             <textarea
               value={message}
               onChange={(event) => setMessage(event.target.value)}
-              placeholder="Digite a mensagem para a empresa cadastrada..."
-              style={{ width:'100%', minHeight:'80px', border:'1px solid #d8e2ef', borderRadius:'8px', padding:'10px 12px', resize:'vertical', fontFamily:'inherit', fontSize:'0.86rem' }}
+              disabled={!selectedCompany}
+              placeholder={selectedCompany ? "Digite a mensagem para a empresa cadastrada..." : "Selecione uma empresa para iniciar a conversa..."}
+              style={{ width:'100%', minHeight:'80px', border:'1px solid #d8e2ef', borderRadius:'8px', padding:'10px 12px', resize:'vertical', fontFamily:'inherit', fontSize:'0.86rem', background: !selectedCompany ? '#f1f5f9' : '#fff' }}
             />
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'10px', marginTop:'10px' }}>
-              <label style={{ border:'1px solid #d8e2ef', borderRadius:'8px', padding:'8px 12px', cursor:'pointer', display:'flex', alignItems:'center', gap:'6px', color:'#344050', fontSize:'0.8rem' }}>
+              <label style={{ border:'1px solid #d8e2ef', borderRadius:'8px', padding:'8px 12px', cursor: selectedCompany ? 'pointer' : 'not-allowed', display:'flex', alignItems:'center', gap:'6px', color:'#344050', fontSize:'0.8rem', opacity: selectedCompany ? 1 : 0.5 }}>
                 <Paperclip size={14}/> {attachment ? attachment.name : 'Anexar documento'}
-                <Input type="file" onChange={(event) => setAttachment(event.target.files?.[0] || null)} style={{ display:'none' }} />
+                <Input type="file" disabled={!selectedCompany} onChange={(event) => setAttachment(event.target.files?.[0] || null)} style={{ display:'none' }} />
               </label>
-              <Button onClick={sendMessage} style={{ background:'#2C7BE5', color:'#fff', display:'flex', alignItems:'center', gap:'6px' }}>
+              <Button onClick={sendMessage} disabled={!selectedCompany} style={{ background:'#2C7BE5', color:'#fff', display:'flex', alignItems:'center', gap:'6px', opacity: selectedCompany ? 1 : 0.5 }}>
                 <Send size={14}/>Enviar mensagem
               </Button>
             </div>

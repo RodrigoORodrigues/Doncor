@@ -847,47 +847,9 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
 
     @app.get("/api/portal-doncor/lgpd/aceites")
     async def get_lgpd_aceites():
+        # Remove pre-existing static mock items if they exist
+        await db.lgpd_aceites.delete_many({"id": {"$in": ["aceite-1", "aceite-2", "aceite-3"]}})
         items = await _all(db.lgpd_aceites, "createdAt", 1000)
-        
-        if not items:
-            default_aceites = [
-                {
-                    "id": "aceite-1",
-                    "usuario": "Fabiana",
-                    "documento": "12345678000190",
-                    "empresa": "Empresa Cliente S.A.",
-                    "versao": "v1.0",
-                    "createdAt": "2026-05-29T14:17:04Z",
-                    "criadoEm": "29/05/2026, 14:17:04",
-                    "ip": "-",
-                    "hash": "sha256_f823a910bc4de90"
-                },
-                {
-                    "id": "aceite-2",
-                    "usuario": "admin",
-                    "documento": "98765432000110",
-                    "empresa": "Parceiro Master",
-                    "versao": "v1.0",
-                    "createdAt": "2026-05-27T11:32:21Z",
-                    "criadoEm": "27/05/2026, 11:32:21",
-                    "ip": "-",
-                    "hash": "sha256_319ab40cdeef78"
-                },
-                {
-                    "id": "aceite-3",
-                    "usuario": "Rodrigo",
-                    "documento": "11122233344",
-                    "empresa": "Todas",
-                    "versao": "v1.0",
-                    "createdAt": "2026-05-25T17:26:11Z",
-                    "criadoEm": "25/05/2026, 17:26:11",
-                    "ip": "-",
-                    "hash": "sha256_907bc231804fdda"
-                }
-            ]
-            for ace in default_aceites:
-                await db.lgpd_aceites.insert_one(ace)
-            items = await _all(db.lgpd_aceites, "createdAt", 1000)
             
         for item in items:
             item.pop("_id", None)
