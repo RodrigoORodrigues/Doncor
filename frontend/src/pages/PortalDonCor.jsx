@@ -2715,13 +2715,7 @@ const PortalDonCor = () => {
     <div style={{ minHeight:'100vh', background:theme.bg, display:'grid', gridTemplateColumns:'278px 1fr' }}>
       <aside style={{ background:theme.navy, color:'#fff', padding:20, display:'flex', flexDirection:'column', gap:18 }}>
         <div style={{ display:'flex', alignItems:'center', gap:12, padding:'6px 4px 18px', borderBottom:'1px solid #ffffff1f' }}>
-          {perfilForm.logo ? (
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, minWidth: 34, borderRadius: 8, background: '#fff', padding: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.15)', overflow: 'hidden' }}>
-              <img src={perfilForm.logo} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-            </div>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center' }}><DoncorLogo size={28} showText={true} /></div>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center' }}><DoncorLogo size={28} showText={true} /></div>
           <div style={{ display: 'flex', flexDirection: 'column', borderLeft: '1px solid #ffffff24', paddingLeft: 10, marginLeft: 4 }}>
             <div style={{ fontWeight:900, fontSize:'0.82rem', color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 }}>{empresa}</div>
             <div style={{ color:'#cbd5e1', fontSize:'0.65rem', fontWeight: 600 }}>Portal do Cliente</div>
@@ -2757,9 +2751,15 @@ const PortalDonCor = () => {
       <div style={{ minWidth:0 }}>
         <header style={{ background:'#fff', borderBottom:`1px solid ${theme.border}`, padding:'14px 24px', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:5 }}>
           <div style={{ display:'flex', alignItems:'center', gap:14 }}>
-            <div style={{ width:40, height:40, borderRadius:14, background:'#eff6ff', color:theme.blue, display:'flex', alignItems:'center', justifyContent:'center' }}>
-              <Building2 size={19}/>
-            </div>
+            {perfilForm.logo ? (
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, minWidth: 40, borderRadius: 14, background: '#fff', padding: 4, border: `1px solid ${theme.border}`, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+                <img src={perfilForm.logo} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+              </div>
+            ) : (
+              <div style={{ width:40, height:40, borderRadius:14, background:'#eff6ff', color:theme.blue, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <Building2 size={19}/>
+              </div>
+            )}
             <div>
               <strong style={{ color:theme.text, fontSize:'1rem' }}>{empresa}</strong>
               <div style={{ color:theme.muted, fontSize:'0.78rem' }}>{session.documento}</div>
