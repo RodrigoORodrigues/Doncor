@@ -37,7 +37,6 @@ const Dashboard = () => {
   const statCards = stats ? [
     { label: 'Contratos Vigentes', value: stats.totalContratos?.toLocaleString('pt-BR') || '0', icon: FileText, color: '#1a3a52', change: '+12', up: true, tag: 'Ativos' },
     { label: 'Vidas Ativas', value: stats.vidasAtivas?.toLocaleString('pt-BR') || '0', icon: Users, color: '#27ae60', change: '+89', up: true, tag: 'Total' },
-    { label: 'Faturas em Aberto', value: stats.faturasPendentes || '0', icon: Receipt, color: '#e6832a', change: '+2', up: true, tag: 'Venc. Próx.' },
     { label: 'Solicitações Pendentes', value: stats.movimentacoesPendentes || '0', icon: Clock, color: '#2a5fcf', change: '-5', up: false, tag: 'Urgente' },
   ] : [];
 
@@ -59,7 +58,7 @@ const Dashboard = () => {
         <p style={{ fontSize: '0.85rem', color: '#6c7680', margin: '4px 0 0' }}>Aqui está o resumo das suas informações e operações ativas hoje.</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px', marginBottom: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '24px' }}>
         {statCards.map((stat, i) => {
           const Icon = stat.icon;
           return (
@@ -72,9 +71,7 @@ const Dashboard = () => {
               </div>
               <div style={{ fontSize: '1.8rem', fontWeight: 700, color: '#1a3a52', lineHeight: 1, marginBottom: '6px' }}>{stat.value}</div>
               <div style={{ fontSize: '0.75rem', color: '#6c7680', marginBottom: '8px' }}>{stat.label}</div>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.65rem', fontWeight: 600, color: stat.up ? '#27ae60' : '#e63757' }}>
-                {stat.up ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}{stat.change}
-              </span>
+              {/* Trend indicators removed as requested */}
             </div>
           );
         })}

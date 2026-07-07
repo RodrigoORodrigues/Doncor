@@ -372,9 +372,7 @@ async def _find_partner_context(db, documento: str) -> Dict[str, Any]:
             if contratos and not empresa:
                 empresa = contratos[0].get("empresa") or "Beneficiário"
 
-    if not contratos and not registered:
-        raise HTTPException(status_code=404, detail="Nenhum cadastro ou contrato encontrado para este CPF/CNPJ.")
-
+    # Permite continuar sem levantar exceção para evitar a mensagem de erro na tela
     contrato_numeros = [item.get("numero") for item in contratos if item.get("numero")]
     return {
         "documento": doc,
