@@ -622,7 +622,6 @@ const PortalDonCor = () => {
       if (!form.parentesco) missingFields.push('Parentesco');
       if (!form.email?.trim()) missingFields.push('E-mail');
       if (!form.telefone?.trim()) missingFields.push('Telefone');
-      if (!form.detalhes?.trim()) missingFields.push('Detalhes da Inclusão');
 
       // Attachments check
       const requiredDocs = ['RG / CPF', 'Comprovante de Residência', 'CTPS / eSocial', 'Formulário Assinado'];
@@ -632,9 +631,6 @@ const PortalDonCor = () => {
           missingFields.push(`Anexo: ${doc}`);
         }
       });
-      if (attachments?.['Outros'] && !form.outrosDescricao?.trim()) {
-        missingFields.push('Descrição do anexo Outros');
-      }
     } else if (section === 'exclusao') {
       if (!form.operadora) missingFields.push('Operadora');
       if (form.operadora === 'Outra' && !form.outraOperadora?.trim()) missingFields.push('Nome da outra Operadora');
@@ -651,9 +647,6 @@ const PortalDonCor = () => {
           missingFields.push(`Anexo: ${doc}`);
         }
       });
-      if (attachments?.['Outros'] && !form.outrosDescricao?.trim()) {
-        missingFields.push('Descrição do anexo Outros');
-      }
     } else if (section === 'alteracao') {
       if (!form.planos || form.planos.length === 0) missingFields.push('Selecione pelo menos um Contrato/Plano');
       if (!form.beneficiario?.trim()) missingFields.push('Nome Completo');
@@ -677,6 +670,12 @@ const PortalDonCor = () => {
     }
     if (fieldName === 'outraOperadora') {
       return form.operadora === 'Outra' && (!form.outraOperadora || !form.outraOperadora.trim());
+    }
+    if (fieldName === 'detalhes' && section === 'inclusao') {
+      return false;
+    }
+    if (fieldName === 'outrosDescricao') {
+      return false;
     }
     const val = form[fieldName];
     return !val || (typeof val === 'string' && !val.trim());
@@ -865,28 +864,60 @@ const PortalDonCor = () => {
     const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     const data = months.map(m => ({ name: m, solicitacoes: 0, boletos: 0 }));
     
-    solicitacoes.forEach(s => {
-      if (s.dataSolicitacao) {
-        const parts = s.dataSolicitacao.split('/');
+    const getMonthIndex = (dateStr) => {
+      if (!dateStr || typeof dateStr !== 'string') return -1;
+      const cleanStr = dateStr.split(',')[0].split(' ')[0].trim();
+      if (cleanStr.includes('-')) {
+        const parts = cleanStr.split('-');
         if (parts.length >= 2) {
-          const mIndex = parseInt(parts[1], 10) - 1;
-          if (mIndex >= 0 && mIndex < 12) {
-            data[mIndex].solicitacoes++;
+          if (parts[0].length === 4) {
+            return parseInt(parts[1], 10) - 1;
+          } else if (parts[2]?.length === 4) {
+            return parseInt(parts[1], 10) - 1;
           }
         }
+      }
+      if (cleanStr.includes('/')) {
+        const parts = cleanStr.split('/');
+        if (parts.length === 2) {
+          if (parts[1].length === 4) {
+            return parseInt(parts[0], 10) - 1;
+          }
+          if (parts[0].length === 4) {
+            return parseInt(parts[1], 10) - 1;
+          }
+        } else if (parts.length >= 3) {
+          return parseInt(parts[1], 10) - 1;
+        }
+      }
+      const d = new Date(dateStr);
+      if (!isNaN(d.getTime())) {
+        return d.getMonth();
+      }
+      return -1;
+    };
+
+    solicitacoes.forEach(s => {
+      const dateStr = s.criadoEm || s.dataEnvio || s.createdAt || s.dataSolicitacao;
+      const mIndex = getMonthIndex(dateStr);
+      if (mIndex >= 0 && mIndex < 12) {
+        data[mIndex].solicitacoes++;
       }
     });
     
     boletos.forEach(b => {
-      if (b.dataVencimento || b.competencia) {
-        const dateStr = b.dataVencimento || b.competencia;
-        const parts = dateStr.split('/');
-        if (parts.length >= 2) {
-          const mIndex = parseInt(parts[1], 10) - 1;
-          if (mIndex >= 0 && mIndex < 12) {
-            data[mIndex].boletos++;
-          }
-        }
+      const dateStr = b.vencimento || b.dataVencimento || b.competencia || b.criadoEm || b.createdAt;
+      const mIndex = getMonthIndex(dateStr);
+      if (mIndex >= 0 && mIndex < 12) {
+        data[mIndex].boletos++;
+      }
+    });
+
+    faturas.forEach(f => {
+      const dateStr = f.vencimento || f.dataVencimento || f.competencia || f.criadoEm || f.createdAt;
+      const mIndex = getMonthIndex(dateStr);
+      if (mIndex >= 0 && mIndex < 12) {
+        data[mIndex].boletos++;
       }
     });
     
@@ -898,7 +929,7 @@ const PortalDonCor = () => {
       last6Months.push(data[m]);
     }
     return last6Months;
-  }, [solicitacoes, boletos]);
+  }, [solicitacoes, boletos, faturas]);
 
   if (!session) {
     return (
@@ -1455,7 +1486,7 @@ const PortalDonCor = () => {
             <FileText size={20}/> Detalhes da Inclusão
           </h3>
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18 }}>
-            <label style={fieldLabel}>Descreva os detalhes da inclusão *</label>
+            <label style={fieldLabel}>Descreva os detalhes da inclusão (Opcional)</label>
             <textarea
               value={form.detalhes}
               onChange={(event) => updateMovementField('inclusao', 'detalhes', event.target.value)}
@@ -2822,9 +2853,6 @@ const PortalDonCor = () => {
                   <div style={{ padding: '8px' }}>
                     <button onClick={() => { setActiveSection('perfil'); setShowProfileMenu(false); }} style={{ width: '100%', textAlign: 'left', padding: '10px 12px', background: 'transparent', border: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, color: theme.text, fontSize: '0.85rem', borderRadius: 8 }} onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
                       <User size={16} color={theme.blue} /> Meu Perfil
-                    </button>
-                    <button onClick={() => { setActiveSection('configuracoes'); setShowProfileMenu(false); }} style={{ width: '100%', textAlign: 'left', padding: '10px 12px', background: 'transparent', border: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, color: theme.text, fontSize: '0.85rem', borderRadius: 8 }} onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-                      <Settings size={16} color={theme.blue} /> Configurações
                     </button>
                   </div>
                   <div style={{ padding: '8px', borderTop: `1px solid ${theme.border}` }}>
