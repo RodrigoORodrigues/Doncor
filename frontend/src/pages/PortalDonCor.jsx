@@ -2752,12 +2752,12 @@ const PortalDonCor = () => {
         <header style={{ background:'#fff', borderBottom:`1px solid ${theme.border}`, padding:'14px 24px', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:5 }}>
           <div style={{ display:'flex', alignItems:'center', gap:14 }}>
             {perfilForm.logo ? (
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, minWidth: 40, borderRadius: 14, background: '#fff', padding: 4, border: `1px solid ${theme.border}`, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 160, height: 160, minWidth: 160, borderRadius: 24, background: '#fff', padding: 12, border: `1px solid ${theme.border}`, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
                 <img src={perfilForm.logo} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
               </div>
             ) : (
-              <div style={{ width:40, height:40, borderRadius:14, background:'#eff6ff', color:theme.blue, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                <Building2 size={19}/>
+              <div style={{ width:160, height:160, borderRadius:24, background:'#eff6ff', color:theme.blue, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <Building2 size={76}/>
               </div>
             )}
             <div>
