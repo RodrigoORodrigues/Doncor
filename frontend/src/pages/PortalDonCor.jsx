@@ -623,19 +623,46 @@ const PortalDonCor = () => {
       if (!form.email?.trim()) missingFields.push('E-mail');
       if (!form.telefone?.trim()) missingFields.push('Telefone');
 
-      // No attachments are required anymore
+      // Attachments check - only 'Outros' is optional!
+      const requiredDocs = ['RG / CPF', 'Comprovante de Residência', 'CTPS / eSocial', 'Formulário Assinado'];
+      requiredDocs.forEach(doc => {
+        const att = attachments?.[doc];
+        if (!att || !att.name || att.size === 0) {
+          missingFields.push(`Anexo: ${doc}`);
+        }
+      });
+      // description for 'Outros' if uploaded
+      if (attachments?.['Outros'] && attachments['Outros'].name && !form.outrosDescricao?.trim()) {
+        missingFields.push('Descrição do anexo Outros');
+      }
     } else if (section === 'exclusao') {
       if (!form.operadora) missingFields.push('Operadora');
       if (form.operadora === 'Outra' && !form.outraOperadora?.trim()) missingFields.push('Nome da outra Operadora');
       if (!form.planos || form.planos.length === 0) missingFields.push('Pelo menos um Plano (Saúde/Dental)');
       if (!form.beneficiario?.trim()) missingFields.push('Nome Completo');
       if (!form.cpf?.trim()) missingFields.push('CPF');
-      // Detalhes is optional
+      
+      // Attachments check - only 'Outros' is optional!
+      const requiredDocs = ['Termo de Rescisão', 'Formulário de Exclusão Assinado'];
+      requiredDocs.forEach(doc => {
+        const att = attachments?.[doc];
+        if (!att || !att.name || att.size === 0) {
+          missingFields.push(`Anexo: ${doc}`);
+        }
+      });
+      // description for 'Outros' if uploaded
+      if (attachments?.['Outros'] && attachments['Outros'].name && !form.outrosDescricao?.trim()) {
+        missingFields.push('Descrição do anexo Outros');
+      }
     } else if (section === 'alteracao') {
       if (!form.planos || form.planos.length === 0) missingFields.push('Selecione pelo menos um Contrato/Plano');
       if (!form.beneficiario?.trim()) missingFields.push('Nome Completo');
       if (!form.cpf?.trim()) missingFields.push('CPF');
-      // Detalhes and support files are optional
+      
+      // Support files list attachments are required
+      if (!attachments || attachments.length === 0) {
+        missingFields.push('Anexo de apoio (Selecione pelo menos um arquivo)');
+      }
     }
 
     return missingFields;
@@ -654,14 +681,24 @@ const PortalDonCor = () => {
       return false;
     }
     if (fieldName === 'outrosDescricao') {
-      return false;
+      const att = movementAttachments[section]?.[ 'Outros' ];
+      const hasOutros = att && att.name && att.size > 0;
+      return hasOutros && (!form.outrosDescricao || !form.outrosDescricao.trim());
     }
     const val = form[fieldName];
     return !val || (typeof val === 'string' && !val.trim());
   };
 
   const isAttachmentInvalid = (section, docName) => {
-    return false;
+    if (!attemptedSubmit[section]) return false;
+    if (section === 'alteracao') {
+      return !movementAttachments.alteracao || movementAttachments.alteracao.length === 0;
+    }
+    if (docName === 'Outros') {
+      return false; // Optional
+    }
+    const att = movementAttachments[section]?.[docName];
+    return !att || !att.name || att.size === 0;
   };
 
   const handleTrySubmit = (section) => {
@@ -1516,7 +1553,7 @@ const PortalDonCor = () => {
 
          <section style={{ ...card, padding: 24 }}>
           <h3 style={{ color: theme.primary, margin: '0 0 14px', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Paperclip size={20}/> Anexos (Opcional)
+            <Paperclip size={20}/> Anexos
           </h3>
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 14, display: 'grid', gap: 12 }}>
             {['RG / CPF', 'Comprovante de Residência', 'CTPS / eSocial', 'Formulário Assinado', 'Outros'].map((doc) => (
@@ -1533,7 +1570,7 @@ const PortalDonCor = () => {
                 }}>
                   <span>
                     <input type="checkbox" checked={!!attachments[doc]} onChange={(event) => updateChecklistAttachment('inclusao', doc, event.target.checked ? null : undefined)} style={{ marginRight: 10 }} />
-                    {doc}
+                    {doc === 'Outros' ? 'Outros (Opcional)' : doc}
                     {attachments[doc]?.name && attachments[doc].name !== doc && <span style={{ color: theme.muted, marginLeft: 6, fontSize: '0.72rem' }}>({attachments[doc].name})</span>}
                   </span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1774,7 +1811,7 @@ const PortalDonCor = () => {
 
         <section style={{ ...card, padding: 24 }}>
           <h3 style={{ color: theme.primary, margin: '0 0 14px', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Paperclip size={20}/> Anexos (Opcional)
+            <Paperclip size={20}/> Anexos
           </h3>
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 14, display: 'grid', gap: 12 }}>
             {['Termo de Rescisão', 'Formulário de Exclusão Assinado', 'Outros'].map((doc) => (
@@ -1791,7 +1828,7 @@ const PortalDonCor = () => {
                 }}>
                   <span>
                     <input type="checkbox" checked={!!attachments[doc]} onChange={(event) => updateChecklistAttachment('exclusao', doc, event.target.checked ? null : undefined)} style={{ marginRight: 10 }} />
-                    {doc}
+                    {doc === 'Outros' ? 'Outros (Opcional)' : doc}
                     {attachments[doc]?.name && attachments[doc].name !== doc && <span style={{ color: theme.muted, marginLeft: 6, fontSize: '0.72rem' }}>({attachments[doc].name})</span>}
                   </span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2023,13 +2060,13 @@ const PortalDonCor = () => {
 
         <section style={{ ...card, padding: 24 }}>
           <h3 style={{ color: theme.primary, margin: '0 0 14px', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Paperclip size={20}/> Anexos (Opcional)
+            <Paperclip size={20}/> Anexos
           </h3>
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 14 }}>
             <label style={{
-              border: '2px dashed #d5dcec',
+              border: isAttachmentInvalid('alteracao', '') ? '2px dashed #EF4444' : '2px dashed #d5dcec',
               borderRadius: 12,
-              background: '#f8faff',
+              background: isAttachmentInvalid('alteracao', '') ? '#FEF2F2' : '#f8faff',
               padding: 28,
               textAlign: 'center',
               color: theme.text,
@@ -2037,11 +2074,16 @@ const PortalDonCor = () => {
               cursor: 'pointer',
               transition: 'all 0.2s ease'
             }}>
-              <UploadCloud size={26} color={theme.muted}/>
-              <div style={{ marginTop: 8, fontWeight: 800, color: theme.text }}>Selecione arquivos de apoio</div>
-              <div style={{ color: theme.muted, fontSize: '0.82rem', marginTop: 4 }}>PDF, imagens ou documentos do pedido</div>
+              <UploadCloud size={26} color={isAttachmentInvalid('alteracao', '') ? '#EF4444' : theme.muted}/>
+              <div style={{ marginTop: 8, fontWeight: 800, color: isAttachmentInvalid('alteracao', '') ? '#EF4444' : theme.text }}>Selecione arquivos de apoio</div>
+              <div style={{ color: isAttachmentInvalid('alteracao', '') ? '#B91C1C' : theme.muted, fontSize: '0.82rem', marginTop: 4 }}>PDF, imagens ou documentos do pedido</div>
               <Input type="file" multiple onChange={(event) => updateAlteracaoAttachments(event.target.files)} style={{ marginTop: 12 }} />
             </label>
+            {isAttachmentInvalid('alteracao', '') && (
+              <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block', textAlign: 'center' }}>
+                ⚠️ Anexo obrigatório. Selecione pelo menos um arquivo de apoio.
+              </span>
+            )}
             <div style={{ marginTop: 14, display: 'grid', gap: 8 }}>
               {attachments.length === 0 ? <div style={{ color: theme.muted, fontSize: '0.78rem' }}>Nenhum anexo selecionado.</div> : attachments.map((file) => (
                 <div key={`${file.name}-${file.size}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${theme.border}`, borderRadius: 10, padding: '10px 12px', background: '#fff' }}>
