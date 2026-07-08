@@ -623,40 +623,19 @@ const PortalDonCor = () => {
       if (!form.email?.trim()) missingFields.push('E-mail');
       if (!form.telefone?.trim()) missingFields.push('Telefone');
 
-      // Attachments check
-      const requiredDocs = ['RG / CPF', 'Comprovante de Residência', 'CTPS / eSocial', 'Formulário Assinado'];
-      requiredDocs.forEach(doc => {
-        const att = attachments?.[doc];
-        if (!att || !att.name || att.size === 0) {
-          missingFields.push(`Anexo: ${doc}`);
-        }
-      });
+      // No attachments are required anymore
     } else if (section === 'exclusao') {
       if (!form.operadora) missingFields.push('Operadora');
       if (form.operadora === 'Outra' && !form.outraOperadora?.trim()) missingFields.push('Nome da outra Operadora');
       if (!form.planos || form.planos.length === 0) missingFields.push('Pelo menos um Plano (Saúde/Dental)');
       if (!form.beneficiario?.trim()) missingFields.push('Nome Completo');
       if (!form.cpf?.trim()) missingFields.push('CPF');
-      if (!form.detalhes?.trim()) missingFields.push('Detalhes da Exclusão');
-
-      // Attachments check
-      const requiredDocs = ['Termo de Rescisão', 'Formulário de Exclusão Assinado'];
-      requiredDocs.forEach(doc => {
-        const att = attachments?.[doc];
-        if (!att || !att.name || att.size === 0) {
-          missingFields.push(`Anexo: ${doc}`);
-        }
-      });
+      // Detalhes is optional
     } else if (section === 'alteracao') {
       if (!form.planos || form.planos.length === 0) missingFields.push('Selecione pelo menos um Contrato/Plano');
       if (!form.beneficiario?.trim()) missingFields.push('Nome Completo');
       if (!form.cpf?.trim()) missingFields.push('CPF');
-      if (!form.detalhes?.trim()) missingFields.push('Detalhes da Alteração');
-      
-      // Support files list attachments
-      if (!attachments || attachments.length === 0) {
-        missingFields.push('Anexo de apoio (Selecione pelo menos um arquivo)');
-      }
+      // Detalhes and support files are optional
     }
 
     return missingFields;
@@ -671,7 +650,7 @@ const PortalDonCor = () => {
     if (fieldName === 'outraOperadora') {
       return form.operadora === 'Outra' && (!form.outraOperadora || !form.outraOperadora.trim());
     }
-    if (fieldName === 'detalhes' && section === 'inclusao') {
+    if (fieldName === 'detalhes') {
       return false;
     }
     if (fieldName === 'outrosDescricao') {
@@ -682,12 +661,7 @@ const PortalDonCor = () => {
   };
 
   const isAttachmentInvalid = (section, docName) => {
-    if (!attemptedSubmit[section]) return false;
-    if (section === 'alteracao') {
-      return !movementAttachments.alteracao || movementAttachments.alteracao.length === 0;
-    }
-    const att = movementAttachments[section]?.[docName];
-    return !att || !att.name || att.size === 0;
+    return false;
   };
 
   const handleTrySubmit = (section) => {
@@ -1538,11 +1512,11 @@ const PortalDonCor = () => {
               </div>
             </label>
           </div>
-        </section>
+         </section>
 
-        <section style={{ ...card, padding: 24 }}>
+         <section style={{ ...card, padding: 24 }}>
           <h3 style={{ color: theme.primary, margin: '0 0 14px', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Paperclip size={20}/> Anexos Necessários
+            <Paperclip size={20}/> Anexos (Opcional)
           </h3>
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 14, display: 'grid', gap: 12 }}>
             {['RG / CPF', 'Comprovante de Residência', 'CTPS / eSocial', 'Formulário Assinado', 'Outros'].map((doc) => (
@@ -1750,7 +1724,7 @@ const PortalDonCor = () => {
             <FileText size={20}/> Detalhes da Exclusão
           </h3>
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18 }}>
-            <label style={fieldLabel}>Descreva os detalhes da exclusão *</label>
+            <label style={fieldLabel}>Descreva os detalhes da exclusão (Opcional)</label>
             <textarea
               value={form.detalhes}
               onChange={(event) => updateMovementField('exclusao', 'detalhes', event.target.value)}
@@ -1758,8 +1732,7 @@ const PortalDonCor = () => {
               style={{
                 width: '100%',
                 minHeight: 128,
-                border: isFieldInvalid('exclusao', 'detalhes') ? '2.5px solid #EF4444' : `1px solid ${theme.border}`,
-                boxShadow: isFieldInvalid('exclusao', 'detalhes') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                border: `1px solid ${theme.border}`,
                 borderRadius: 10,
                 padding: 14,
                 fontFamily: 'inherit',
@@ -1769,11 +1742,6 @@ const PortalDonCor = () => {
                 transition: 'all 0.2s ease'
               }}
             />
-            {isFieldInvalid('exclusao', 'detalhes') && (
-              <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
-                ⚠️ O preenchimento dos Detalhes da Exclusão é obrigatório.
-              </span>
-            )}
           </div>
         </section>
       </div>
@@ -1806,7 +1774,7 @@ const PortalDonCor = () => {
 
         <section style={{ ...card, padding: 24 }}>
           <h3 style={{ color: theme.primary, margin: '0 0 14px', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Paperclip size={20}/> Anexos Necessários
+            <Paperclip size={20}/> Anexos (Opcional)
           </h3>
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 14, display: 'grid', gap: 12 }}>
             {['Termo de Rescisão', 'Formulário de Exclusão Assinado', 'Outros'].map((doc) => (
@@ -1979,7 +1947,7 @@ const PortalDonCor = () => {
             <FileText size={20}/> Detalhes da Alteração
           </h3>
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18 }}>
-            <label style={fieldLabel}>Descreva a alteração *</label>
+            <label style={fieldLabel}>Descreva a alteração (Opcional)</label>
             <textarea
               value={form.detalhes}
               onChange={(event) => updateMovementField('alteracao', 'detalhes', event.target.value)}
@@ -1987,8 +1955,7 @@ const PortalDonCor = () => {
               style={{
                 width: '100%',
                 minHeight: 128,
-                border: isFieldInvalid('alteracao', 'detalhes') ? '2.5px solid #EF4444' : `1px solid ${theme.border}`,
-                boxShadow: isFieldInvalid('alteracao', 'detalhes') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                border: `1px solid ${theme.border}`,
                 borderRadius: 10,
                 padding: 14,
                 fontFamily: 'inherit',
@@ -1998,11 +1965,6 @@ const PortalDonCor = () => {
                 transition: 'all 0.2s ease'
               }}
             />
-            {isFieldInvalid('alteracao', 'detalhes') && (
-              <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
-                ⚠️ O preenchimento da descrição da alteração é obrigatório.
-              </span>
-            )}
           </div>
         </section>
       </div>
@@ -2061,13 +2023,13 @@ const PortalDonCor = () => {
 
         <section style={{ ...card, padding: 24 }}>
           <h3 style={{ color: theme.primary, margin: '0 0 14px', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Paperclip size={20}/> Anexos
+            <Paperclip size={20}/> Anexos (Opcional)
           </h3>
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 14 }}>
             <label style={{
-              border: isAttachmentInvalid('alteracao', '') ? '2px dashed #EF4444' : '2px dashed #d5dcec',
+              border: '2px dashed #d5dcec',
               borderRadius: 12,
-              background: isAttachmentInvalid('alteracao', '') ? '#FEF2F2' : '#f8faff',
+              background: '#f8faff',
               padding: 28,
               textAlign: 'center',
               color: theme.text,
@@ -2075,16 +2037,11 @@ const PortalDonCor = () => {
               cursor: 'pointer',
               transition: 'all 0.2s ease'
             }}>
-              <UploadCloud size={26} color={isAttachmentInvalid('alteracao', '') ? '#EF4444' : theme.muted}/>
-              <div style={{ marginTop: 8, fontWeight: 800, color: isAttachmentInvalid('alteracao', '') ? '#EF4444' : theme.text }}>Selecione arquivos de apoio</div>
-              <div style={{ color: isAttachmentInvalid('alteracao', '') ? '#B91C1C' : theme.muted, fontSize: '0.82rem', marginTop: 4 }}>PDF, imagens ou documentos do pedido</div>
+              <UploadCloud size={26} color={theme.muted}/>
+              <div style={{ marginTop: 8, fontWeight: 800, color: theme.text }}>Selecione arquivos de apoio</div>
+              <div style={{ color: theme.muted, fontSize: '0.82rem', marginTop: 4 }}>PDF, imagens ou documentos do pedido</div>
               <Input type="file" multiple onChange={(event) => updateAlteracaoAttachments(event.target.files)} style={{ marginTop: 12 }} />
             </label>
-            {isAttachmentInvalid('alteracao', '') && (
-              <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block', textAlign: 'center' }}>
-                ⚠️ Anexo obrigatório. Selecione pelo menos um arquivo de apoio.
-              </span>
-            )}
             <div style={{ marginTop: 14, display: 'grid', gap: 8 }}>
               {attachments.length === 0 ? <div style={{ color: theme.muted, fontSize: '0.78rem' }}>Nenhum anexo selecionado.</div> : attachments.map((file) => (
                 <div key={`${file.name}-${file.size}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: `1px solid ${theme.border}`, borderRadius: 10, padding: '10px 12px', background: '#fff' }}>
