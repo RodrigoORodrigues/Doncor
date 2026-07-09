@@ -126,8 +126,11 @@ CREATE TABLE IF NOT EXISTS public.contratos_empresarial (
 CREATE TABLE IF NOT EXISTS public.inclusoes (
   id text primary key,
   payload jsonb not null default '{}'::jsonb,
+  cpf text GENERATED ALWAYS AS (payload->>'cpf') STORED,
+  contrato text GENERATED ALWAYS AS (payload->>'contrato') STORED,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  CONSTRAINT fk_inclusoes_contratos_empresarial FOREIGN KEY (contrato) REFERENCES public.contratos_empresarial(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS public.exclusoes (
@@ -287,9 +290,30 @@ CREATE TABLE IF NOT EXISTS public.robo_diagnosticos (
 -- =====================================================================================
 -- 5. ÍNDICES DE PERFORMANCE PARA JSONB
 -- =====================================================================================
+-- Migração incremental para garantir que as colunas e chaves estrangeiras existam em bancos já criados
+ALTER TABLE public.inclusoes ADD COLUMN IF NOT EXISTS cpf text GENERATED ALWAYS AS (payload->>'cpf') STORED;
+ALTER TABLE public.inclusoes ADD COLUMN IF NOT EXISTS contrato text GENERATED ALWAYS AS (payload->>'contrato') STORED;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.table_constraints 
+        WHERE constraint_name = 'fk_inclusoes_contratos_empresarial' 
+          AND table_name = 'inclusoes'
+    ) THEN
+        ALTER TABLE public.inclusoes 
+        ADD CONSTRAINT fk_inclusoes_contratos_empresarial 
+        FOREIGN KEY (contrato) 
+        REFERENCES public.contratos_empresarial(id) 
+        ON DELETE CASCADE;
+    END IF;
+END $$;
+
 CREATE INDEX if not exists contratos_adesao_payload_gin on public.contratos_adesao using gin (payload);
 CREATE INDEX if not exists contratos_empresarial_payload_gin on public.contratos_empresarial using gin (payload);
 CREATE INDEX if not exists inclusoes_payload_gin on public.inclusoes using gin (payload);
+CREATE INDEX if not exists inclusoes_cpf_contrato_idx on public.inclusoes (cpf, contrato);
 CREATE INDEX if not exists exclusoes_payload_gin on public.exclusoes using gin (payload);
 CREATE INDEX if not exists transferencias_payload_gin on public.transferencias using gin (payload);
 CREATE INDEX if not exists faturas_payload_gin on public.faturas using gin (payload);
