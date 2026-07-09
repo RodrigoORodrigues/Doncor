@@ -118,6 +118,18 @@ class SupabaseCollection:
     async def count_documents(self, query=None):
         return len(self._select_matching(query or {}))
 
+    async def drop(self):
+        if self.client is None:
+            self._memory_table().clear()
+        else:
+            try:
+                self._table().delete().neq("id", "").execute()
+            except Exception:
+                try:
+                    self._table().delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
+                except Exception:
+                    pass
+
     async def insert_one(self, document: dict[str, Any]):
         payload = copy.deepcopy(document)
         item_id = str(payload.get("id") or payload.get("_id") or uuid.uuid4())

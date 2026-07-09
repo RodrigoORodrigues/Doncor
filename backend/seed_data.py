@@ -463,6 +463,7 @@ for l in normalized_lines:
 CONTRATOS_EMPRESARIAL = [
     {
         "id": "EMP-MBC01",
+        "numero": "EMP-MBC01",
         "cnpj": "27.644.400/0001-96",
         "empresa": "MARINA BARRA CLUBE",
         "status": "Ativo",
