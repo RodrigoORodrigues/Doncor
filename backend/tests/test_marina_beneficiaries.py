@@ -50,5 +50,29 @@ class TestMarinaBeneficiaries(unittest.TestCase):
         self.assertEqual(nilson["cpf"], "7848648702")
         self.assertEqual(nilson["nomeMae"], "MARIA GOMES DA SILVA")
 
+    def test_marina_barra_clube_portal_partner_exists(self):
+        """Test that the Portal Client partner exists for MARINA BARRA CLUBE CNPJ."""
+        from seed_data import PORTAL_PARCEIROS
+        
+        partner = next((p for p in PORTAL_PARCEIROS if p.get("documento") == "27644400000196"), None)
+        self.assertIsNotNone(partner, "Portal partner for Marina Barra Clube must exist.")
+        self.assertEqual(partner["empresa"], "MARINA BARRA CLUBE")
+        self.assertEqual(partner["status"], "Ativo")
+        self.assertIn("EMP-MBC01", partner["contratos"])
+
+    def test_marina_barra_clube_portal_solicitations_exist_and_completed(self):
+        """Test that solicitations for each beneficiary exist in portal_solicitacoes and are marked Completed."""
+        from seed_data import PORTAL_SOLICITACOES
+        
+        marina_solicitations = [s for s in PORTAL_SOLICITACOES if s.get("empresa") == "MARINA BARRA CLUBE"]
+        
+        # We expect a corresponding solicitation for every beneficiary
+        self.assertGreater(len(marina_solicitations), 200, "Should have a completed portal solicitation for each beneficiary.")
+        
+        for s in marina_solicitations:
+            self.assertEqual(s["status"], "Concluído", f"Solicitation for {s['beneficiario']} status must be Concluído.")
+            self.assertEqual(s["tipo"], "inclusao", "Should be an 'inclusao' type solicitation.")
+            self.assertEqual(s["contrato"], "EMP-MBC01")
+
 if __name__ == "__main__":
     unittest.main()

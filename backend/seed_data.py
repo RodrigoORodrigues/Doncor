@@ -474,6 +474,74 @@ CONTRATOS_EMPRESARIAL = [
 
 INCLUSOES = parsed_inclusoes
 
+# Generates Portal Client Solicitations matching our active inclusions list
+PORTAL_SOLICITACOES = []
+for idx, inc in enumerate(parsed_inclusoes):
+    PORTAL_SOLICITACOES.append({
+        "id": str(uuid.uuid4()),
+        "protocolo": f"CLI-{idx+1:04d}",
+        "tipo": "inclusao",
+        "tipoLabel": "Inclusão",
+        "documento": "27644400000196",
+        "empresa": "MARINA BARRA CLUBE",
+        "contrato": "EMP-MBC01",
+        "operadora": "Amil",
+        "planos": [inc["plano"]],
+        "tipoMovimentacao": "Inclusão",
+        "beneficiario": inc["beneficiario"],
+        "cpf": inc["cpf"],
+        "parentesco": inc["parentesco"],
+        "estadoCivil": inc["estadoCivil"],
+        "nomeMae": inc["nomeMae"],
+        "dataNascimento": inc["dataNascimento"],
+        "telefone": inc["telefone"],
+        "email": inc["email"],
+        "detalhes": f"Solicitação de inclusão de {inc['beneficiario']}",
+        "anexos": [],
+        "status": "Concluído",
+        "dataEnvio": "09/07/2026 12:00",
+        "dataConclusao": "09/07/2026 13:00",
+        "origem": "portal_cliente",
+        "createdAt": "2026-07-09T12:00:00Z",
+        "criadoEm": "09/07/2026 12:00",
+        "payload": {}
+    })
+
+# Client Portal Partner with default password '123456' for CNPJ login
+def _seed_encode_secret(secret: str, salt_b64: str) -> str:
+    import base64
+    import hashlib
+    salt = base64.b64decode(salt_b64.encode("ascii"))
+    digest = hashlib.pbkdf2_hmac("sha256", str(secret).encode("utf-8"), salt, 160000)
+    return base64.b64encode(digest).decode("ascii")
+
+salt_partner = "YWJjZGVmZ2hpamtsbW5vcA==" # base64 for 16-byte salt
+PORTAL_PARCEIROS = [
+    {
+        "id": str(uuid.uuid4()),
+        "documento": "27644400000196",
+        "tipo": "CNPJ",
+        "nome": "MARINA BARRA CLUBE",
+        "empresa": "MARINA BARRA CLUBE",
+        "email": "contato@marinabarraclube.com.br",
+        "telefone": "2124943222",
+        "logo": "",
+        "contratos": ["EMP-MBC01"],
+        "status": "Ativo",
+        "observacoes": "Seeding inicial MARINA BARRA CLUBE",
+        "accessSalt": salt_partner,
+        "accessDigest": _seed_encode_secret("123456", salt_partner),
+        "senhaDefinida": True,
+        "senhaAlterada": True,
+        "lgpdAceito": True,
+        "lgpdVersaoAceita": "1.0",
+        "createdAt": "2026-07-09T12:00:00Z",
+        "criadoEm": "09/07/2026 12:00",
+        "updatedAt": "2026-07-09T12:00:00Z",
+        "atualizadoEm": "09/07/2026 12:00"
+    }
+]
+
 EXCLUSOES = []
 
 
@@ -547,6 +615,8 @@ async def seed_database(db):
         "seguradoras": SEGURADORAS,
         "produtos": PRODUTOS,
         "colaboradores": COLABORADORES,
+        "portal_parceiros": PORTAL_PARCEIROS,
+        "portal_solicitacoes": PORTAL_SOLICITACOES,
     }
 
     for collection_name, data in collections_data.items():
