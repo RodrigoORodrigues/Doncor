@@ -2164,7 +2164,7 @@ const PortalDonCor = () => {
                 </select>
               </div>
             </div>
-            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%', maxWidth: '100%' }}>
               <table className="data-table" style={{ fontSize: '0.8rem', minWidth: '1300px', borderCollapse: 'collapse', width: '100%' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: `2px solid ${theme.border}` }}>
@@ -2744,7 +2744,7 @@ const PortalDonCor = () => {
   };
 
   return (
-    <div style={{ minHeight:'100vh', background:theme.bg, display:'grid', gridTemplateColumns:'278px 1fr' }}>
+    <div style={{ minHeight:'100vh', background:theme.bg, display:'grid', gridTemplateColumns:'278px minmax(0, 1fr)' }}>
       <aside style={{ background:theme.navy, color:'#fff', padding:20, display:'flex', flexDirection:'column', gap:18 }}>
         <div style={{ display:'flex', alignItems:'center', gap:12, padding:'6px 4px 18px', borderBottom:'1px solid #ffffff1f' }}>
           <div style={{ display: 'flex', alignItems: 'center' }}><DoncorLogo size={28} showText={false} /></div>
