@@ -350,7 +350,7 @@ function MainApp({ session, onLogout, accessByRole, onAccessChange }) {
     const tab = tabs.find((t) => t.id === activeTab);
     if (!tab) return null;
     const Component = pageComponents[tab.page] || GenericPage;
-    return <Component key={tab.id} pageId={tab.page} pageLabel={tab.label} session={session} accessByRole={accessByRole} onAccessChange={onAccessChange} />;
+    return <Component key={tab.id} pageId={tab.page} tabId={tab.id} pageLabel={tab.label} session={session} accessByRole={accessByRole} onAccessChange={onAccessChange} />;
   };
 
   return (

@@ -162,12 +162,12 @@ const StatCard = ({ title, value, subtitle, icon: Icon, tone = theme.blue, onCli
 );
 
 const SectionTitle = ({ title, subtitle, action }) => (
-  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16 }}>
-    <div>
+  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+    <div style={{ flex: '1 1 240px' }}>
       <h2 style={{ margin: 0, color: theme.text, fontSize: '1.22rem', fontWeight: 900 }}>{title}</h2>
       {subtitle && <p style={{ margin: '5px 0 0', color: theme.muted, fontSize: '0.86rem' }}>{subtitle}</p>}
     </div>
-    {action}
+    {action && <div style={{ flexShrink: 0 }}>{action}</div>}
   </div>
 );
 
@@ -2144,23 +2144,25 @@ const PortalDonCor = () => {
           />
           
           <section style={{ ...card, padding: 18 }}>
-            <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-              <div style={{ flex: 1, position: 'relative' }}>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'stretch' }}>
+              <div style={{ flex: '1 1 280px', position: 'relative' }}>
                 <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: theme.muted }} />
-                <Input value={solicitacoesSearch} onChange={(event) => setSolicitacoesSearch(event.target.value)} placeholder="Buscar por protocolo, CPF ou nome do beneficiário..." style={{ paddingLeft: '32px', fontSize: '0.8rem' }} />
+                <Input value={solicitacoesSearch} onChange={(event) => setSolicitacoesSearch(event.target.value)} placeholder="Buscar por protocolo, CPF ou nome do beneficiário..." style={{ paddingLeft: '32px', fontSize: '0.8rem', width: '100%' }} />
               </div>
-              <select value={solicitacoesTipo} onChange={(event) => setSolicitacoesTipo(event.target.value)} style={{ ...selectStyle, maxWidth: 150 }}>
-                <option value="todos">Tipo: Todos</option>
-                <option value="inclusao">Inclusão</option>
-                <option value="exclusao">Exclusão</option>
-                <option value="alteracao">Alteração</option>
-              </select>
-              <select value={solicitacoesStatus} onChange={(event) => setSolicitacoesStatus(event.target.value)} style={{ ...selectStyle, maxWidth: 150 }}>
-                <option value="todos">Status: Todos</option>
-                <option value="recebido">Recebido</option>
-                <option value="em andamento">Em Andamento</option>
-                <option value="concluído">Concluído</option>
-              </select>
+              <div style={{ display: 'flex', gap: 12, flex: '1 1 auto', flexWrap: 'wrap' }}>
+                <select value={solicitacoesTipo} onChange={(event) => setSolicitacoesTipo(event.target.value)} style={{ ...selectStyle, flex: '1 1 140px', maxWidth: '100%' }}>
+                  <option value="todos">Tipo: Todos</option>
+                  <option value="inclusao">Inclusão</option>
+                  <option value="exclusao">Exclusão</option>
+                  <option value="alteracao">Alteração</option>
+                </select>
+                <select value={solicitacoesStatus} onChange={(event) => setSolicitacoesStatus(event.target.value)} style={{ ...selectStyle, flex: '1 1 140px', maxWidth: '100%' }}>
+                  <option value="todos">Status: Todos</option>
+                  <option value="recebido">Recebido</option>
+                  <option value="em andamento">Em Andamento</option>
+                  <option value="concluído">Concluído</option>
+                </select>
+              </div>
             </div>
             <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
               <table className="data-table" style={{ fontSize: '0.8rem', minWidth: '1300px', borderCollapse: 'collapse', width: '100%' }}>
@@ -2745,9 +2747,9 @@ const PortalDonCor = () => {
     <div style={{ minHeight:'100vh', background:theme.bg, display:'grid', gridTemplateColumns:'278px 1fr' }}>
       <aside style={{ background:theme.navy, color:'#fff', padding:20, display:'flex', flexDirection:'column', gap:18 }}>
         <div style={{ display:'flex', alignItems:'center', gap:12, padding:'6px 4px 18px', borderBottom:'1px solid #ffffff1f' }}>
-          <div style={{ display: 'flex', alignItems: 'center' }}><DoncorLogo size={28} showText={true} /></div>
+          <div style={{ display: 'flex', alignItems: 'center' }}><DoncorLogo size={28} showText={false} /></div>
           <div style={{ display: 'flex', flexDirection: 'column', borderLeft: '1px solid #ffffff24', paddingLeft: 10, marginLeft: 4 }}>
-            <div style={{ fontWeight:900, fontSize:'0.82rem', color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 }}>{empresa}</div>
+            <div style={{ fontWeight:900, fontSize:'0.9rem', color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 }}>Doncor</div>
             <div style={{ color:'#cbd5e1', fontSize:'0.65rem', fontWeight: 600 }}>Portal do Cliente</div>
           </div>
         </div>
@@ -2782,12 +2784,12 @@ const PortalDonCor = () => {
         <header style={{ background:'#fff', borderBottom:`1px solid ${theme.border}`, padding:'14px 24px', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:5 }}>
           <div style={{ display:'flex', alignItems:'center', gap:14 }}>
             {perfilForm.logo ? (
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 160, height: 160, minWidth: 160, borderRadius: 24, background: '#fff', padding: 12, border: `1px solid ${theme.border}`, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
-                <img src={perfilForm.logo} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 44, borderRadius: 10, background: '#fff', padding: '4px 10px', border: `1px solid ${theme.border}`, boxShadow: '0 2px 8px rgba(0,0,0,0.03)', overflow: 'hidden' }}>
+                <img src={perfilForm.logo} alt="Logo" style={{ maxHeight: '100%', maxWidth: '100%', width: 'auto', height: 'auto', objectFit: 'contain' }} />
               </div>
             ) : (
-              <div style={{ width:160, height:160, borderRadius:24, background:'#eff6ff', color:theme.blue, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                <Building2 size={76}/>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: '#eff6ff', color: theme.blue, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Building2 size={20}/>
               </div>
             )}
             <div>

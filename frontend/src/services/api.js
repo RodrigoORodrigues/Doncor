@@ -145,8 +145,8 @@ export const deleteContratoAdesao = (id) =>
   api.delete(`/contratos-adesao/${id}`).then((r) => r.data);
 
 // ─── Contratos Empresarial ────────────────────────
-export const fetchContratosEmpresarial = (search = "", status = "todos") =>
-  getArray("/contratos-empresarial", { params: { search, status } });
+export const fetchContratosEmpresarial = (search = "", status = "todos", tipo = "") =>
+  getArray("/contratos-empresarial", { params: { search, status, tipo } });
 
 export const createContratoEmpresarial = (data) =>
   api.post("/contratos-empresarial", data).then((r) => r.data);

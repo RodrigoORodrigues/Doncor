@@ -9,7 +9,7 @@ import Pagination from '../components/Pagination';
 const PAGE_SIZE = 8;
 const emptyForm = { numero:'', empresa:'', cnpj:'', seguradora:'', produto:'', plano:'', vigencia:'', vencimento:'', vidas:0, status:'Ativo', valorMensal:'R$ 0,00' };
 
-const Empresarial = () => {
+const Empresarial = ({ tabId }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -24,29 +24,32 @@ const Empresarial = () => {
   const [formData, setFormData] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
 
+  const isPme = tabId === 'pme';
+  const displayLabel = isPme ? 'PME' : 'Empresarial';
+
   const loadData = useCallback(async () => {
     setLoading(true);
-    try { setData(await fetchContratosEmpresarial(searchTerm, filterStatus)); } catch(e){console.error(e);}
+    try { setData(await fetchContratosEmpresarial(searchTerm, filterStatus, displayLabel)); } catch(e){console.error(e);}
     setLoading(false);
-  }, [searchTerm, filterStatus]);
+  }, [searchTerm, filterStatus, displayLabel]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
   const handleCreate = async () => {
     setSaving(true);
-    try { await createContratoEmpresarial({...formData, vidas:parseInt(formData.vidas)||0}); setShowNew(false); setFormData(emptyForm); loadData(); } catch(e){console.error(e);}
+    try { await createContratoEmpresarial({...formData, vidas:parseInt(formData.vidas)||0, tipo: displayLabel}); setShowNew(false); setFormData(emptyForm); loadData(); } catch(e){console.error(e);}
     setSaving(false);
   };
 
   const handleSaveEdit = async (id) => {
     setSaving(true);
-    try { await updateContratoEmpresarial(id, {...editData, vidas:parseInt(editData.vidas)||0}); setEditingId(null); loadData(); } catch(e){console.error(e);}
+    try { await updateContratoEmpresarial(id, {...editData, vidas:parseInt(editData.vidas)||0, tipo: editData.tipo || displayLabel}); setEditingId(null); loadData(); } catch(e){console.error(e);}
     setSaving(false);
   };
 
   const startEdit = (item) => {
     setEditingId(item.id);
-    setEditData({ numero:item.numero, empresa:item.empresa, cnpj:item.cnpj, seguradora:item.seguradora, produto:item.produto, plano:item.plano || '', vigencia:item.vigencia, vencimento:item.vencimento, vidas:item.vidas, status:item.status, valorMensal:item.valorMensal });
+    setEditData({ numero:item.numero, empresa:item.empresa, cnpj:item.cnpj, seguradora:item.seguradora, produto:item.produto, plano:item.plano || '', vigencia:item.vigencia, vencimento:item.vencimento, vidas:item.vidas, status:item.status, valorMensal:item.valorMensal, tipo: item.tipo || displayLabel });
   };
 
   const handleDelete = async (id) => {
@@ -64,9 +67,9 @@ const Empresarial = () => {
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' }}>
         <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
           <div style={{ width:'36px', height:'36px', borderRadius:'8px', background:'#4979bb15', display:'flex', alignItems:'center', justifyContent:'center' }}><Handshake size={18} color="#4979bb" /></div>
-          <div><h2 style={{ fontSize:'1.1rem', fontWeight:600, color:'#344050', margin:0 }}>Contratos Empresariais</h2><p style={{ fontSize:'0.72rem', color:'#8a8d93', margin:0 }}>Categoria empresarial isolada</p></div>
+          <div><h2 style={{ fontSize:'1.1rem', fontWeight:600, color:'#344050', margin:0 }}>Contratos {isPme ? 'PME' : 'Empresariais'}</h2><p style={{ fontSize:'0.72rem', color:'#8a8d93', margin:0 }}>Categoria {isPme ? 'PME' : 'empresarial'} isolada</p></div>
         </div>
-        <Button onClick={()=>setShowNew(true)} style={{ background:'#4979bb', color:'#fff', fontSize:'0.78rem', display:'flex', alignItems:'center', gap:'6px' }}><Plus size={14}/>Novo Empresarial</Button>
+        <Button onClick={()=>setShowNew(true)} style={{ background:'#4979bb', color:'#fff', fontSize:'0.78rem', display:'flex', alignItems:'center', gap:'6px' }}><Plus size={14}/>Novo {isPme ? 'PME' : 'Empresarial'}</Button>
       </div>
 
       <div className="filters-toggle" onClick={()=>setShowFilters(!showFilters)}><Filter size={11} style={{marginRight:'4px'}}/>Filtros</div>
@@ -95,13 +98,13 @@ const Empresarial = () => {
 
       <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} totalItems={data.length} pageSize={PAGE_SIZE} />
 
-      <Dialog open={showDetail} onOpenChange={setShowDetail}><DialogContent style={{maxWidth:'650px'}}><DialogHeader><DialogTitle>Detalhes do Contrato Empresarial</DialogTitle></DialogHeader>
+      <Dialog open={showDetail} onOpenChange={setShowDetail}><DialogContent style={{maxWidth:'650px'}}><DialogHeader><DialogTitle>Detalhes do Contrato {isPme ? 'PME' : 'Empresarial'}</DialogTitle></DialogHeader>
         {selectedContrato && (<div style={{padding:'8px 0'}}><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>{[['Número',selectedContrato.numero,'#2C7BE5'],['Status',null],['Empresa',selectedContrato.empresa],['CNPJ',selectedContrato.cnpj],['Seguradora',selectedContrato.seguradora],['Produto',selectedContrato.produto],['Plano',selectedContrato.plano || '-'],['Vigência',selectedContrato.vigencia],['Vencimento',selectedContrato.vencimento],['Vidas',selectedContrato.vidas],['Valor Mensal',selectedContrato.valorMensal,'#27ae60']].map(([lbl,val,clr],i)=><div key={i}><label style={{fontSize:'0.68rem',color:'#8a8d93',textTransform:'uppercase',fontWeight:600}}>{lbl}</label>{lbl==='Status'?<p style={{margin:'2px 0'}}><span className={getStatusBadge(selectedContrato.status)}>{selectedContrato.status}</span></p>:<p style={{fontSize:'0.85rem',fontWeight:600,color:clr||'#344050',margin:'2px 0'}}>{val}</p>}</div>)}</div></div>)}
       </DialogContent></Dialog>
 
-      <Dialog open={showNew} onOpenChange={setShowNew}><DialogContent style={{maxWidth:'600px'}}><DialogHeader><DialogTitle>Novo Contrato Empresarial</DialogTitle></DialogHeader>
+      <Dialog open={showNew} onOpenChange={setShowNew}><DialogContent style={{maxWidth:'600px'}}><DialogHeader><DialogTitle>Novo Contrato {isPme ? 'PME' : 'Empresarial'}</DialogTitle></DialogHeader>
         <div style={{display:'flex',flexDirection:'column',gap:'10px',padding:'8px 0'}}>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Número</label><Input value={formData.numero} onChange={e=>setFormData({...formData,numero:e.target.value})} placeholder="EMP-2024-XXX"/></div><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Empresa</label><Input value={formData.empresa} onChange={e=>setFormData({...formData,empresa:e.target.value})}/></div></div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Número</label><Input value={formData.numero} onChange={e=>setFormData({...formData,numero:e.target.value})} placeholder={isPme ? "PME-2024-XXX" : "EMP-2024-XXX"}/></div><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Empresa</label><Input value={formData.empresa} onChange={e=>setFormData({...formData,empresa:e.target.value})}/></div></div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>CNPJ</label><Input value={formData.cnpj} onChange={e=>setFormData({...formData,cnpj:e.target.value})} placeholder="00.000.000/0000-00"/></div><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Seguradora</label><Input value={formData.seguradora} onChange={e=>setFormData({...formData,seguradora:e.target.value})}/></div></div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Produto</label><Input value={formData.produto} onChange={e=>setFormData({...formData,produto:e.target.value})}/></div><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Plano</label><Input value={formData.plano} onChange={e=>setFormData({...formData,plano:e.target.value})}/></div></div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px'}}><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Vigência</label><Input value={formData.vigencia} onChange={e=>setFormData({...formData,vigencia:e.target.value})} placeholder="01/01/2024"/></div><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Vencimento</label><Input value={formData.vencimento} onChange={e=>setFormData({...formData,vencimento:e.target.value})} placeholder="01/01/2025"/></div><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Vidas</label><Input type="number" value={formData.vidas} onChange={e=>setFormData({...formData,vidas:e.target.value})}/></div></div>

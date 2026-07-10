@@ -33,6 +33,7 @@ class ContratoEmpresarialBase(BaseModel):
     vidas: int = 0
     status: str = "Ativo"
     valorMensal: str = "R$ 0,00"
+    tipo: str = "Empresarial"
 
 
 class ContratoEmpresarial(ContratoEmpresarialBase):

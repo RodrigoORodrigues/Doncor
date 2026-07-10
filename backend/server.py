@@ -371,17 +371,35 @@ async def delete_contrato_adesao(item_id: str):
 #  CONTRATOS EMPRESARIAL
 # ═══════════════════════════════════════════════════════════════
 @api_router.get("/contratos-empresarial")
-async def list_contratos_empresarial(search: str = "", status: str = "todos"):
+async def list_contratos_empresarial(search: str = "", status: str = "todos", tipo: str = ""):
     query = {}
     if status != "todos":
         query["status"] = {"$regex": f"^{status}$", "$options": "i"}
+    if tipo:
+        if tipo.lower() == "pme":
+            query["tipo"] = {"$regex": "^pme$", "$options": "i"}
+        else:
+            query["$or"] = [
+                {"tipo": {"$regex": "^empresarial$", "$options": "i"}},
+                {"tipo": {"$exists": False}},
+                {"tipo": None}
+            ]
     if search:
-        query["$or"] = [
+        search_or = [
             {"numero": {"$regex": search, "$options": "i"}},
             {"empresa": {"$regex": search, "$options": "i"}},
             {"cnpj": {"$regex": search, "$options": "i"}},
             {"seguradora": {"$regex": search, "$options": "i"}},
         ]
+        if "$or" in query:
+            # combine filters
+            query["$and"] = [
+                {"$or": query["$or"]},
+                {"$or": search_or}
+            ]
+            del query["$or"]
+        else:
+            query["$or"] = search_or
     items = await db.contratos_empresarial.find(query, _proj()).to_list(1000)
     return items
 
