@@ -1123,33 +1123,33 @@ const PortalDonCor = () => {
             <table className="data-table" style={{ fontSize: '0.85rem', minWidth: '1000px', width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: `2px solid ${theme.border}` }}>
-                  <th style={{ textAlign: 'left', padding: '12px 14px' }}>Número do Contrato</th>
-                  <th style={{ textAlign: 'left', padding: '12px 14px' }}>Tipo</th>
-                  <th style={{ textAlign: 'left', padding: '12px 14px' }}>Seguradora</th>
-                  <th style={{ textAlign: 'left', padding: '12px 14px' }}>Plano</th>
-                  <th style={{ textAlign: 'left', padding: '12px 14px' }}>Vigência</th>
-                  <th style={{ textAlign: 'left', padding: '12px 14px' }}>Vidas</th>
-                  <th style={{ textAlign: 'left', padding: '12px 14px' }}>Valor Mensal</th>
-                  <th style={{ textAlign: 'left', padding: '12px 14px' }}>Status</th>
-                  <th style={{ textAlign: 'center', padding: '12px 14px' }}>Ações</th>
+                  <th style={{ textAlign: 'left', padding: '6px 14px' }}>Número do Contrato</th>
+                  <th style={{ textAlign: 'left', padding: '6px 14px' }}>Tipo</th>
+                  <th style={{ textAlign: 'left', padding: '6px 14px' }}>Seguradora</th>
+                  <th style={{ textAlign: 'left', padding: '6px 14px' }}>Plano</th>
+                  <th style={{ textAlign: 'left', padding: '6px 14px' }}>Vigência</th>
+                  <th style={{ textAlign: 'left', padding: '6px 14px' }}>Vidas</th>
+                  <th style={{ textAlign: 'left', padding: '6px 14px' }}>Valor Mensal</th>
+                  <th style={{ textAlign: 'left', padding: '6px 14px' }}>Status</th>
+                  <th style={{ textAlign: 'center', padding: '6px 14px' }}>Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredContratosList.map((item) => (
                   <tr key={item.contrato} style={{ borderBottom: `1px solid ${theme.border}`, hover: { background: '#f8fafc' } }}>
-                    <td style={{ fontWeight: 600, color: theme.primary, padding: '12px 14px' }}>{item.contrato}</td>
-                    <td style={{ padding: '12px 14px' }}>
+                    <td style={{ fontWeight: 600, color: theme.primary, padding: '6px 14px' }}>{item.contrato}</td>
+                    <td style={{ padding: '6px 14px' }}>
                       <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: item.tipo === 'PME' ? '#eff6ff' : '#f8fafc', color: item.tipo === 'PME' ? theme.blue : theme.text, border: `1px solid ${theme.border}` }}>
                         {item.tipo || 'Empresarial'}
                       </span>
                     </td>
-                    <td style={{ padding: '12px 14px' }}>{item.seguradora || '-'}</td>
-                    <td style={{ padding: '12px 14px' }}>{item.plano}</td>
-                    <td style={{ padding: '12px 14px' }}>{item.vigencia}</td>
-                    <td style={{ padding: '12px 14px', fontWeight: 600 }}>{item.vidas}</td>
-                    <td style={{ padding: '12px 14px' }}>{item.valorMensal || '-'}</td>
-                    <td style={{ padding: '12px 14px' }}><StatusPill status={item.status}/></td>
-                    <td style={{ textAlign: 'center', padding: '12px 14px' }}>
+                    <td style={{ padding: '6px 14px' }}>{item.seguradora || '-'}</td>
+                    <td style={{ padding: '6px 14px' }}>{item.plano}</td>
+                    <td style={{ padding: '6px 14px' }}>{item.vigencia}</td>
+                    <td style={{ padding: '6px 14px', fontWeight: 600 }}>{item.vidas}</td>
+                    <td style={{ padding: '6px 14px' }}>{item.valorMensal || '-'}</td>
+                    <td style={{ padding: '6px 14px' }}><StatusPill status={item.status}/></td>
+                    <td style={{ textAlign: 'center', padding: '6px 14px' }}>
                       <button onClick={() => setSelectedContratoDetail(item)} style={{ border: 0, background: 'transparent', color: theme.blue, cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700 }}>
                         <Eye size={16} />
                       </button>
@@ -2220,40 +2220,40 @@ const PortalDonCor = () => {
               <table className="data-table" style={{ fontSize: '0.8rem', minWidth: '1300px', borderCollapse: 'collapse', width: '100%' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: `2px solid ${theme.border}` }}>
-                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Protocolo</th>
-                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Contrato</th>
-                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Empresa</th>
-                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Beneficiário</th>
-                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Nome da Mãe</th>
-                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>CPF</th>
-                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Nascimento</th>
-                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Telefone</th>
-                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>E-mail</th>
-                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Parentesco</th>
-                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Estado Civil</th>
-                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Solicitação</th>
-                    <th style={{ textAlign: 'left', padding: '12px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Status</th>
+                    <th style={{ textAlign: 'left', padding: '6px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Protocolo</th>
+                    <th style={{ textAlign: 'left', padding: '6px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Contrato</th>
+                    <th style={{ textAlign: 'left', padding: '6px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Empresa</th>
+                    <th style={{ textAlign: 'left', padding: '6px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Beneficiário</th>
+                    <th style={{ textAlign: 'left', padding: '6px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Nome da Mãe</th>
+                    <th style={{ textAlign: 'left', padding: '6px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>CPF</th>
+                    <th style={{ textAlign: 'left', padding: '6px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Nascimento</th>
+                    <th style={{ textAlign: 'left', padding: '6px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Telefone</th>
+                    <th style={{ textAlign: 'left', padding: '6px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>E-mail</th>
+                    <th style={{ textAlign: 'left', padding: '6px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Parentesco</th>
+                    <th style={{ textAlign: 'left', padding: '6px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Estado Civil</th>
+                    <th style={{ textAlign: 'left', padding: '6px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Solicitação</th>
+                    <th style={{ textAlign: 'left', padding: '6px 10px', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 800, color: theme.muted }}>Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredSolicitacoes.map((item) => (
                     <tr key={item.id || item.protocolo} style={{ borderBottom: `1px solid ${theme.border}` }}>
-                      <td style={{ color: theme.primary, fontWeight: 800, padding: '12px 10px' }}>{item.protocolo}</td>
-                      <td style={{ color: theme.text, padding: '12px 10px' }}>{item.contrato || '-'}</td>
-                      <td style={{ padding: '12px 10px' }}>
+                      <td style={{ color: theme.primary, fontWeight: 800, padding: '6px 10px' }}>{item.protocolo}</td>
+                      <td style={{ color: theme.text, padding: '6px 10px' }}>{item.contrato || '-'}</td>
+                      <td style={{ padding: '6px 10px' }}>
                         <div style={{ fontWeight: 600, color: theme.text }}>{item.empresa || '-'}</div>
                         <div style={{ fontSize: '0.72rem', color: theme.muted }}>{item.documento || '-'}</div>
                       </td>
-                      <td style={{ fontWeight: 600, color: theme.text, padding: '12px 10px' }}>{item.beneficiario || item.payload?.beneficiario || '-'}</td>
-                      <td style={{ color: theme.text, padding: '12px 10px' }}>{item.nomeMae || item.payload?.nomeMae || '-'}</td>
-                      <td style={{ color: theme.text, padding: '12px 10px', whiteSpace: 'nowrap' }}>{item.cpf || item.payload?.cpf || '-'}</td>
-                      <td style={{ color: theme.text, padding: '12px 10px', whiteSpace: 'nowrap' }}>{item.dataNascimento || item.payload?.dataNascimento || '-'}</td>
-                      <td style={{ color: theme.text, padding: '12px 10px', whiteSpace: 'nowrap' }}>{item.telefone || item.payload?.telefone || '-'}</td>
-                      <td style={{ color: theme.text, padding: '12px 10px' }}>{item.email || item.payload?.email || '-'}</td>
-                      <td style={{ color: theme.text, padding: '12px 10px' }}>{item.parentesco || item.payload?.parentesco || '-'}</td>
-                      <td style={{ color: theme.text, padding: '12px 10px' }}>{item.estadoCivil || item.payload?.estadoCivil || '-'}</td>
-                      <td style={{ fontWeight: 600, color: theme.text, padding: '12px 10px' }}>{item.tipoLabel || item.tipo || '-'}</td>
-                      <td style={{ padding: '12px 10px' }}><StatusPill status={item.status}/></td>
+                      <td style={{ fontWeight: 600, color: theme.text, padding: '6px 10px' }}>{item.beneficiario || item.payload?.beneficiario || '-'}</td>
+                      <td style={{ color: theme.text, padding: '6px 10px' }}>{item.nomeMae || item.payload?.nomeMae || '-'}</td>
+                      <td style={{ color: theme.text, padding: '6px 10px', whiteSpace: 'nowrap' }}>{item.cpf || item.payload?.cpf || '-'}</td>
+                      <td style={{ color: theme.text, padding: '6px 10px', whiteSpace: 'nowrap' }}>{item.dataNascimento || item.payload?.dataNascimento || '-'}</td>
+                      <td style={{ color: theme.text, padding: '6px 10px', whiteSpace: 'nowrap' }}>{item.telefone || item.payload?.telefone || '-'}</td>
+                      <td style={{ color: theme.text, padding: '6px 10px' }}>{item.email || item.payload?.email || '-'}</td>
+                      <td style={{ color: theme.text, padding: '6px 10px' }}>{item.parentesco || item.payload?.parentesco || '-'}</td>
+                      <td style={{ color: theme.text, padding: '6px 10px' }}>{item.estadoCivil || item.payload?.estadoCivil || '-'}</td>
+                      <td style={{ fontWeight: 600, color: theme.text, padding: '6px 10px' }}>{item.tipoLabel || item.tipo || '-'}</td>
+                      <td style={{ padding: '6px 10px' }}><StatusPill status={item.status}/></td>
                     </tr>
                   ))}
                   {filteredSolicitacoes.length === 0 && (

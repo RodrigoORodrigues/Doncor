@@ -28,6 +28,7 @@ class ContratoEmpresarialBase(BaseModel):
     cnpj: str
     seguradora: str
     produto: str
+    plano: Optional[str] = ""
     vigencia: str
     vencimento: str
     vidas: int = 0

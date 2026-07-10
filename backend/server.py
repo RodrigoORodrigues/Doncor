@@ -385,12 +385,25 @@ async def list_contratos_empresarial(search: str = "", status: str = "todos", ti
                 {"tipo": None}
             ]
     if search:
+        # Generate variations for CNPJ/CPF to match both formatted and unformatted versions
+        cleaned_digits = "".join(c for c in search if c.isdigit())
+        cnpj_variations = [search]
+        if cleaned_digits and cleaned_digits != search:
+            cnpj_variations.append(cleaned_digits)
+        if len(cleaned_digits) == 14:
+            formatted = f"{cleaned_digits[:2]}.{cleaned_digits[2:5]}.{cleaned_digits[5:8]}/{cleaned_digits[8:12]}-{cleaned_digits[12:]}"
+            cnpj_variations.append(formatted)
+        elif len(cleaned_digits) == 11:
+            formatted = f"{cleaned_digits[:3]}.{cleaned_digits[3:6]}.{cleaned_digits[6:9]}-{cleaned_digits[9:]}"
+            cnpj_variations.append(formatted)
+            
+        cnpj_queries = [{"cnpj": {"$regex": var, "$options": "i"}} for var in set(cnpj_variations)]
+
         search_or = [
             {"numero": {"$regex": search, "$options": "i"}},
             {"empresa": {"$regex": search, "$options": "i"}},
-            {"cnpj": {"$regex": search, "$options": "i"}},
             {"seguradora": {"$regex": search, "$options": "i"}},
-        ]
+        ] + cnpj_queries
         if "$or" in query:
             # combine filters
             query["$and"] = [
