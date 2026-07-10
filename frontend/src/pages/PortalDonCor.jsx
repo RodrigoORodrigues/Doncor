@@ -9,6 +9,7 @@ import {
   fetchPortalDonCorResumo,
   fetchPortalDonCorFormularios,
   fetchPortalDonCorSolicitacoes,
+  fetchContratosEmpresarial,
   createPortalDonCorMovimentacao,
   deletePortalDonCorSolicitacao,
   fetchPortalDonCorChat,
@@ -249,6 +250,11 @@ const PortalDonCor = () => {
   const [loading, setLoading] = useState(false);
   const [payload, setPayload] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [contratosDb, setContratosDb] = useState([]);
+  const [contratosSearch, setContratosSearch] = useState('');
+  const [contratosStatusFilter, setContratosStatusFilter] = useState('Todos');
+  const [contratosVigenciaFilter, setContratosVigenciaFilter] = useState('Todas');
+  const [selectedContratoDetail, setSelectedContratoDetail] = useState(null);
   const [message, setMessage] = useState('');
   const [attachment, setAttachment] = useState(null);
   const [formularios, setFormularios] = useState([]);
@@ -315,18 +321,20 @@ const PortalDonCor = () => {
     if (!currentSession.lgpdAceito || !currentSession.senhaAlterada) return;
     setLoading(true);
     try {
-      const [resumo, chat, solicitacoesData, formulariosData, sinistroData] = await Promise.all([
+      const [resumo, chat, solicitacoesData, formulariosData, sinistroData, dbContratosData] = await Promise.all([
         fetchPortalDonCorResumo(currentSession.documento),
         fetchPortalDonCorChat({ documento: currentSession.documento, empresa: currentSession.empresa }),
         fetchPortalDonCorSolicitacoes({ documento: currentSession.documento }),
         fetchPortalDonCorFormularios(),
-        fetchPortalDonCorSinistralidade(currentSession.documento)
+        fetchPortalDonCorSinistralidade(currentSession.documento),
+        fetchContratosEmpresarial(currentSession.documento, 'todos', '')
       ]);
       setPayload(resumo);
       setMessages(chat || []);
       setSolicitacoes(solicitacoesData || []);
       setFormularios(formulariosData || []);
       setSinistralidade(sinistroData || []);
+      setContratosDb(dbContratosData || []);
     } catch (err) {
       setError(err?.response?.data?.detail || 'Não foi possível carregar o Portal do Cliente.');
     }
@@ -769,14 +777,48 @@ const PortalDonCor = () => {
   const faturas = useMemo(() => payload?.faturas || [], [payload]);
   const boletos = useMemo(() => payload?.boletos || [], [payload]);
   const contratos = useMemo(() => {
-    const map = new Map();
-    faturas.forEach((item) => {
-      const key = item.contrato || item.numero || 'Contrato';
-      if (!map.has(key)) map.set(key, { contrato: key, plano: item.seguradora || 'Plano empresarial', seguradora: item.seguradora || '-', status: 'Ativo', vigencia: item.competencia || '-', vidas: item.vidas || '-' });
-    });
-    if (map.size === 0 && payload?.resumo?.contratos) map.set('Contrato Principal', { contrato: 'Contrato Principal', plano: 'Plano empresarial', seguradora: 'DonCor', status: 'Ativo', vigencia: '-', vidas: '-' });
-    return Array.from(map.values());
-  }, [faturas, payload]);
+    const list = [];
+    if (contratosDb && contratosDb.length > 0) {
+      contratosDb.forEach((c) => {
+        list.push({
+          contrato: c.numero || 'Contrato',
+          plano: c.plano || c.produto || 'Plano empresarial',
+          seguradora: c.seguradora || '-',
+          status: c.status || 'Ativo',
+          vigencia: c.vigencia || '-',
+          vencimento: c.vencimento || '-',
+          vidas: c.vidas || 0,
+          valorMensal: c.valorMensal || 'R$ 0,00',
+          tipo: c.tipo || 'Empresarial'
+        });
+      });
+    } else {
+      const map = new Map();
+      faturas.forEach((item) => {
+        const key = item.contrato || item.numero || 'Contrato';
+        if (!map.has(key)) map.set(key, { contrato: key, plano: item.seguradora || 'Plano empresarial', seguradora: item.seguradora || '-', status: 'Ativo', vigencia: item.competencia || '-', vidas: item.vidas || '-' });
+      });
+      if (map.size === 0 && payload?.resumo?.contratos) map.set('Contrato Principal', { contrato: 'Contrato Principal', plano: 'Plano empresarial', seguradora: 'DonCor', status: 'Ativo', vigencia: '-', vidas: '-' });
+      list.push(...Array.from(map.values()));
+    }
+    return list;
+  }, [contratosDb, faturas, payload]);
+
+  const filteredContratosList = useMemo(() => {
+    let list = contratos;
+    if (contratosSearch.trim()) {
+      const term = contratosSearch.toLowerCase();
+      list = list.filter(item => 
+        String(item.contrato || '').toLowerCase().includes(term) ||
+        String(item.plano || '').toLowerCase().includes(term) ||
+        String(item.seguradora || '').toLowerCase().includes(term)
+      );
+    }
+    if (contratosStatusFilter !== 'Todos') {
+      list = list.filter(item => String(item.status || '').toLowerCase() === contratosStatusFilter.toLowerCase());
+    }
+    return list;
+  }, [contratos, contratosSearch, contratosStatusFilter]);
   const filteredSolicitacoes = useMemo(() => {
     const term = solicitacoesSearch.trim().toLowerCase();
     return (solicitacoes || []).filter((item) => {
@@ -1024,16 +1066,8 @@ const PortalDonCor = () => {
   );
 
   const renderContratos = () => {
-    const contractChartData = contratos.map(c => {
-      const parsed = parseInt(String(c.vidas || '').replace(/\D/g, ''));
-      return {
-        name: c.contrato,
-        vidas: isNaN(parsed) ? 15 : parsed
-      };
-    });
-
     return (
-      <div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <SectionTitle 
           title="Contratos Vigentes" 
           subtitle="Gerencie suas apólices, vigência e status de todos os contratos."
@@ -1044,7 +1078,7 @@ const PortalDonCor = () => {
             <div key={item.contrato} style={{ ...card, padding: 20, borderTop: `4px solid ${[theme.primary, theme.warning, theme.ok][idx % 3]}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
                 <div>
-                  <div style={{ color: theme.muted, fontSize: '0.75rem', fontWeight: 700, marginBottom: 4 }}>CONTRATO</div>
+                  <div style={{ color: theme.muted, fontSize: '0.75rem', fontWeight: 700, marginBottom: 4 }}>CONTRATO ({item.tipo || 'Empresarial'})</div>
                   <h3 style={{ color: theme.text, fontSize: '1.1rem', fontWeight: 900, margin: 0 }}>{item.contrato}</h3>
                 </div>
                 <StatusPill status={item.status} />
@@ -1063,55 +1097,73 @@ const PortalDonCor = () => {
                   <strong style={{ color: theme.text, fontSize: '1.25rem' }}>{item.vidas}</strong>
                 </div>
               </div>
-              <Button variant="outline" style={{ width: '100%', marginTop: 14, fontSize: '0.8rem' }}><Eye size={14}/> Visualizar</Button>
+              <Button onClick={() => setSelectedContratoDetail(item)} variant="outline" style={{ width: '100%', marginTop: 14, fontSize: '0.8rem' }}><Eye size={14}/> Visualizar</Button>
             </div>
           ))}
+          {contratos.length === 0 && (
+            <div style={{ colSpan: 3, padding: 24, textAlign: 'center', color: theme.muted }}>Nenhum contrato ativo encontrado.</div>
+          )}
         </div>
 
-        <section style={{ ...card, padding: 18 }}>
+        <section style={{ ...card, padding: 18, width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
           <SectionTitle title="Detalhes dos Contratos" subtitle="Visualize informações completas com filtros avançados." />
-          <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-            <div style={{ flex: 1, position: 'relative' }}>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, position: 'relative', minWidth: '240px' }}>
               <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: theme.muted }} />
-              <Input placeholder="Filtrar por número ou plano..." style={{ paddingLeft: '32px', fontSize: '0.8rem' }} />
+              <Input value={contratosSearch} onChange={(e) => setContratosSearch(e.target.value)} placeholder="Filtrar por número, plano, seguradora..." style={{ paddingLeft: '32px', fontSize: '0.8rem' }} />
             </div>
-            <select style={{ ...selectStyle, maxWidth: 200 }}>
-              <option>Status: Todos</option>
-              <option>Ativo</option>
-              <option>Vencido</option>
-            </select>
-            <select style={{ ...selectStyle, maxWidth: 200 }}>
-              <option>Vigência: Todas</option>
-              <option>Próximos 30 dias</option>
-              <option>Próximos 90 dias</option>
+            <select value={contratosStatusFilter} onChange={(e) => setContratosStatusFilter(e.target.value)} style={{ ...selectStyle, maxWidth: 200, flex: '1 1 150px' }}>
+              <option value="Todos">Status: Todos</option>
+              <option value="Ativo">Ativo</option>
+              <option value="Inativo">Inativo</option>
+              <option value="Cancelado">Cancelado</option>
             </select>
           </div>
-          <table className="data-table" style={{ fontSize: '0.85rem' }}>
-            <thead>
-              <tr style={{ background: '#f8fafc', borderBottom: `2px solid ${theme.border}` }}>
-                <th style={{ textAlign: 'left' }}>Número do Contrato</th>
-                <th style={{ textAlign: 'left' }}>Plano</th>
-                <th style={{ textAlign: 'left' }}>Vigência</th>
-                <th style={{ textAlign: 'left' }}>Status</th>
-                <th style={{ textAlign: 'center' }}>Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {contratos.map((item) => (
-                <tr key={item.contrato} style={{ borderBottom: `1px solid ${theme.border}`, hover: { background: '#f8fafc' } }}>
-                  <td style={{ fontWeight: 600, color: theme.primary }}>{item.contrato}</td>
-                  <td>{item.plano}</td>
-                  <td>{item.vigencia}</td>
-                  <td><StatusPill status={item.status}/></td>
-                  <td style={{ textAlign: 'center' }}>
-                    <button style={{ border: 0, background: 'transparent', color: theme.blue, cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700 }}>
-                      <Eye size={16} />
-                    </button>
-                  </td>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%', maxWidth: '100%' }}>
+            <table className="data-table" style={{ fontSize: '0.85rem', minWidth: '1000px', width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', borderBottom: `2px solid ${theme.border}` }}>
+                  <th style={{ textAlign: 'left', padding: '12px 14px' }}>Número do Contrato</th>
+                  <th style={{ textAlign: 'left', padding: '12px 14px' }}>Tipo</th>
+                  <th style={{ textAlign: 'left', padding: '12px 14px' }}>Seguradora</th>
+                  <th style={{ textAlign: 'left', padding: '12px 14px' }}>Plano</th>
+                  <th style={{ textAlign: 'left', padding: '12px 14px' }}>Vigência</th>
+                  <th style={{ textAlign: 'left', padding: '12px 14px' }}>Vidas</th>
+                  <th style={{ textAlign: 'left', padding: '12px 14px' }}>Valor Mensal</th>
+                  <th style={{ textAlign: 'left', padding: '12px 14px' }}>Status</th>
+                  <th style={{ textAlign: 'center', padding: '12px 14px' }}>Ações</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredContratosList.map((item) => (
+                  <tr key={item.contrato} style={{ borderBottom: `1px solid ${theme.border}`, hover: { background: '#f8fafc' } }}>
+                    <td style={{ fontWeight: 600, color: theme.primary, padding: '12px 14px' }}>{item.contrato}</td>
+                    <td style={{ padding: '12px 14px' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: item.tipo === 'PME' ? '#eff6ff' : '#f8fafc', color: item.tipo === 'PME' ? theme.blue : theme.text, border: `1px solid ${theme.border}` }}>
+                        {item.tipo || 'Empresarial'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px 14px' }}>{item.seguradora || '-'}</td>
+                    <td style={{ padding: '12px 14px' }}>{item.plano}</td>
+                    <td style={{ padding: '12px 14px' }}>{item.vigencia}</td>
+                    <td style={{ padding: '12px 14px', fontWeight: 600 }}>{item.vidas}</td>
+                    <td style={{ padding: '12px 14px' }}>{item.valorMensal || '-'}</td>
+                    <td style={{ padding: '12px 14px' }}><StatusPill status={item.status}/></td>
+                    <td style={{ textAlign: 'center', padding: '12px 14px' }}>
+                      <button onClick={() => setSelectedContratoDetail(item)} style={{ border: 0, background: 'transparent', color: theme.blue, cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700 }}>
+                        <Eye size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {filteredContratosList.length === 0 && (
+                  <tr>
+                    <td colSpan="9" style={{ textAlign: 'center', color: theme.muted, padding: 24 }}>Nenhum contrato encontrado.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </section>
       </div>
     );
@@ -3032,6 +3084,73 @@ const PortalDonCor = () => {
               style={{ width: '100%', background: '#EF4444', color: '#fff', fontWeight: 900, height: 46, borderRadius: 12, transition: 'all 0.2s ease' }}
             >
               Entendido, Corrigir Agora
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {selectedContratoDetail && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.4)', backdropFilter: 'blur(3px)', zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: '#fff', borderRadius: 18, padding: 28, width: '100%', maxWidth: 500, boxShadow: '0 20px 40px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: `1px solid ${theme.border}`, paddingBottom: 14 }}>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', color: theme.text, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <FolderOpen size={22} color={theme.blue} /> Detalhes do Contrato
+              </h3>
+              <button onClick={() => setSelectedContratoDetail(null)} style={{ background: 'transparent', border: 0, fontSize: '1.25rem', cursor: 'pointer', color: theme.muted }}>&times;</button>
+            </div>
+            
+            <div style={{ display: 'grid', gap: 14, fontSize: '0.88rem', color: theme.text, marginBottom: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, borderBottom: `1px solid #f1f5f9`, paddingBottom: 8 }}>
+                <div>
+                  <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Número do Contrato</span>
+                  <div style={{ fontWeight: 800, color: theme.primary, fontSize: '1rem', marginTop: 2 }}>{selectedContratoDetail.contrato}</div>
+                </div>
+                <div>
+                  <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Status</span>
+                  <div style={{ marginTop: 2 }}><StatusPill status={selectedContratoDetail.status} /></div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, borderBottom: `1px solid #f1f5f9`, paddingBottom: 8 }}>
+                <div>
+                  <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Tipo de Contrato</span>
+                  <div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: selectedContratoDetail.tipo === 'PME' ? '#eff6ff' : '#f8fafc', color: selectedContratoDetail.tipo === 'PME' ? theme.blue : theme.text, border: `1px solid ${theme.border}` }}>
+                      {selectedContratoDetail.tipo || 'Empresarial'}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Seguradora</span>
+                  <div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{selectedContratoDetail.seguradora || '-'}</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, borderBottom: `1px solid #f1f5f9`, paddingBottom: 8 }}>
+                <div>
+                  <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Plano</span>
+                  <div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{selectedContratoDetail.plano}</div>
+                </div>
+                <div>
+                  <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Vigência</span>
+                  <div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{selectedContratoDetail.vigencia || '-'}</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Total de Vidas</span>
+                  <div style={{ fontWeight: 800, color: theme.text, fontSize: '1.1rem', marginTop: 2 }}>{selectedContratoDetail.vidas}</div>
+                </div>
+                <div>
+                  <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Valor Mensal</span>
+                  <div style={{ fontWeight: 800, color: theme.text, fontSize: '1.1rem', marginTop: 2 }}>{selectedContratoDetail.valorMensal || '-'}</div>
+                </div>
+              </div>
+            </div>
+
+            <Button onClick={() => setSelectedContratoDetail(null)} style={{ background: theme.blue, color: '#fff', width: '100%', height: 44 }}>
+              Fechar Detalhes
             </Button>
           </div>
         </div>
