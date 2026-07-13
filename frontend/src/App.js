@@ -28,6 +28,7 @@ import PortalSolicitacoes from "./pages/PortalSolicitacoes";
 import PortalSinistralidade from "./pages/PortalSinistralidade";
 import LgpdGovernance from "./pages/LgpdGovernance";
 import { Loader2 } from "lucide-react";
+import { fetchColaboradores } from "./services/api";
 
 const DEFAULT_ACCESS = "dashboard";
 const MASTER_USERNAME = "Donfim";
@@ -123,43 +124,134 @@ const normalizeAccessConfig = (value) => {
 };
 
 const LoginScreen = ({ onLogin, error }) => {
-  const [username, setUsername] = useState(MASTER_USERNAME);
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [keepSession, setKeepSession] = useState(false);
+  const [collaborators, setCollaborators] = useState([]);
 
-  const validatePassword = (role, inputPassword) => {
-    const isMaster = role.toLowerCase() === MASTER_USERNAME.toLowerCase();
-    const envKey = isMaster 
-      ? (process.env.REACT_APP_MASTER_LOGIN_KEY || "121418") 
-      : (process.env.REACT_APP_STAFF_LOGIN_KEY || "121418");
+  // Forgot password state
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotInput, setForgotInput] = useState("");
+  const [forgotMessage, setForgotMessage] = useState("");
+  const [forgotError, setForgotError] = useState("");
 
-    if (!envKey) {
-      return { valid: false, message: "A senha do perfil não foi configurada no ambiente de produção." };
+  useEffect(() => {
+    const loadColabs = async () => {
+      try {
+        const list = await fetchColaboradores();
+        setCollaborators(list || []);
+      } catch (e) {
+        console.error("Erro ao carregar colaboradores no login:", e);
+      }
+    };
+    loadColabs();
+  }, []);
+
+  const handleRecoverPassword = (e) => {
+    e.preventDefault();
+    const input = forgotInput.trim().toLowerCase();
+    if (!input) {
+      setForgotError("Por favor, digite seu usuário ou e-mail.");
+      setForgotMessage("");
+      return;
     }
 
-    if (inputPassword !== envKey) {
-      return { valid: false, message: "Senha incorreta." };
+    // Search static users
+    if (input === MASTER_USERNAME.toLowerCase() || input === "master") {
+      setForgotMessage(`Instruções de recuperação de senha enviadas para o e-mail cadastrado do usuário Master. (Para testes, a senha padrão é 121418).`);
+      setForgotError("");
+      return;
     }
 
-    return { valid: true, message: "" };
+    const staticRoles = ["diretoria", "gerencia", "analista"];
+    if (staticRoles.includes(input)) {
+      setForgotMessage(`Instruções de recuperação de senha para o perfil de ${input} enviadas para o e-mail cadastrado. (Para testes, a senha padrão é 121418).`);
+      setForgotError("");
+      return;
+    }
+
+    // Search collaborators
+    const colab = collaborators.find(c => 
+      (c.usuario && c.usuario.toLowerCase() === input) ||
+      (c.email && c.email.toLowerCase() === input) ||
+      (c.nome && c.nome.toLowerCase() === input)
+    );
+
+    if (colab) {
+      const emailDest = colab.email || "suporte@doncor.com.br";
+      setForgotMessage(`Instruções de recuperação de senha enviadas para o e-mail: ${emailDest}. ${colab.senha ? `(Para testes rápidos, sua senha atual é: ${colab.senha})` : ''}`);
+      setForgotError("");
+    } else {
+      setForgotError("Nenhum usuário ou colaborador encontrado com as informações fornecidas.");
+      setForgotMessage("");
+    }
   };
 
   const handleSubmit = (event) => {
     event.preventDefault();
-    const validation = validatePassword(username, password);
+    const typedUser = username.trim();
+    const typedPass = password;
 
-    if (!validation.valid) {
-      onLogin(null, validation.message);
+    if (!typedUser) {
+      onLogin(null, "Por favor, digite o usuário.");
+      return;
+    }
+    if (!typedPass) {
+      onLogin(null, "Por favor, digite a senha.");
       return;
     }
 
-    onLogin(username.trim());
+    // 1. Check if static Master user
+    if (typedUser.toLowerCase() === MASTER_USERNAME.toLowerCase()) {
+      const isMasterKey = process.env.REACT_APP_MASTER_LOGIN_KEY || "121418";
+      if (typedPass === isMasterKey) {
+        onLogin({ username: MASTER_USERNAME, role: 'Master' });
+      } else {
+        onLogin(null, "Senha incorreta.");
+      }
+      return;
+    }
+
+    // 2. Check if static role users
+    const staticRoles = ["Diretoria", "Gerencia", "Analista"];
+    const matchedStaticRole = staticRoles.find(r => r.toLowerCase() === typedUser.toLowerCase());
+    if (matchedStaticRole) {
+      const isStaffKey = process.env.REACT_APP_STAFF_LOGIN_KEY || "121418";
+      if (typedPass === isStaffKey) {
+        onLogin({ username: matchedStaticRole, role: matchedStaticRole });
+      } else {
+        onLogin(null, "Senha incorreta.");
+      }
+      return;
+    }
+
+    // 3. Check collaborators in MongoDB
+    const matchedColab = collaborators.find(c => 
+      (c.usuario && c.usuario.toLowerCase() === typedUser.toLowerCase()) ||
+      (c.email && c.email.toLowerCase() === typedUser.toLowerCase()) ||
+      (c.nome && c.nome.toLowerCase() === typedUser.toLowerCase())
+    );
+
+    if (matchedColab) {
+      if (matchedColab.senha === typedPass) {
+        onLogin({
+          username: matchedColab.nome,
+          role: matchedColab.departamento || 'Analista',
+          collaboratorId: matchedColab.id
+        });
+      } else {
+        onLogin(null, "Senha incorreta.");
+      }
+      return;
+    }
+
+    onLogin(null, "Usuário não cadastrado.");
   };
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #eef4fb 0%, #f8fafc 100%)", padding: "24px" }}>
-      <form onSubmit={handleSubmit} style={{ width: "100%", maxWidth: "400px", background: "#fff", border: "1px solid #eaeaea", borderRadius: "20px", padding: "36px 36px 28px", boxShadow: "0 15px 35px rgba(0, 0, 0, 0.05)" }}>
+      <form onSubmit={handleSubmit} style={{ width: "100%", maxWidth: "400px", background: "#fff", border: "1px solid #eaeaea", borderRadius: "20px", padding: "36px 36px 28px", boxShadow: "0 15px 35px rgba(0, 0, 0, 0.05)", position: "relative" }}>
         <div style={{ textAlign: "center", marginBottom: "26px" }}>
           <div style={{ marginBottom: "14px", display: "flex", justifyContent: "center" }}>
             <DoncorLogo size={46} />
@@ -178,17 +270,13 @@ const LoginScreen = ({ onLogin, error }) => {
         </label>
         <div style={{ position: "relative", marginBottom: "18px" }}>
           <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "1.1rem", color: "#64748b", pointerEvents: "none" }}>👤</span>
-          <select 
+          <input 
+            type="text"
             value={username} 
             onChange={(event) => setUsername(event.target.value)} 
-            style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "10px 12px 10px 38px", fontSize: "0.95rem", background: "#f8fafc", color: "#1e293b", cursor: "pointer", outline: "none", boxSizing: "border-box", WebkitAppearance: "none", MozAppearance: "none", appearance: "none" }}
-          >
-            <option value="Donfim">Master</option>
-            <option value="Diretoria">Diretoria</option>
-            <option value="Gerencia">Gerencia</option>
-            <option value="Analista">Analista</option>
-          </select>
-          <span style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", fontSize: "0.8rem", color: "#64748b" }}>▼</span>
+            placeholder="Digite seu usuário ou e-mail"
+            style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "10px 12px 10px 38px", fontSize: "0.95rem", background: "#f8fafc", color: "#1e293b", outline: "none", boxSizing: "border-box" }}
+          />
         </div>
 
         <label style={{ display: "block", color: "#000000", fontWeight: "700", fontSize: "0.88rem", marginBottom: "6px", textAlign: "left" }}>
@@ -212,17 +300,26 @@ const LoginScreen = ({ onLogin, error }) => {
           </button>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "24px" }}>
-          <input 
-            type="checkbox" 
-            id="keep-session" 
-            checked={keepSession} 
-            onChange={(e) => setKeepSession(e.target.checked)}
-            style={{ width: "16px", height: "16px", cursor: "pointer", borderRadius: "4px" }} 
-          />
-          <label htmlFor="keep-session" style={{ fontSize: "0.88rem", color: "#000000", cursor: "pointer", userSelect: "none" }}>
-            Manter sessão iniciada
-          </label>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <input 
+              type="checkbox" 
+              id="keep-session" 
+              checked={keepSession} 
+              onChange={(e) => setKeepSession(e.target.checked)}
+              style={{ width: "16px", height: "16px", cursor: "pointer", borderRadius: "4px" }} 
+            />
+            <label htmlFor="keep-session" style={{ fontSize: "0.88rem", color: "#000000", cursor: "pointer", userSelect: "none" }}>
+              Manter conectado
+            </label>
+          </div>
+          <button 
+            type="button" 
+            onClick={() => setShowForgot(true)} 
+            style={{ background: "none", border: "none", color: "#2C7BE5", fontSize: "0.85rem", fontWeight: "700", cursor: "pointer", padding: 0 }}
+          >
+            Esqueci a senha
+          </button>
         </div>
 
         <button 
@@ -253,6 +350,100 @@ const LoginScreen = ({ onLogin, error }) => {
           </a>
         </div>
       </form>
+
+      {showForgot && (
+        <div style={{
+          position: "fixed",
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: "rgba(15, 23, 42, 0.3)",
+          backdropFilter: "blur(4px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 9999,
+          padding: "20px"
+        }}>
+          <div style={{
+            background: "#fff",
+            borderRadius: "16px",
+            padding: "28px",
+            width: "100%",
+            maxWidth: "400px",
+            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+            border: "1px solid #e2e8f0"
+          }}>
+            <h3 style={{ margin: "0 0 8px", color: "#0f172a", fontSize: "1.2rem", fontWeight: 700 }}>Recuperar Senha</h3>
+            <p style={{ margin: "0 0 20px", color: "#64748b", fontSize: "0.85rem", lineHeight: "1.4" }}>
+              Digite seu nome de usuário ou e-mail cadastrado para obter sua senha de acesso.
+            </p>
+
+            <form onSubmit={handleRecoverPassword}>
+              {forgotError && (
+                <div style={{ background: "#fff1f2", border: "1px solid #fecdd3", color: "#be123c", borderRadius: "8px", padding: "10px 12px", marginBottom: "16px", fontSize: "0.85rem" }}>
+                  {forgotError}
+                </div>
+              )}
+              {forgotMessage && (
+                <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", borderRadius: "8px", padding: "10px 12px", marginBottom: "16px", fontSize: "0.85rem", lineHeight: "1.4" }}>
+                  {forgotMessage}
+                </div>
+              )}
+
+              <label style={{ display: "block", color: "#000000", fontWeight: "700", fontSize: "0.85rem", marginBottom: "6px", textAlign: "left" }}>
+                Usuário ou E-mail
+              </label>
+              <input 
+                type="text"
+                placeholder="Ex: joao.silva ou joao@email.com"
+                value={forgotInput}
+                onChange={e => setForgotInput(e.target.value)}
+                style={{ 
+                  width: "100%", 
+                  marginBottom: "20px", 
+                  padding: "10px 12px", 
+                  fontSize: "0.9rem",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  boxSizing: "border-box",
+                  outline: "none"
+                }}
+              />
+
+              <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+                <button 
+                  type="button" 
+                  onClick={() => { setShowForgot(false); setForgotInput(""); setForgotMessage(""); setForgotError(""); }}
+                  style={{ 
+                    fontSize: "0.85rem",
+                    padding: "8px 14px",
+                    background: "none",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "6px",
+                    cursor: "pointer"
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  style={{ 
+                    background: "#2C7BE5", 
+                    color: "#fff", 
+                    fontSize: "0.85rem",
+                    padding: "8px 14px",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontWeight: 600
+                  }}
+                >
+                  Recuperar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -364,13 +555,6 @@ function MainApp({ session, onLogout, accessByRole, onAccessChange }) {
           onLogout={onLogout}
           session={session}
         />
-        <TabSystem
-          tabs={tabs}
-          activeTab={activeTab}
-          onTabClick={setActiveTab}
-          onTabClose={closeTab}
-          onRefresh={refreshTab}
-        />
         <div className="content-area">
           {renderContent()}
         </div>
@@ -386,12 +570,21 @@ function App() {
   const [accessByRole, setAccessByRole] = useState(() => normalizeAccessConfig(safeParseJSON(localStorage.getItem('doncor_access'), DEFAULT_ACCESS_BY_ROLE)));
 
   const handleLoadingFinish = useCallback(() => setLoading(false), []);
-  const handleLogin = (username, errorMessage = '') => {
+  const handleLogin = (sessionOrUsername, errorMessage = '') => {
     if (errorMessage) {
       setError(errorMessage);
       return;
     }
 
+    if (sessionOrUsername && typeof sessionOrUsername === "object") {
+      setSession(sessionOrUsername);
+      localStorage.setItem('doncor_session', JSON.stringify(sessionOrUsername));
+      setError('');
+      setLoading(true);
+      return;
+    }
+
+    const username = sessionOrUsername;
     const availableRoles = ["Diretoria", "Gerencia", "Analista"];
     const matchedRole = availableRoles.find((roleName) => roleName.toLowerCase() === username.toLowerCase());
     const isMaster = username.toLowerCase() === MASTER_USERNAME.toLowerCase();

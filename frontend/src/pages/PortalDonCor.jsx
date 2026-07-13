@@ -2918,7 +2918,7 @@ const PortalDonCor = () => {
             </div>
           </div>
         </header>
-        <main style={{ padding:24, maxWidth:1320, margin:'0 auto' }}>
+        <main style={{ padding:24, maxWidth:'100%', boxSizing:'border-box' }}>
           {error && <div style={{ background:'#fff1f2', border:'1px solid #fecdd3', color:'#be123c', borderRadius:10, padding:'10px 12px', marginBottom:14 }}>{error}</div>}
           {successMsg && <div style={{ background:'#ecfdf5', border:'1px solid #bbf7d0', color:'#047857', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{successMsg}</div>}
           {passMsg && <div style={{ background:'#ecfdf5', border:'1px solid #bbf7d0', color:'#047857', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{passMsg}</div>}

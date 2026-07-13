@@ -196,6 +196,7 @@ class ColaboradorBase(BaseModel):
     departamento: str = ""
     status: str = "Ativo"
     senha: str = ""
+    usuario: str = ""
     primeiroAcesso: bool = True
     senhaTemporaria: bool = True
 
