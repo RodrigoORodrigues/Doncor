@@ -49,6 +49,7 @@ const ALL_PAGES = [
   "portal-solicitacoes",
   "portal-formularios",
   "portal-sinistralidade",
+  "lgpd-governance",
   "relatorios",
   "robo",
   "robo-config",
@@ -514,10 +515,10 @@ function MainApp({ session, onLogout, accessByRole, onAccessChange }) {
 
   const role = session?.role || 'Diretoria';
   const allowedPages = useMemo(() => {
-    const base = accessByRole[role] || accessByRole.Diretoria || [];
     if (role === 'Master') {
-      return [...base, 'lgpd-governance'];
+      return ALL_PAGES;
     }
+    const base = accessByRole[role] || accessByRole.Diretoria || [];
     return base;
   }, [accessByRole, role]);
 
