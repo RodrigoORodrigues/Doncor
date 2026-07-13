@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { fetchContratosAdesao, createContratoAdesao, updateContratoAdesao, deleteContratoAdesao } from '../services/api';
+import { fetchContratosAdesao, createContratoAdesao, updateContratoAdesao, deleteContratoAdesao, fetchProdutos } from '../services/api';
 import { Search, Filter, Plus, Eye, FileText, Trash2, Edit, Save, X, Loader2 } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
@@ -20,12 +20,17 @@ const Adesao = () => {
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
   const [page, setPage] = useState(1);
-  const [formData, setFormData] = useState({ numero:'', seguradora:'', produto:'', administradora:'', vigencia:'', vidas:0, status:'Ativo', valorMensal:'R$ 0,00' });
+  const [formData, setFormData] = useState({ numero:'', seguradora:'', plano:'', administradora:'', vigencia:'', vidas:0, status:'Ativo', valorMensal:'R$ 0,00' });
   const [saving, setSaving] = useState(false);
+  const [planos, setPlanos] = useState([]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    try { setData(await fetchContratosAdesao(searchTerm, filterStatus)); } catch(e){console.error(e);}
+    try { 
+      setData(await fetchContratosAdesao(searchTerm, filterStatus)); 
+      const registeredPlanos = await fetchProdutos();
+      setPlanos(registeredPlanos || []);
+    } catch(e){console.error(e);}
     setLoading(false);
   }, [searchTerm, filterStatus]);
 
@@ -33,7 +38,7 @@ const Adesao = () => {
 
   const handleCreate = async () => {
     setSaving(true);
-    try { await createContratoAdesao({...formData, vidas: parseInt(formData.vidas)||0}); setShowNew(false); setFormData({ numero:'', seguradora:'', produto:'', administradora:'', vigencia:'', vidas:0, status:'Ativo', valorMensal:'R$ 0,00' }); loadData(); } catch(e){console.error(e);}
+    try { await createContratoAdesao({...formData, vidas: parseInt(formData.vidas)||0}); setShowNew(false); setFormData({ numero:'', seguradora:'', plano:'', administradora:'', vigencia:'', vidas:0, status:'Ativo', valorMensal:'R$ 0,00' }); loadData(); } catch(e){console.error(e);}
     setSaving(false);
   };
 
@@ -45,7 +50,7 @@ const Adesao = () => {
 
   const startEdit = (item) => {
     setEditingId(item.id);
-    setEditData({ numero:item.numero, seguradora:item.seguradora, produto:item.produto, administradora:item.administradora, vigencia:item.vigencia, vidas:item.vidas, status:item.status, valorMensal:item.valorMensal });
+    setEditData({ numero:item.numero, seguradora:item.seguradora, plano:item.plano || item.produto || '', administradora:item.administradora, vigencia:item.vigencia, vidas:item.vidas, status:item.status, valorMensal:item.valorMensal });
   };
 
   const handleDelete = async (id) => {
@@ -72,7 +77,7 @@ const Adesao = () => {
       {showFilters && (
         <div style={{ background:'#fff', borderRadius:'0 0 8px 8px', padding:'16px', marginBottom:'12px', boxShadow:'0 1px 3px rgba(0,0,0,0.06)' }}>
           <div style={{ display:'flex', gap:'12px', alignItems:'center' }}>
-            <div style={{ flex:1, position:'relative' }}><Search size={14} style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',color:'#8a8d93'}}/><Input placeholder="Buscar por número, seguradora, produto..." value={searchTerm} onChange={e=>{setSearchTerm(e.target.value);setPage(1);}} style={{paddingLeft:'32px',fontSize:'0.8rem'}}/></div>
+            <div style={{ flex:1, position:'relative' }}><Search size={14} style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',color:'#8a8d93'}}/><Input placeholder="Buscar por número, seguradora, plano..." value={searchTerm} onChange={e=>{setSearchTerm(e.target.value);setPage(1);}} style={{paddingLeft:'32px',fontSize:'0.8rem'}}/></div>
             <select value={filterStatus} onChange={e=>{setFilterStatus(e.target.value);setPage(1);}} style={{border:'1px solid #d8e2ef',borderRadius:'6px',padding:'8px 12px',fontSize:'0.8rem',color:'#344050',background:'#fff',cursor:'pointer'}}>
               <option value="todos">Todos os Status</option><option value="ativo">Ativo</option><option value="cancelado">Cancelado</option><option value="suspenso">Suspenso</option>
             </select>
@@ -82,11 +87,28 @@ const Adesao = () => {
 
       <div style={{ background:'#fff', borderRadius:'8px', boxShadow:'0 1px 3px rgba(0,0,0,0.06)', overflow:'hidden', marginTop:showFilters?'0':'12px' }}>
         {loading ? <div style={{display:'flex',justifyContent:'center',padding:'40px'}}><Loader2 size={24} style={{color:'#4979bb',animation:'spin 1s linear infinite'}}/></div> : (
-          <table className="data-table"><thead><tr><th>Número</th><th>Seguradora</th><th>Produto</th><th>Administradora</th><th>Vigência</th><th>Vidas</th><th>Valor Mensal</th><th>Status</th><th style={{width:'110px'}}>Ações</th></tr></thead>
+          <table className="data-table"><thead><tr><th>Número</th><th>Seguradora</th><th>Plano</th><th>Administradora</th><th>Vigência</th><th>Vidas</th><th>Valor Mensal</th><th>Status</th><th style={{width:'110px'}}>Ações</th></tr></thead>
             <tbody>{paged.map(c => (
               <tr key={c.id}>
                 {editingId===c.id ? (<>
-                  <td>{inlineInput('numero','80px')}</td><td>{inlineInput('seguradora')}</td><td>{inlineInput('produto')}</td><td>{inlineInput('administradora')}</td><td>{inlineInput('vigencia','80px')}</td>
+                  <td>{inlineInput('numero','80px')}</td><td>{inlineInput('seguradora')}</td>
+                  <td>
+                    {planos.length > 0 ? (
+                      <select
+                        value={editData.plano || ''}
+                        onChange={e => setEditData({...editData, plano: e.target.value})}
+                        style={{ fontSize: '0.75rem', padding: '4px 6px', border: '1px solid #d8e2ef', borderRadius: '4px', width: '100%', background: '#fff' }}
+                      >
+                        <option value="">Selecione...</option>
+                        {planos.map(p => (
+                          <option key={p.id} value={p.nome}>{p.nome}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      inlineInput('plano')
+                    )}
+                  </td>
+                  <td>{inlineInput('administradora')}</td><td>{inlineInput('vigencia','80px')}</td>
                   <td><Input type="number" value={editData.vidas} onChange={e=>setEditData({...editData,vidas:e.target.value})} style={{fontSize:'0.78rem',padding:'4px 8px',height:'30px',width:'60px'}}/></td>
                   <td>{inlineInput('valorMensal','90px')}</td>
                   <td><select value={editData.status} onChange={e=>setEditData({...editData,status:e.target.value})} style={{fontSize:'0.75rem',padding:'4px 6px',border:'1px solid #d8e2ef',borderRadius:'4px'}}><option>Ativo</option><option>Cancelado</option><option>Suspenso</option></select></td>
@@ -95,7 +117,7 @@ const Adesao = () => {
                     <button onClick={()=>setEditingId(null)} style={{background:'none',border:'1px solid #e63757',borderRadius:'4px',padding:'4px 6px',cursor:'pointer',color:'#e63757'}} title="Cancelar"><X size={13}/></button>
                   </div></td>
                 </>) : (<>
-                  <td style={{fontWeight:600,color:'#2C7BE5'}}>{c.numero}</td><td>{c.seguradora}</td><td>{c.produto}</td><td>{c.administradora}</td><td>{c.vigencia}</td><td style={{fontWeight:600}}>{c.vidas}</td><td style={{fontWeight:500}}>{c.valorMensal}</td>
+                  <td style={{fontWeight:600,color:'#2C7BE5'}}>{c.numero}</td><td>{c.seguradora}</td><td>{c.plano || c.produto || '-'}</td><td>{c.administradora}</td><td>{c.vigencia}</td><td style={{fontWeight:600}}>{c.vidas}</td><td style={{fontWeight:500}}>{c.valorMensal}</td>
                   <td><span className={getStatusBadge(c.status)}>{c.status}</span></td>
                   <td><div style={{display:'flex',gap:'4px'}}>
                     <button onClick={()=>{setSelectedContrato(c);setShowDetail(true);}} style={{background:'none',border:'1px solid #d8e2ef',borderRadius:'4px',padding:'4px 6px',cursor:'pointer',color:'#2C7BE5'}} title="Visualizar"><Eye size={13}/></button>
@@ -116,7 +138,7 @@ const Adesao = () => {
       <Dialog open={showDetail} onOpenChange={setShowDetail}>
         <DialogContent style={{maxWidth:'600px'}}><DialogHeader><DialogTitle>Detalhes do Contrato</DialogTitle></DialogHeader>
           {selectedContrato && (<div style={{padding:'8px 0'}}><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
-            {[['Número',selectedContrato.numero,'#2C7BE5'],['Status',null],['Seguradora',selectedContrato.seguradora],['Produto',selectedContrato.produto],['Administradora',selectedContrato.administradora],['Vigência',selectedContrato.vigencia],['Vidas',selectedContrato.vidas],['Valor Mensal',selectedContrato.valorMensal,'#27ae60']].map(([lbl,val,clr],i)=>(
+            {[['Número',selectedContrato.numero,'#2C7BE5'],['Status',null],['Seguradora',selectedContrato.seguradora],['Plano',selectedContrato.plano || selectedContrato.produto || '-'],['Administradora',selectedContrato.administradora],['Vigência',selectedContrato.vigencia],['Vidas',selectedContrato.vidas],['Valor Mensal',selectedContrato.valorMensal,'#27ae60']].map(([lbl,val,clr],i)=>(
               <div key={i}><label style={{fontSize:'0.68rem',color:'#8a8d93',textTransform:'uppercase',fontWeight:600}}>{lbl}</label>
                 {lbl==='Status'?<p style={{margin:'2px 0'}}><span className={getStatusBadge(selectedContrato.status)}>{selectedContrato.status}</span></p>:
                 <p style={{fontSize:'0.85rem',fontWeight:600,color:clr||'#344050',margin:'2px 0'}}>{val}</p>}
@@ -135,7 +157,23 @@ const Adesao = () => {
               <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Seguradora</label><Input value={formData.seguradora} onChange={e=>setFormData({...formData,seguradora:e.target.value})}/></div>
             </div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
-              <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Produto</label><Input value={formData.produto} onChange={e=>setFormData({...formData,produto:e.target.value})}/></div>
+              <div>
+                <label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Plano</label>
+                {planos.length > 0 ? (
+                  <select 
+                    value={formData.plano} 
+                    onChange={e => setFormData({...formData, plano: e.target.value})}
+                    style={{ width: '100%', border: '1px solid #d8e2ef', borderRadius: '6px', padding: '8px 12px', fontSize: '0.85rem', background: '#fff' }}
+                  >
+                    <option value="">Selecione um plano...</option>
+                    {planos.map(p => (
+                      <option key={p.id} value={p.nome}>{p.nome} ({p.seguradora})</option>
+                    ))}
+                  </select>
+                ) : (
+                  <Input value={formData.plano} onChange={e=>setFormData({...formData, plano:e.target.value})} placeholder="Digite o nome do plano" />
+                )}
+              </div>
               <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Administradora</label><Input value={formData.administradora} onChange={e=>setFormData({...formData,administradora:e.target.value})}/></div>
             </div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px'}}>

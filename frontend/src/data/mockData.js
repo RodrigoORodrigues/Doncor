@@ -37,7 +37,7 @@ export const menuItems = [
     section: "Cadastros",
     items: [
       { id: "seguradoras", label: "Seguradoras", icon: "Building2", page: "seguradoras" },
-      { id: "produtos", label: "Produtos", icon: "Package", page: "produtos" },
+      { id: "produtos", label: "Planos", icon: "Package", page: "produtos" },
       { id: "colaboradores", label: "Colaboradores", icon: "UserCog", page: "colaboradores" },
     ],
   },

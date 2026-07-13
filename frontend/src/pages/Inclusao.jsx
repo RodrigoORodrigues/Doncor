@@ -250,7 +250,7 @@ const Inclusao = () => {
               </div>
 
               <div>
-                <label style={{ fontSize: '0.75rem', color: '#8a8d93', fontWeight: 600, display: 'block', marginBottom: '6px' }}>Selecione o Plano (Produtos) *</label>
+                <label style={{ fontSize: '0.75rem', color: '#8a8d93', fontWeight: 600, display: 'block', marginBottom: '6px' }}>Selecione o Plano *</label>
                 <select 
                   value={selectedProduto} 
                   onChange={e => setSelectedProduto(e.target.value)} 

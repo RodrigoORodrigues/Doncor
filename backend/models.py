@@ -6,7 +6,8 @@ import uuid
 class ContratoAdesaoBase(BaseModel):
     numero: str
     seguradora: str
-    produto: str
+    produto: Optional[str] = ""
+    plano: Optional[str] = ""
     administradora: str
     vigencia: str
     vidas: int = 0
@@ -27,7 +28,7 @@ class ContratoEmpresarialBase(BaseModel):
     empresa: str
     cnpj: str
     seguradora: str
-    produto: str
+    produto: Optional[str] = ""
     plano: Optional[str] = ""
     vigencia: str
     vencimento: str

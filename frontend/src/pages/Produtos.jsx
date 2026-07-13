@@ -42,7 +42,7 @@ const Produtos = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Excluir produto?')) return;
+    if (!window.confirm('Excluir plano?')) return;
     try { await deleteProduto(id); loadData(); } catch(e){console.error(e);}
   };
 
@@ -62,19 +62,19 @@ const Produtos = () => {
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' }}>
         <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
           <div style={{ width:'36px', height:'36px', borderRadius:'8px', background:'#e6832a15', display:'flex', alignItems:'center', justifyContent:'center' }}><Package size={18} color="#e6832a" /></div>
-          <div><h2 style={{ fontSize:'1.1rem', fontWeight:600, color:'#344050', margin:0 }}>Produtos</h2><p style={{ fontSize:'0.72rem', color:'#8a8d93', margin:0 }}>Cadastro e gestão de produtos</p></div>
+          <div><h2 style={{ fontSize:'1.1rem', fontWeight:600, color:'#344050', margin:0 }}>Planos</h2><p style={{ fontSize:'0.72rem', color:'#8a8d93', margin:0 }}>Cadastro e gestão de planos</p></div>
         </div>
-        <Button onClick={()=>setShowNew(true)} style={{ background:'#e6832a', color:'#fff', fontSize:'0.78rem', display:'flex', alignItems:'center', gap:'6px' }}><Plus size={14}/>Novo Produto</Button>
+        <Button onClick={()=>setShowNew(true)} style={{ background:'#e6832a', color:'#fff', fontSize:'0.78rem', display:'flex', alignItems:'center', gap:'6px' }}><Plus size={14}/>Novo Plano</Button>
       </div>
 
       <div className="filters-toggle" onClick={()=>setShowFilters(!showFilters)} style={{background:'#e6832a'}}><Filter size={11} style={{marginRight:'4px'}}/>Filtros</div>
       {showFilters && (<div style={{ background:'#fff', borderRadius:'0 0 8px 8px', padding:'16px', marginBottom:'12px', boxShadow:'0 1px 3px rgba(0,0,0,0.06)' }}>
-        <div style={{flex:1,position:'relative'}}><Search size={14} style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',color:'#8a8d93'}}/><Input placeholder="Buscar produto ou seguradora..." value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}} style={{paddingLeft:'32px',fontSize:'0.8rem'}}/></div>
+        <div style={{flex:1,position:'relative'}}><Search size={14} style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',color:'#8a8d93'}}/><Input placeholder="Buscar plano ou seguradora..." value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}} style={{paddingLeft:'32px',fontSize:'0.8rem'}}/></div>
       </div>)}
 
       <div style={{ background:'#fff', borderRadius:'8px', boxShadow:'0 1px 3px rgba(0,0,0,0.06)', overflow:'hidden', marginTop:showFilters?'0':'12px' }}>
         {loading ? <div style={{display:'flex',justifyContent:'center',padding:'40px'}}><Loader2 size={24} style={{color:'#e6832a',animation:'spin 1s linear infinite'}}/></div> : (
-          <table className="data-table"><thead><tr><th>Produto</th><th>Seguradora</th><th>Tipo</th><th>Cobertura</th><th>Acomodação</th><th>Contratos</th><th>Status</th><th style={{width:'100px'}}>Ações</th></tr></thead>
+          <table className="data-table"><thead><tr><th>Plano</th><th>Seguradora</th><th>Tipo</th><th>Cobertura</th><th>Acomodação</th><th>Contratos</th><th>Status</th><th style={{width:'100px'}}>Ações</th></tr></thead>
             <tbody>{paged.map(item=>(<tr key={item.id}>
               {editingId===item.id ? (<>
                 <td>{inlineInput('nome')}</td><td>{inlineInput('seguradora')}</td><td>{inlineSelect('tipo',['Saúde','Odonto','Vida'])}</td><td>{inlineSelect('cobertura',['Nacional','Regional','Municipal'])}</td><td>{inlineSelect('acomodacao',['Enfermaria','Apartamento'])}</td>
@@ -99,7 +99,7 @@ const Produtos = () => {
       </div>
       <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} totalItems={data.length} pageSize={PAGE_SIZE} />
 
-      <Dialog open={showNew} onOpenChange={setShowNew}><DialogContent style={{maxWidth:'550px'}}><DialogHeader><DialogTitle>Novo Produto</DialogTitle></DialogHeader>
+      <Dialog open={showNew} onOpenChange={setShowNew}><DialogContent style={{maxWidth:'550px'}}><DialogHeader><DialogTitle>Novo Plano</DialogTitle></DialogHeader>
         <div style={{display:'flex',flexDirection:'column',gap:'10px',padding:'8px 0'}}>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
             <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Nome</label><Input value={form.nome} onChange={e=>setForm({...form,nome:e.target.value})}/></div>
