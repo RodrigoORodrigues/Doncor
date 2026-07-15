@@ -4,6 +4,7 @@ import { UserMinus, Search, Filter, Loader2 } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
+import { formatCPF, validateCPF } from '../lib/utils';
 
 const initialFormData = { contrato:'', beneficiario:'', cpf:'', dataFim:'', motivo:'Solicitação do titular' };
 
@@ -15,6 +16,8 @@ const Exclusao = () => {
   const [showNew, setShowNew] = useState(false);
   const [formData, setFormData] = useState(initialFormData);
   const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [selectedProtocol, setSelectedProtocol] = useState(null);
 
   // Confirmar Efetivação
   const [showConfirm, setShowConfirm] = useState(false);
@@ -29,14 +32,32 @@ const Exclusao = () => {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  useEffect(() => {
+    if (!showNew) {
+      setErrorMsg('');
+    }
+  }, [showNew]);
+
   const handleCreate = async () => {
+    if (!formData.cpf?.trim()) {
+      setErrorMsg('O preenchimento do CPF é obrigatório.');
+      return;
+    }
+    if (!validateCPF(formData.cpf)) {
+      setErrorMsg('CPF inválido. Verifique o número digitado.');
+      return;
+    }
     setSaving(true);
     try {
       await createExclusao(formData);
       setShowNew(false);
       setFormData(initialFormData);
+      setErrorMsg('');
       loadData();
-    } catch(e){console.error(e);}
+    } catch(e){
+      console.error(e);
+      setErrorMsg('Erro ao salvar exclusão.');
+    }
     setSaving(false);
   };
 
@@ -83,7 +104,24 @@ const Exclusao = () => {
         {loading ? <div style={{display:'flex',justifyContent:'center',padding:'40px'}}><Loader2 size={24} style={{color:'#e63757',animation:'spin 1s linear infinite'}}/></div> : (
           <table className="data-table"><thead><tr><th>Protocolo</th><th>Contrato</th><th>Beneficiário</th><th>CPF</th><th>Data Fim</th><th>Motivo</th><th>Solicitação</th><th>Status</th><th style={{ textAlign: 'center' }}>Ações</th></tr></thead>
             <tbody>{data.map((item,i)=>(<tr key={i}>
-              <td style={{fontWeight:600,color:'#e63757'}}>{item.protocolo}</td>
+              <td style={{fontWeight:600,color:'#e63757'}}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedProtocol(item)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    color: '#e63757',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    textAlign: 'left'
+                  }}
+                >
+                  {item.protocolo}
+                </button>
+              </td>
               <td style={{color:'#2C7BE5',fontWeight:500}}>{item.contrato}</td>
               <td style={{fontWeight:500}}>{item.beneficiario}</td>
               <td style={{fontSize:'0.75rem',color:'#5E6E82'}}>{item.cpf}</td>
@@ -109,11 +147,12 @@ const Exclusao = () => {
       <div style={{display:'flex',justifyContent:'space-between',marginTop:'12px',fontSize:'0.72rem',color:'#8a8d93'}}><span>Exibindo {data.length} registros</span></div>
 
       <Dialog open={showNew} onOpenChange={setShowNew}><DialogContent style={{maxWidth:'500px'}}><DialogHeader><DialogTitle>Nova Exclusão</DialogTitle></DialogHeader>
+        {errorMsg && <div style={{ padding: '8px 12px', background: '#ffe2e2', color: '#991b1b', border: '1px solid #fecdd3', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600 }}>⚠️ {errorMsg}</div>}
         <div style={{display:'flex',flexDirection:'column',gap:'12px',padding:'8px 0'}}>
-          <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Contrato</label><Input value={formData.contrato} onChange={e=>setFormData({...formData,contrato:e.target.value})}/></div>
-          <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Beneficiário</label><Input value={formData.beneficiario} onChange={e=>setFormData({...formData,beneficiario:e.target.value})}/></div>
+          <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Contrato</label><Input value={formData.contrato} onChange={e=>{ setErrorMsg(''); setFormData({...formData,contrato:e.target.value}); }}/></div>
+          <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Beneficiário</label><Input value={formData.beneficiario} onChange={e=>{ setErrorMsg(''); setFormData({...formData,beneficiario:e.target.value}); }}/></div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
-            <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>CPF</label><Input value={formData.cpf} onChange={e=>setFormData({...formData,cpf:e.target.value})}/></div>
+            <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>CPF</label><Input value={formData.cpf} onChange={e=>{ setErrorMsg(''); setFormData({...formData,cpf:formatCPF(e.target.value)}); }}/></div>
             <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Data Fim</label><Input type="date" value={formData.dataFim} onChange={e=>setFormData({...formData,dataFim:e.target.value})}/></div>
           </div>
           <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Motivo</label>
@@ -142,6 +181,70 @@ const Exclusao = () => {
               disabled={actionLoading}
             >
               {actionLoading ? 'Processando...' : 'Confirmar Efetivação ✅'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Detalhes do Protocolo */}
+      <Dialog open={!!selectedProtocol} onOpenChange={(open) => !open && setSelectedProtocol(null)}>
+        <DialogContent style={{ maxWidth: '600px' }}>
+          <DialogHeader>
+            <DialogTitle style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1a3a52', fontSize: '1.25rem' }}>
+              📄 Detalhes da Solicitação ({selectedProtocol?.protocolo})
+            </DialogTitle>
+          </DialogHeader>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', padding: '12px 0', fontSize: '0.85rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Protocolo</span>
+              <span style={{ fontWeight: 700, color: '#1a3a52', fontSize: '0.95rem' }}>{selectedProtocol?.protocolo}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Status</span>
+              <span>
+                <span className={selectedProtocol ? getStatusBadge(selectedProtocol.status) : ''} style={{ display: 'inline-block' }}>
+                  {selectedProtocol?.status}
+                </span>
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Tipo</span>
+              <span style={{ fontWeight: 500, color: '#344050' }}>Exclusão de Beneficiário</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Data de Solicitação</span>
+              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.dataSolicitacao}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: 'span 2' }}>
+              <div style={{ height: '1px', background: '#e2e8f0', margin: '4px 0' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Beneficiário</span>
+              <span style={{ fontWeight: 600, color: '#1a3a52' }}>{selectedProtocol?.beneficiario}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>CPF</span>
+              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.cpf}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Data de Fim (Vigência)</span>
+              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.dataFim || '-'}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Motivo da Exclusão</span>
+              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.motivo || '-'}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: 'span 2' }}>
+              <div style={{ height: '1px', background: '#e2e8f0', margin: '4px 0' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: 'span 2' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Contrato Relacionado</span>
+              <span style={{ fontWeight: 600, color: '#2C7BE5' }}>{selectedProtocol?.contrato || '-'}</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setSelectedProtocol(null)} style={{ background: '#1a3a52', color: '#fff', width: '100%' }}>
+              Fechar Detalhes
             </Button>
           </DialogFooter>
         </DialogContent>

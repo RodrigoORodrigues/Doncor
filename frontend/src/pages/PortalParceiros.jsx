@@ -16,6 +16,7 @@ const initialFormData = {
   contratos: '',
   status: 'Ativo',
   observacoes: '',
+  acessoSinistralidade: false,
 };
 
 const onlyDigits = (value) => String(value || '').replace(/\D/g, '');
@@ -70,6 +71,7 @@ const PortalParceiros = () => {
       contratos: formatContracts(item.contratos),
       status: item.status || 'Ativo',
       observacoes: item.observacoes || '',
+      acessoSinistralidade: !!item.acessoSinistralidade,
     });
     setError('');
     setShowForm(true);
@@ -136,12 +138,17 @@ const PortalParceiros = () => {
 
       <div style={{ background:'#fff', borderRadius:'8px', boxShadow:'0 1px 3px rgba(0,0,0,0.06)', overflow:'auto', marginTop:showFilters?'0':'12px' }}>
         {loading ? <div style={{display:'flex',justifyContent:'center',padding:'40px'}}><Loader2 size={24} style={{color:'#2C7BE5',animation:'spin 1s linear infinite'}}/></div> : (
-          <table className="data-table"><thead><tr><th>Tipo</th><th>CPF/CNPJ</th><th>Nome</th><th>Empresa</th><th>E-mail</th><th>Telefone</th><th>Contratos</th><th>Senha</th><th>Status</th><th>Ações</th></tr></thead>
+          <table className="data-table"><thead><tr><th>Tipo</th><th>CPF/CNPJ</th><th>Nome</th><th>Empresa</th><th>E-mail</th><th>Telefone</th><th>Contratos</th><th>Sinistralidade & BI</th><th>Senha</th><th>Status</th><th>Ações</th></tr></thead>
             <tbody>{data.map((item)=>(<tr key={item.id || item.documento}>
               <td style={{fontWeight:700,color:'#2C7BE5'}}>{item.tipo || formatDocType(item.documento)}</td>
               <td style={{fontWeight:600}}>{item.documento}</td>
               <td>{item.nome || '-'}</td><td>{item.empresa || '-'}</td><td>{item.email || '-'}</td><td>{item.telefone || '-'}</td>
               <td style={{maxWidth:'220px',whiteSpace:'normal'}}>{formatContracts(item.contratos) || '-'}</td>
+              <td>
+                <span className={item.acessoSinistralidade ? 'badge-aprovado' : 'badge-cancelado'}>
+                  {item.acessoSinistralidade ? 'Permitido' : 'Bloqueado'}
+                </span>
+              </td>
               <td><span className={item.senhaDefinida ? 'badge-aprovado' : 'badge-pendente'}>{item.senhaDefinida ? 'Definida' : 'Pendente'}</span></td>
               <td><span className={statusBadge(item.status)}>{item.status || 'Ativo'}</span></td>
               <td><div style={{display:'flex',gap:'6px'}}><Button variant="outline" onClick={()=>openEdit(item)} style={{padding:'6px 8px'}}><Pencil size={13}/></Button><Button variant="outline" onClick={()=>handleDelete(item)} style={{padding:'6px 8px',color:'#e63757'}}><Trash2 size={13}/></Button></div></td>
@@ -170,6 +177,18 @@ const PortalParceiros = () => {
           <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>E-mail</label><Input type="email" placeholder="email@empresa.com.br" value={formData.email} onChange={e=>updateField('email', e.target.value)}/></div>
           <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Contratos vinculados</label><Input placeholder="Ex.: EMP-2024-001, EMP-2024-002" value={formData.contratos} onChange={e=>updateField('contratos', e.target.value)}/><div style={{fontSize:'0.68rem',color:'#8a8d93',marginTop:'4px'}}>Separe contratos por vírgula, ponto e vírgula ou quebra de linha. Se deixar vazio, o portal tentará localizar automaticamente pelo CPF/CNPJ nos contratos/movimentações.</div></div>
           <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Observações</label><textarea placeholder="Observações internas sobre este acesso" value={formData.observacoes} onChange={e=>updateField('observacoes', e.target.value)} style={{width:'100%',minHeight:'78px',border:'1px solid #d8e2ef',borderRadius:'6px',padding:'8px 12px',fontSize:'0.85rem',fontFamily:'inherit'}} /></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', marginTop: '4px' }}>
+            <input 
+              type="checkbox" 
+              id="acessoSinistralidade"
+              checked={!!formData.acessoSinistralidade} 
+              onChange={e => updateField('acessoSinistralidade', e.target.checked)} 
+              style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#2C7BE5' }}
+            />
+            <label htmlFor="acessoSinistralidade" style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+              Liberar acesso à seção "Sinistralidade e BI" para este cliente
+            </label>
+          </div>
         </div>
         <DialogFooter><Button variant="outline" onClick={()=>setShowForm(false)}>Cancelar</Button><Button style={{background:'#2C7BE5',color:'#fff'}} onClick={handleSave} disabled={saving}>{saving?'Salvando...':'Salvar Acesso'}</Button></DialogFooter>
       </DialogContent></Dialog>

@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, BarChart3, Bell, Building2, Download, Eye, FileText, FolderOpen, HelpCircle, Home, LogOut, MessageCircle, Paperclip, Receipt, RefreshCw, Search, Send, Shield, UploadCloud, UserMinus, UserPlus, User, Settings, ChevronDown, Trash2, Mail, Phone } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, AreaChart, Area, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, AreaChart, Area, Cell, PieChart, Pie } from 'recharts';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import DoncorLogo from '../components/DoncorLogo';
+import { formatCPF, formatCNPJ, formatCPFOrCNPJ, formatPhone, validateCPF, validateCNPJ, validateCPFOrCNPJ } from '../lib/utils';
 import {
   loginPortalDonCor,
   fetchPortalDonCorResumo,
@@ -86,6 +87,7 @@ const defaultMovementForms = {
     dataNascimento: '',
     estadoCivil: '',
     parentesco: 'Titular',
+    genero: '',
     email: '',
     telefone: '',
     detalhes: '',
@@ -246,15 +248,30 @@ const PortalDonCor = () => {
   }, [session]);
 
   const [configForm, setConfigForm] = useState({ notifications: true, autoUpdate: true });
+  const [fixedOperadoras, setFixedOperadoras] = useState([]);
+
+  const handleAddFixedOperadora = (name) => {
+    if (name && name.trim()) {
+      const trimmed = name.trim();
+      setFixedOperadoras((prev) => {
+        if (!prev.includes(trimmed)) {
+          return [...prev, trimmed];
+        }
+        return prev;
+      });
+    }
+  };
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [payload, setPayload] = useState(null);
   const [messages, setMessages] = useState([]);
+  const filteredChatMessages = useMemo(() => messages.filter((m) => !m.protocolo), [messages]);
   const [contratosDb, setContratosDb] = useState([]);
   const [contratosSearch, setContratosSearch] = useState('');
   const [contratosStatusFilter, setContratosStatusFilter] = useState('Todos');
   const [contratosVigenciaFilter, setContratosVigenciaFilter] = useState('Todas');
   const [selectedContratoDetail, setSelectedContratoDetail] = useState(null);
+  const [selectedProtocolDetail, setSelectedProtocolDetail] = useState(null);
   const [message, setMessage] = useState('');
   const [attachment, setAttachment] = useState(null);
   const [formularios, setFormularios] = useState([]);
@@ -281,17 +298,22 @@ const PortalDonCor = () => {
   }, [session, perfilForm]);
 
   const filteredMenuItems = useMemo(() => {
-    return [
+    const items = [
       { id: 'dashboard', label: 'Dashboard', icon: Home },
       { id: 'contratos', label: 'Contratos', icon: FolderOpen },
       { id: 'faturas', label: 'Faturas', icon: Receipt },
-      { id: 'bi', label: 'Sinistralidade e BI', icon: BarChart3 },
+    ];
+    if (session?.acessoSinistralidade) {
+      items.push({ id: 'bi', label: 'Sinistralidade e BI', icon: BarChart3 });
+    }
+    items.push(
       { id: 'movimentacao', label: 'Movimentação', icon: RefreshCw },
       { id: 'solicitacoes', label: 'Solicitações', icon: FileText },
       { id: 'formularios', label: 'Formulários e Manuais', icon: FileText },
-      { id: 'chat', label: 'Chat', icon: MessageCircle },
-    ];
-  }, []);
+      { id: 'chat', label: 'Chat', icon: MessageCircle }
+    );
+    return items;
+  }, [session]);
 
   const isLengthValid = newPass.length >= 8;
   const containsSpecialChar = /[^A-Za-z0-9]/.test(newPass);
@@ -624,12 +646,24 @@ const PortalDonCor = () => {
       if (!form.planos || form.planos.length === 0) missingFields.push('Pelo menos um Plano (Saúde/Dental)');
       if (!form.beneficiario?.trim()) missingFields.push('Nome Completo do Beneficiário');
       if (!form.nomeMae?.trim()) missingFields.push('Nome da Mãe');
-      if (!form.cpf?.trim()) missingFields.push('CPF');
+      if (!form.cpf?.trim()) {
+        missingFields.push('CPF');
+      } else if (!validateCPF(form.cpf)) {
+        missingFields.push('CPF inválido');
+      }
       if (!form.dataNascimento) missingFields.push('Data de Nascimento');
       if (!form.estadoCivil) missingFields.push('Estado Civil');
       if (!form.parentesco) missingFields.push('Parentesco');
+      if (!form.genero) missingFields.push('Gênero');
       if (!form.email?.trim()) missingFields.push('E-mail');
-      if (!form.telefone?.trim()) missingFields.push('Telefone');
+      if (!form.telefone?.trim()) {
+        missingFields.push('Telefone');
+      } else {
+        const cleanPhone = form.telefone.replace(/\D/g, '');
+        if (cleanPhone.length < 10 || cleanPhone.length > 11) {
+          missingFields.push('Telefone inválido (mínimo de 10 ou 11 dígitos)');
+        }
+      }
 
       // Attachments check - only 'Outros' is optional!
       const requiredDocs = ['RG / CPF', 'Comprovante de Residência', 'CTPS / eSocial', 'Formulário Assinado'];
@@ -648,7 +682,11 @@ const PortalDonCor = () => {
       if (form.operadora === 'Outra' && !form.outraOperadora?.trim()) missingFields.push('Nome da outra Operadora');
       if (!form.planos || form.planos.length === 0) missingFields.push('Pelo menos um Plano (Saúde/Dental)');
       if (!form.beneficiario?.trim()) missingFields.push('Nome Completo');
-      if (!form.cpf?.trim()) missingFields.push('CPF');
+      if (!form.cpf?.trim()) {
+        missingFields.push('CPF');
+      } else if (!validateCPF(form.cpf)) {
+        missingFields.push('CPF inválido');
+      }
       
       // Attachments check - only 'Outros' is optional!
       const requiredDocs = ['Termo de Rescisão', 'Formulário de Exclusão Assinado'];
@@ -665,7 +703,11 @@ const PortalDonCor = () => {
     } else if (section === 'alteracao') {
       if (!form.planos || form.planos.length === 0) missingFields.push('Selecione pelo menos um Contrato/Plano');
       if (!form.beneficiario?.trim()) missingFields.push('Nome Completo');
-      if (!form.cpf?.trim()) missingFields.push('CPF');
+      if (!form.cpf?.trim()) {
+        missingFields.push('CPF');
+      } else if (!validateCPF(form.cpf)) {
+        missingFields.push('CPF inválido');
+      }
       
       // Support files list attachments are required
       if (!attachments || attachments.length === 0) {
@@ -694,7 +736,15 @@ const PortalDonCor = () => {
       return hasOutros && (!form.outrosDescricao || !form.outrosDescricao.trim());
     }
     const val = form[fieldName];
-    return !val || (typeof val === 'string' && !val.trim());
+    if (!val || (typeof val === 'string' && !val.trim())) return true;
+    if (fieldName === 'cpf') {
+      return !validateCPF(val);
+    }
+    if (fieldName === 'telefone') {
+      const cleanPhone = val.replace(/\D/g, '');
+      return cleanPhone.length < 10 || cleanPhone.length > 11;
+    }
+    return false;
   };
 
   const isAttachmentInvalid = (section, docName) => {
@@ -736,6 +786,9 @@ const PortalDonCor = () => {
     const contrato = form.contrato || payload?.parceiro?.contratos?.[0] || contratos?.[0]?.contrato || '';
     setSubmittingMovement(true);
     const resolvedOperadora = form.operadora === 'Outra' ? (form.outraOperadora || 'Outra') : form.operadora;
+    if (form.operadora === 'Outra' && form.outraOperadora?.trim()) {
+      handleAddFixedOperadora(form.outraOperadora);
+    }
     try {
       const attachmentsList = getMovementAttachments(section);
       const attachmentsWithBase64 = await Promise.all(
@@ -804,6 +857,26 @@ const PortalDonCor = () => {
     return list;
   }, [contratosDb, faturas, payload]);
 
+  const uniqueOperadoras = useMemo(() => {
+    const set = new Set();
+    contratos.forEach(item => {
+      if (item.seguradora && item.seguradora !== '-' && item.seguradora !== 'DonCor') {
+        set.add(item.seguradora);
+      }
+    });
+    return Array.from(set);
+  }, [contratos]);
+
+  const availableOperadoras = useMemo(() => {
+    const list = [...uniqueOperadoras];
+    fixedOperadoras.forEach(op => {
+      if (op && op.trim() && !list.includes(op.trim())) {
+        list.push(op.trim());
+      }
+    });
+    return list;
+  }, [uniqueOperadoras, fixedOperadoras]);
+
   const filteredContratosList = useMemo(() => {
     let list = contratos;
     if (contratosSearch.trim()) {
@@ -837,7 +910,7 @@ const PortalDonCor = () => {
     () => solicitacoes.filter((item) => !String(item.status || '').toLowerCase().includes('concl')).length,
     [solicitacoes]
   );
-  const mensagensAtendimento = useMemo(() => messages.length, [messages]);
+  const mensagensAtendimento = useMemo(() => filteredChatMessages.length, [filteredChatMessages]);
   const solicitacoesPorStatus = useMemo(() => {
     const base = [
       { key: 'recebido', label: 'Recebido', value: 0, color: theme.muted },
@@ -1001,7 +1074,7 @@ const PortalDonCor = () => {
               <div style={{ marginBottom: 24 }}><div style={{ marginBottom: 14 }}><DoncorLogo size={40} /></div><h2 style={{ margin: 0, fontSize: '1.55rem', color: theme.text }}>Redefinir Senha</h2><p style={{ margin: '8px 0 0', color: theme.muted, fontSize: '0.9rem' }}>Informe seus dados para recuperar o acesso.</p></div>
               {esqueciError && <div style={{ background:'#fff1f2', border:'1px solid #fecdd3', color:'#be123c', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{esqueciError}</div>}
               {esqueciSuccess && <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', color:'#15803d', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{esqueciSuccess}</div>}
-              <label style={{ display:'block', color:theme.text, fontWeight:800, fontSize:'0.84rem', marginBottom:6 }}>CNPJ ou CPF vinculado</label><Input value={documento} onChange={(event) => setDocumento(event.target.value)} placeholder="Digite o CNPJ da empresa ou CPF" style={{ marginBottom:12 }} />
+              <label style={{ display:'block', color:theme.text, fontWeight:800, fontSize:'0.84rem', marginBottom:6 }}>CNPJ ou CPF vinculado</label><Input value={documento} onChange={(event) => setDocumento(formatCPFOrCNPJ(event.target.value))} placeholder="Digite o CNPJ da empresa ou CPF" style={{ marginBottom:12 }} />
               <label style={{ display:'block', color:theme.text, fontWeight:800, fontSize:'0.84rem', marginBottom:6 }}>E-mail cadastrado</label><Input type="email" value={esqueciEmail} onChange={(event) => setEsqueciEmail(event.target.value)} placeholder="Digite o e-mail da conta" style={{ marginBottom:12 }} />
               <label style={{ display:'block', color:theme.text, fontWeight:800, fontSize:'0.84rem', marginBottom:6 }}>Nova Senha</label><Input type="password" value={esqueciSenha} onChange={(event) => setEsqueciSenha(event.target.value)} placeholder="Mínimo 6 caracteres" style={{ marginBottom:14 }} />
               <button type="button" onClick={() => setShowForgot(false)} style={{ border:0, background:'transparent', color:theme.muted, cursor:'pointer', fontSize:'0.84rem', marginBottom:14, padding:0, textDecoration: 'underline' }}>Voltar para o login</button>
@@ -1011,7 +1084,7 @@ const PortalDonCor = () => {
             <form onSubmit={handleLogin} style={{ width: '100%', background: theme.card, border: `1px solid ${theme.border}`, borderRadius: 22, padding: 30, boxShadow: '0 24px 70px rgba(15,23,42,0.12)' }}>
               <div style={{ marginBottom: 24 }}><div style={{ marginBottom: 14 }}><DoncorLogo size={40} /></div><h2 style={{ margin: 0, fontSize: '1.55rem', color: theme.text }}>Entrar no Portal do Cliente</h2><p style={{ margin: '8px 0 0', color: theme.muted, fontSize: '0.9rem' }}>Use o CNPJ/CPF vinculado e sua senha de acesso.</p></div>
               {error && <div style={{ background:'#fff1f2', border:'1px solid #fecdd3', color:'#be123c', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:'0.86rem' }}>{error}</div>}
-              <label style={{ display:'block', color:theme.text, fontWeight:800, fontSize:'0.84rem', marginBottom:6 }}>CNPJ ou CPF vinculado</label><Input value={documento} onChange={(event) => setDocumento(event.target.value)} placeholder="Digite o CNPJ da empresa ou CPF" style={{ marginBottom:12 }} />
+              <label style={{ display:'block', color:theme.text, fontWeight:800, fontSize:'0.84rem', marginBottom:6 }}>CNPJ ou CPF vinculado</label><Input value={documento} onChange={(event) => setDocumento(formatCPFOrCNPJ(event.target.value))} placeholder="Digite o CNPJ da empresa ou CPF" style={{ marginBottom:12 }} />
               <label style={{ display:'block', color:theme.text, fontWeight:800, fontSize:'0.84rem', marginBottom:6 }}>Senha</label><Input type="password" value={senha} onChange={(event) => setSenha(event.target.value)} placeholder="Digite sua senha" style={{ marginBottom:10 }} />
               <button type="button" onClick={() => { setShowForgot(true); setError(''); }} style={{ border:0, background:'transparent', color:theme.blue, cursor:'pointer', fontSize:'0.78rem', marginBottom:14, padding:0 }}>Esqueci minha senha</button>
               <Button type="submit" disabled={loading} style={{ width:'100%', background:theme.blue, color:'#fff', fontWeight:900 }}>{loading ? 'Validando...' : 'Entrar no Portal do Cliente'}</Button>
@@ -1049,6 +1122,131 @@ const PortalDonCor = () => {
                 </BarChart>
               </ResponsiveContainer>
             )}
+          </div>
+
+          {/* Seção com os Gráficos adicionais de Gênero e Titularidade */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, marginTop: 32, borderTop: '1px solid #f0f2f5', paddingTop: 24 }}>
+            {/* Gráfico de Gênero */}
+            <div style={{ background: '#fff', border: `1px solid ${theme.border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ background: '#15A4C4', color: '#fff', padding: '10px 16px', textAlign: 'center', fontWeight: '700', fontSize: '0.88rem', letterSpacing: '0.3px' }}>
+                Qtde de Beneficiários por Gênero
+              </div>
+              <div style={{ padding: '24px 16px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                <div style={{ position: 'relative', width: '100%', height: 220, maxWidth: 280, display: 'flex', justifyContent: 'center' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'M', value: 49, color: '#2C7BE5', percentage: '62,82%' },
+                          { name: 'F', value: 29, color: '#e63757', percentage: '37,18%' }
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={75}
+                        paddingAngle={0}
+                        dataKey="value"
+                        label={({ value, percentage }) => `${value} (${percentage})`}
+                        labelLine={true}
+                      >
+                        {[
+                          { name: 'M', value: 49, color: '#2C7BE5', percentage: '62,82%' },
+                          { name: 'F', value: 29, color: '#e63757', percentage: '37,18%' }
+                        ].map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        formatter={(value, name, props) => [`${value} (${props.payload.percentage})`, name === 'M' ? 'Masculino' : 'Feminino']}
+                        contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    textAlign: 'center',
+                    pointerEvents: 'none'
+                  }}>
+                    <div style={{ fontSize: '2.2rem', fontWeight: '800', color: theme.text, lineHeight: 1 }}>78</div>
+                  </div>
+                </div>
+                
+                {/* Legenda Gênero */}
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 16, fontSize: '0.82rem', color: theme.text }}>
+                  <span style={{ fontWeight: 700, color: '#4a5568' }}>Genero</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#2C7BE5', display: 'inline-block' }} /> M
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#e63757', display: 'inline-block' }} /> F
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Gráfico de Titularidade */}
+            <div style={{ background: '#fff', border: `1px solid ${theme.border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ background: '#15A4C4', color: '#fff', padding: '10px 16px', textAlign: 'center', fontWeight: '700', fontSize: '0.88rem', letterSpacing: '0.3px' }}>
+                Qtde de Beneficiários por Titularidade
+              </div>
+              <div style={{ padding: '24px 16px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                <div style={{ position: 'relative', width: '100%', height: 220, maxWidth: 280, display: 'flex', justifyContent: 'center' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'T', value: 58, color: '#166534', percentage: '74,36%' },
+                          { name: 'D', value: 20, color: '#a3e635', percentage: '25,64%' }
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={75}
+                        paddingAngle={0}
+                        dataKey="value"
+                        label={({ value, percentage }) => `${value} (${percentage})`}
+                        labelLine={true}
+                      >
+                        {[
+                          { name: 'T', value: 58, color: '#166534', percentage: '74,36%' },
+                          { name: 'D', value: 20, color: '#a3e635', percentage: '25,64%' }
+                        ].map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        formatter={(value, name, props) => [`${value} (${props.payload.percentage})`, name === 'T' ? 'Titular' : 'Dependente']}
+                        contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    textAlign: 'center',
+                    pointerEvents: 'none'
+                  }}>
+                    <div style={{ fontSize: '2.2rem', fontWeight: '800', color: theme.text, lineHeight: 1 }}>78</div>
+                  </div>
+                </div>
+                
+                {/* Legenda Titularidade */}
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 16, fontSize: '0.82rem', color: theme.text }}>
+                  <span style={{ fontWeight: 700, color: '#4a5568' }}>Titularidade</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#166534', display: 'inline-block' }} /> T
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#a3e635', display: 'inline-block' }} /> D
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       </div>
@@ -1323,10 +1521,9 @@ const PortalDonCor = () => {
                 onChange={(event) => updateMovementField('inclusao', 'operadora', event.target.value)}
               >
                 <option value="">Selecione a Operadora</option>
-                <option>Assim Saúde</option>
-                <option>Amil</option>
-                <option>SulAmérica</option>
-                <option>Bradesco Saúde</option>
+                {availableOperadoras.map((op) => (
+                  <option key={op} value={op}>{op}</option>
+                ))}
                 <option value="Outra">Outra</option>
               </select>
               {isFieldInvalid('inclusao', 'operadora') && (
@@ -1341,6 +1538,25 @@ const PortalDonCor = () => {
                     placeholder="Digite o nome da outra operadora"
                     value={form.outraOperadora || ''}
                     onChange={(event) => updateMovementField('inclusao', 'outraOperadora', event.target.value)}
+                    onBlur={() => {
+                      if (form.outraOperadora?.trim()) {
+                        const val = form.outraOperadora.trim();
+                        handleAddFixedOperadora(val);
+                        updateMovementField('inclusao', 'operadora', val);
+                        updateMovementField('inclusao', 'outraOperadora', '');
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        if (form.outraOperadora?.trim()) {
+                          const val = form.outraOperadora.trim();
+                          handleAddFixedOperadora(val);
+                          updateMovementField('inclusao', 'operadora', val);
+                          updateMovementField('inclusao', 'outraOperadora', '');
+                        }
+                      }
+                    }}
                     style={{
                       border: isFieldInvalid('inclusao', 'outraOperadora') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
                       boxShadow: isFieldInvalid('inclusao', 'outraOperadora') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
@@ -1426,7 +1642,7 @@ const PortalDonCor = () => {
               <Input
                 placeholder="000.000.000-00"
                 value={form.cpf}
-                onChange={(event) => updateMovementField('inclusao', 'cpf', event.target.value)}
+                onChange={(event) => updateMovementField('inclusao', 'cpf', formatCPF(event.target.value))}
                 style={{
                   border: isFieldInvalid('inclusao', 'cpf') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
                   boxShadow: isFieldInvalid('inclusao', 'cpf') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
@@ -1496,6 +1712,7 @@ const PortalDonCor = () => {
                 <option>Titular</option>
                 <option>Cônjuge</option>
                 <option>Filho(a)</option>
+                <option>Entiado</option>
                 <option>Dependente</option>
               </select>
               {isFieldInvalid('inclusao', 'parentesco') && (
@@ -1528,7 +1745,7 @@ const PortalDonCor = () => {
               <Input
                 placeholder="(11) 90000-0000"
                 value={form.telefone}
-                onChange={(event) => updateMovementField('inclusao', 'telefone', event.target.value)}
+                onChange={(event) => updateMovementField('inclusao', 'telefone', formatPhone(event.target.value))}
                 style={{
                   border: isFieldInvalid('inclusao', 'telefone') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
                   boxShadow: isFieldInvalid('inclusao', 'telefone') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
@@ -1538,6 +1755,28 @@ const PortalDonCor = () => {
               {isFieldInvalid('inclusao', 'telefone') && (
                 <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
                   ⚠️ O preenchimento do Telefone é obrigatório.
+                </span>
+              )}
+            </div>
+            <div>
+              <label style={fieldLabel}>Gênero *</label>
+              <select
+                style={{
+                  ...selectStyle,
+                  border: isFieldInvalid('inclusao', 'genero') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                  boxShadow: isFieldInvalid('inclusao', 'genero') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+                value={form.genero || ''}
+                onChange={(event) => updateMovementField('inclusao', 'genero', event.target.value)}
+              >
+                <option value="">Selecione</option>
+                <option>Masculino</option>
+                <option>Feminino</option>
+              </select>
+              {isFieldInvalid('inclusao', 'genero') && (
+                <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
+                  ⚠️ Selecione o Gênero.
                 </span>
               )}
             </div>
@@ -1708,9 +1947,9 @@ const PortalDonCor = () => {
                 onChange={(event) => updateMovementField('exclusao', 'operadora', event.target.value)}
               >
                 <option value="">Selecione a operadora</option>
-                <option>Assim Saúde</option>
-                <option>Amil</option>
-                <option>SulAmérica</option>
+                {availableOperadoras.map((op) => (
+                  <option key={op} value={op}>{op}</option>
+                ))}
                 <option value="Outra">Outra</option>
               </select>
               {isFieldInvalid('exclusao', 'operadora') && (
@@ -1725,6 +1964,25 @@ const PortalDonCor = () => {
                     placeholder="Digite o nome da outra operadora"
                     value={form.outraOperadora || ''}
                     onChange={(event) => updateMovementField('exclusao', 'outraOperadora', event.target.value)}
+                    onBlur={() => {
+                      if (form.outraOperadora?.trim()) {
+                        const val = form.outraOperadora.trim();
+                        handleAddFixedOperadora(val);
+                        updateMovementField('exclusao', 'operadora', val);
+                        updateMovementField('exclusao', 'outraOperadora', '');
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        if (form.outraOperadora?.trim()) {
+                          const val = form.outraOperadora.trim();
+                          handleAddFixedOperadora(val);
+                          updateMovementField('exclusao', 'operadora', val);
+                          updateMovementField('exclusao', 'outraOperadora', '');
+                        }
+                      }
+                    }}
                     style={{
                       border: isFieldInvalid('exclusao', 'outraOperadora') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
                       boxShadow: isFieldInvalid('exclusao', 'outraOperadora') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
@@ -1792,7 +2050,7 @@ const PortalDonCor = () => {
               <Input
                 placeholder="000.000.000-00"
                 value={form.cpf}
-                onChange={(event) => updateMovementField('exclusao', 'cpf', event.target.value)}
+                onChange={(event) => updateMovementField('exclusao', 'cpf', formatCPF(event.target.value))}
                 style={{
                   border: isFieldInvalid('exclusao', 'cpf') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
                   boxShadow: isFieldInvalid('exclusao', 'cpf') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
@@ -2015,7 +2273,7 @@ const PortalDonCor = () => {
               <Input
                 placeholder="000.000.000-00"
                 value={form.cpf}
-                onChange={(event) => updateMovementField('alteracao', 'cpf', event.target.value)}
+                onChange={(event) => updateMovementField('alteracao', 'cpf', formatCPF(event.target.value))}
                 style={{
                   border: isFieldInvalid('alteracao', 'cpf') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
                   boxShadow: isFieldInvalid('alteracao', 'cpf') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
@@ -2238,7 +2496,24 @@ const PortalDonCor = () => {
                 <tbody>
                   {filteredSolicitacoes.map((item) => (
                     <tr key={item.id || item.protocolo} style={{ borderBottom: `1px solid ${theme.border}` }}>
-                      <td style={{ color: theme.primary, fontWeight: 800, padding: '6px 10px' }}>{item.protocolo}</td>
+                      <td style={{ padding: '6px 10px' }}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProtocolDetail(item)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                            color: theme.primary,
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                            textAlign: 'left'
+                          }}
+                        >
+                          {item.protocolo}
+                        </button>
+                      </td>
                       <td style={{ color: theme.text, padding: '6px 10px' }}>{item.contrato || '-'}</td>
                       <td style={{ padding: '6px 10px' }}>
                         <div style={{ fontWeight: 600, color: theme.text }}>{item.empresa || '-'}</div>
@@ -2324,7 +2599,7 @@ const PortalDonCor = () => {
       <div style={{ display:'flex', alignItems:'center', gap:8 }}><Button onClick={() => loadPortal(session)} variant="outline" style={{ fontSize:'0.75rem', display:'flex', gap:6 }}><RefreshCw size={13}/>Atualizar</Button><StatusPill status="Online agora" /></div>
     </div>
     <div style={{ flex:1, padding:18, background:'#f8fafc', overflowY:'auto' }}>
-      {messages.length === 0 ? <EmptyState>Nenhuma mensagem ainda. Envie sua primeira solicitação para a equipe.</EmptyState> : messages.map((item) => (
+      {filteredChatMessages.length === 0 ? <EmptyState>Nenhuma mensagem ainda. Envie sua primeira solicitação para a equipe.</EmptyState> : filteredChatMessages.map((item) => (
         <div key={item.id} style={{ display:'flex', justifyContent:item.direction === 'incoming' ? 'flex-end' : 'flex-start', marginBottom:10 }}>
           <div style={{ maxWidth:'72%', background:item.direction === 'incoming' ? theme.blue : '#fff', color:item.direction === 'incoming' ? '#fff' : theme.text, border:`1px solid ${theme.border}`, borderRadius:14, padding:'10px 12px' }}>
             <div style={{ fontSize:'0.68rem', opacity:0.82, marginBottom:4 }}>{item.sender}</div>
@@ -2786,7 +3061,7 @@ const PortalDonCor = () => {
       case 'configuracoes': return renderConfiguracoes();
       case 'contratos': return renderContratos();
       case 'faturas': return renderFaturas();
-      case 'bi': return renderBi();
+      case 'bi': return session?.acessoSinistralidade ? renderBi() : renderDashboard();
       case 'movimentacao': return renderMovimentacao();
       case 'solicitacoes': return renderSolicitacoes();
       case 'formularios': return renderFormularios();
@@ -2854,15 +3129,15 @@ const PortalDonCor = () => {
             <button
               onClick={() => {
                 setActiveSection('chat');
-                const unread = messages.filter(m => m.direction === 'incoming' && !m.read).length;
+                const unread = filteredChatMessages.filter(m => m.direction === 'incoming' && !m.read).length;
                 if (unread > 0) markPortalDonCorChatRead({ documento: session.documento, empresa: session.empresa }).then(() => loadPortal(session));
               }}
               style={{ border:`1px solid ${theme.border}`, background:'#fff', borderRadius:12, padding:9, color:theme.muted, position: 'relative', cursor: 'pointer' }}
             >
               <Bell size={16}/>
-              {messages.filter(m => m.direction === 'incoming' && !m.read).length > 0 && (
+              {filteredChatMessages.filter(m => m.direction === 'incoming' && !m.read).length > 0 && (
                 <span style={{ position: 'absolute', top: -5, right: -5, background: '#e63757', color: '#fff', fontSize: '10px', fontWeight: 800, padding: '2px 5px', borderRadius: '50%' }}>
-                  {messages.filter(m => m.direction === 'incoming' && !m.read).length}
+                  {filteredChatMessages.filter(m => m.direction === 'incoming' && !m.read).length}
                 </span>
               )}
             </button>
@@ -2948,9 +3223,10 @@ const PortalDonCor = () => {
                       <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Data de Nascimento</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.dataNascimento || '-'}</div></div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                       <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Estado Civil</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.estadoCivil || '-'}</div></div>
                       <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Parentesco</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.parentesco || 'Titular'}</div></div>
+                      <div><span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.72rem', textTransform: 'uppercase' }}>Gênero</span><div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{movementForms.inclusao.genero || '-'}</div></div>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -3150,6 +3426,126 @@ const PortalDonCor = () => {
             </div>
 
             <Button onClick={() => setSelectedContratoDetail(null)} style={{ background: theme.blue, color: '#fff', width: '100%', height: 44 }}>
+              Fechar Detalhes
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {selectedProtocolDetail && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.4)', backdropFilter: 'blur(3px)', zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: '#fff', borderRadius: 18, padding: 28, width: '100%', maxWidth: 550, boxShadow: '0 20px 40px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: `1px solid ${theme.border}`, paddingBottom: 14 }}>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', color: theme.text, display: 'flex', alignItems: 'center', gap: 10 }}>
+                📄 Detalhes da Solicitação ({selectedProtocolDetail.protocolo})
+              </h3>
+              <button onClick={() => setSelectedProtocolDetail(null)} style={{ background: 'transparent', border: 0, fontSize: '1.25rem', cursor: 'pointer', color: theme.muted }}>&times;</button>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, fontSize: '0.82rem', color: theme.text, marginBottom: 24, maxHeight: '350px', overflowY: 'auto', paddingRight: '4px' }}>
+              <div>
+                <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>Protocolo</span>
+                <div style={{ fontWeight: 800, color: theme.primary, fontSize: '0.95rem', marginTop: 2 }}>{selectedProtocolDetail.protocolo}</div>
+              </div>
+              <div>
+                <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>Status</span>
+                <div style={{ marginTop: 2 }}><StatusPill status={selectedProtocolDetail.status} /></div>
+              </div>
+              
+              <div>
+                <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>Tipo de Solicitação</span>
+                <div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{selectedProtocolDetail.tipoLabel || selectedProtocolDetail.tipo || '-'}</div>
+              </div>
+              <div>
+                <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>Data</span>
+                <div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{selectedProtocolDetail.dataSolicitacao || '-'}</div>
+              </div>
+
+              <div style={{ gridColumn: 'span 2', height: '1px', background: theme.border, margin: '4px 0' }} />
+
+              <div style={{ gridColumn: 'span 2' }}>
+                <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>Beneficiário</span>
+                <div style={{ fontWeight: 800, color: theme.text, fontSize: '0.95rem', marginTop: 2 }}>{selectedProtocolDetail.beneficiario || selectedProtocolDetail.payload?.beneficiario || '-'}</div>
+              </div>
+              
+              <div>
+                <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>CPF</span>
+                <div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{selectedProtocolDetail.cpf || selectedProtocolDetail.payload?.cpf || '-'}</div>
+              </div>
+              <div>
+                <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>Data Nascimento</span>
+                <div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{selectedProtocolDetail.dataNascimento || selectedProtocolDetail.payload?.dataNascimento || '-'}</div>
+              </div>
+
+              <div style={{ gridColumn: 'span 2' }}>
+                <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>Nome da Mãe</span>
+                <div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{selectedProtocolDetail.nomeMae || selectedProtocolDetail.payload?.nomeMae || '-'}</div>
+              </div>
+
+              <div>
+                <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>Parentesco</span>
+                <div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{selectedProtocolDetail.parentesco || selectedProtocolDetail.payload?.parentesco || '-'}</div>
+              </div>
+              <div>
+                <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>Gênero</span>
+                <div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{selectedProtocolDetail.genero || selectedProtocolDetail.payload?.genero || '-'}</div>
+              </div>
+
+              <div>
+                <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>Estado Civil</span>
+                <div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{selectedProtocolDetail.estadoCivil || selectedProtocolDetail.payload?.estadoCivil || '-'}</div>
+              </div>
+              <div>
+                <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>Telefone</span>
+                <div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{selectedProtocolDetail.telefone || selectedProtocolDetail.payload?.telefone || '-'}</div>
+              </div>
+
+              <div style={{ gridColumn: 'span 2' }}>
+                <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>E-mail</span>
+                <div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{selectedProtocolDetail.email || selectedProtocolDetail.payload?.email || '-'}</div>
+              </div>
+
+              <div style={{ gridColumn: 'span 2', height: '1px', background: theme.border, margin: '4px 0' }} />
+
+              <div>
+                <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>Contrato Relacionado</span>
+                <div style={{ fontWeight: 800, color: theme.blue, marginTop: 2 }}>{selectedProtocolDetail.contrato || '-'}</div>
+              </div>
+              <div>
+                <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>Empresa</span>
+                <div style={{ fontWeight: 800, color: theme.text, marginTop: 2 }}>{selectedProtocolDetail.empresa || '-'}</div>
+              </div>
+
+              {/* Seção de Anexos */}
+              {(selectedProtocolDetail?.anexos || selectedProtocolDetail?.attachments || [])?.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, gridColumn: 'span 2', marginTop: 8 }}>
+                  <span style={{ color: theme.muted, fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>Anexos / Documentos</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {(selectedProtocolDetail?.anexos || selectedProtocolDetail?.attachments || []).map((att, idx) => (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: '#f8f9fa', border: `1px solid ${theme.border}`, borderRadius: 6, fontSize: '0.8rem' }}>
+                        <span>📎</span>
+                        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {att.base64 ? (
+                            <a
+                              href={att.base64.startsWith('data:') ? att.base64 : `data:${att.type || 'application/octet-stream'};base64,${att.base64}`}
+                              download={att.name}
+                              style={{ color: '#2C7BE5', fontWeight: 600, textDecoration: 'underline' }}
+                            >
+                              {att.name}
+                            </a>
+                          ) : (
+                            <span style={{ fontWeight: 500, color: theme.text }}>{att.name}</span>
+                          )}
+                          {att.size ? <span style={{ color: theme.muted, fontSize: '0.72rem', marginLeft: 6 }}>({(att.size / 1024).toFixed(0)} KB)</span> : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Button onClick={() => setSelectedProtocolDetail(null)} style={{ background: theme.primary, color: '#fff', width: '100%', height: 44 }}>
               Fechar Detalhes
             </Button>
           </div>

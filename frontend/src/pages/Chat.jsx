@@ -66,19 +66,19 @@ const Chat = ({ session }) => {
   }, [loadChatData]);
 
   useEffect(() => {
-    const unread = messages.filter((item) => item.direction === 'incoming' && !item.read).length;
+    const unread = messages.filter((item) => item.direction === 'incoming' && !item.read && !item.protocolo).length;
     saveUnread(unread);
   }, [messages]);
 
   const companyMessages = useMemo(
-    () => messages.filter((item) => (item.company || item.empresa) === selectedCompany),
+    () => messages.filter((item) => (item.company || item.empresa) === selectedCompany && !item.protocolo),
     [messages, selectedCompany]
   );
 
   const unreadByCompany = useMemo(() => {
     return messages.reduce((acc, item) => {
       const company = item.company || item.empresa;
-      if (item.direction === 'incoming' && !item.read && company) acc[company] = (acc[company] || 0) + 1;
+      if (item.direction === 'incoming' && !item.read && company && !item.protocolo) acc[company] = (acc[company] || 0) + 1;
       return acc;
     }, {});
   }, [messages]);

@@ -794,6 +794,7 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
             "cargo": partner.get("cargo") or ("Master" if str(partner.get("nome")).lower() == "donfim" else "Cliente"),
             "lgpdAceito": bool(partner.get("lgpdAceito", False)),
             "senhaAlterada": bool(partner.get("senhaAlterada", False)),
+            "acessoSinistralidade": bool(partner.get("acessoSinistralidade", False)),
         }
 
     @app.get("/api/portal-doncor/lgpd/config")
@@ -1239,6 +1240,16 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
 
     @app.patch("/api/portal-doncor/chat/read")
     async def portal_doncor_chat_read(payload: Dict[str, Any] = Body(...)):
+        all_notifications = payload.get("all_notifications")
+        if all_notifications:
+            await db.portal_chat.update_many({"protocolo": {"$exists": True, "$ne": ""}}, {"$set": {"read": True}})
+            return {"ok": True, "updated": "all_notifications"}
+
+        msg_id = payload.get("id") or payload.get("messageId")
+        if msg_id:
+            await db.portal_chat.update_one({"id": msg_id}, {"$set": {"read": True}})
+            return {"ok": True, "updated": msg_id}
+
         documento = _digits(payload.get("documento"))
         empresa_norm = str(payload.get("empresa") or payload.get("company") or "").strip().lower()
         items = await _all(db.portal_chat, "createdAt", 1000)

@@ -23,6 +23,8 @@ const Adesao = () => {
   const [formData, setFormData] = useState({ numero:'', seguradora:'', plano:'', administradora:'', vigencia:'', vidas:0, status:'Ativo', valorMensal:'R$ 0,00' });
   const [saving, setSaving] = useState(false);
   const [planos, setPlanos] = useState([]);
+  const [isManualPlano, setIsManualPlano] = useState(false);
+  const [editIsManualPlano, setEditIsManualPlano] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -38,7 +40,7 @@ const Adesao = () => {
 
   const handleCreate = async () => {
     setSaving(true);
-    try { await createContratoAdesao({...formData, vidas: parseInt(formData.vidas)||0}); setShowNew(false); setFormData({ numero:'', seguradora:'', plano:'', administradora:'', vigencia:'', vidas:0, status:'Ativo', valorMensal:'R$ 0,00' }); loadData(); } catch(e){console.error(e);}
+    try { await createContratoAdesao({...formData, vidas: parseInt(formData.vidas)||0}); setShowNew(false); setFormData({ numero:'', seguradora:'', plano:'', administradora:'', vigencia:'', vidas:0, status:'Ativo', valorMensal:'R$ 0,00' }); setIsManualPlano(false); loadData(); } catch(e){console.error(e);}
     setSaving(false);
   };
 
@@ -50,7 +52,10 @@ const Adesao = () => {
 
   const startEdit = (item) => {
     setEditingId(item.id);
-    setEditData({ numero:item.numero, seguradora:item.seguradora, plano:item.plano || item.produto || '', administradora:item.administradora, vigencia:item.vigencia, vidas:item.vidas, status:item.status, valorMensal:item.valorMensal });
+    const planName = item.plano || item.produto || '';
+    const inList = planos.some(p => p.nome === planName);
+    setEditIsManualPlano(!inList && planName !== '');
+    setEditData({ numero:item.numero, seguradora:item.seguradora, plano:planName, administradora:item.administradora, vigencia:item.vigencia, vidas:item.vidas, status:item.status, valorMensal:item.valorMensal });
   };
 
   const handleDelete = async (id) => {
@@ -94,16 +99,36 @@ const Adesao = () => {
                   <td>{inlineInput('numero','80px')}</td><td>{inlineInput('seguradora')}</td>
                   <td>
                     {planos.length > 0 ? (
-                      <select
-                        value={editData.plano || ''}
-                        onChange={e => setEditData({...editData, plano: e.target.value})}
-                        style={{ fontSize: '0.75rem', padding: '4px 6px', border: '1px solid #d8e2ef', borderRadius: '4px', width: '100%', background: '#fff' }}
-                      >
-                        <option value="">Selecione...</option>
-                        {planos.map(p => (
-                          <option key={p.id} value={p.nome}>{p.nome}</option>
-                        ))}
-                      </select>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <select
+                          value={editIsManualPlano ? "__manual__" : editData.plano || ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            if (val === '__manual__') {
+                              setEditIsManualPlano(true);
+                              setEditData({...editData, plano: ''});
+                            } else {
+                              setEditIsManualPlano(false);
+                              setEditData({...editData, plano: val});
+                            }
+                          }}
+                          style={{ fontSize: '0.75rem', padding: '4px 6px', border: '1px solid #d8e2ef', borderRadius: '4px', width: '100%', background: '#fff' }}
+                        >
+                          <option value="">Selecione...</option>
+                          <option value="__manual__" style={{ fontWeight: 'bold', color: '#2C7BE5' }}>+ Digitar manualmente...</option>
+                          {planos.map(p => (
+                            <option key={p.id} value={p.nome}>{p.nome}</option>
+                          ))}
+                        </select>
+                        {editIsManualPlano && (
+                          <Input 
+                            value={editData.plano || ''} 
+                            onChange={e => setEditData({...editData, plano: e.target.value})} 
+                            style={{ fontSize: '0.78rem', padding: '4px 8px', height: '30px' }} 
+                            placeholder="Digite o plano"
+                          />
+                        )}
+                      </div>
                     ) : (
                       inlineInput('plano')
                     )}
@@ -160,16 +185,35 @@ const Adesao = () => {
               <div>
                 <label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Plano</label>
                 {planos.length > 0 ? (
-                  <select 
-                    value={formData.plano} 
-                    onChange={e => setFormData({...formData, plano: e.target.value})}
-                    style={{ width: '100%', border: '1px solid #d8e2ef', borderRadius: '6px', padding: '8px 12px', fontSize: '0.85rem', background: '#fff' }}
-                  >
-                    <option value="">Selecione um plano...</option>
-                    {planos.map(p => (
-                      <option key={p.id} value={p.nome}>{p.nome} ({p.seguradora})</option>
-                    ))}
-                  </select>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <select 
+                      value={isManualPlano ? "__manual__" : formData.plano} 
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (val === '__manual__') {
+                          setIsManualPlano(true);
+                          setFormData({...formData, plano: ''});
+                        } else {
+                          setIsManualPlano(false);
+                          setFormData({...formData, plano: val});
+                        }
+                      }}
+                      style={{ width: '100%', border: '1px solid #d8e2ef', borderRadius: '6px', padding: '8px 12px', fontSize: '0.85rem', background: '#fff' }}
+                    >
+                      <option value="">Selecione um plano...</option>
+                      <option value="__manual__" style={{ fontWeight: 'bold', color: '#2C7BE5' }}>+ Digitar manualmente (Novo Plano)...</option>
+                      {planos.map(p => (
+                        <option key={p.id} value={p.nome}>{p.nome} ({p.seguradora})</option>
+                      ))}
+                    </select>
+                    {isManualPlano && (
+                      <Input 
+                        value={formData.plano} 
+                        onChange={e => setFormData({...formData, plano: e.target.value})} 
+                        placeholder="Digite o nome do plano" 
+                      />
+                    )}
+                  </div>
                 ) : (
                   <Input value={formData.plano} onChange={e=>setFormData({...formData, plano:e.target.value})} placeholder="Digite o nome do plano" />
                 )}

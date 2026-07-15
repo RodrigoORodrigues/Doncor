@@ -4,6 +4,7 @@ import { UserPlus, Search, Filter, Loader2 } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
+import { formatCPF, formatPhone, validateCPF } from '../lib/utils';
 
 const initialFormData = {
   contrato: '',
@@ -15,7 +16,10 @@ const initialFormData = {
   telefone: '',
   email: '',
   parentesco: 'Titular',
+  genero: '',
   estadoCivil: '',
+  plano: '',
+  valorMensal: 'R$ 0,00',
 };
 
 const Inclusao = () => {
@@ -27,6 +31,43 @@ const Inclusao = () => {
   const [showNew, setShowNew] = useState(false);
   const [formData, setFormData] = useState(initialFormData);
   const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [selectedProtocol, setSelectedProtocol] = useState(null);
+
+  const standardFaixas = [
+    '0 a 18 anos',
+    '19 a 23 anos',
+    '24 a 28 anos',
+    '29 a 33 anos',
+    '34 a 38 anos',
+    '39 a 43 anos',
+    '44 a 48 anos',
+    '49 a 53 anos',
+    '54 a 58 anos',
+    '59 anos ou mais'
+  ];
+
+  const createEmptyPlan = () => ({
+    nome: '',
+    isManual: false,
+    pricingMode: 'custo_medio',
+    valorMensal: 'R$ 0,00',
+    faixasValues: {
+      '0 a 18 anos': '',
+      '19 a 23 anos': '',
+      '24 a 28 anos': '',
+      '29 a 33 anos': '',
+      '34 a 38 anos': '',
+      '39 a 43 anos': '',
+      '44 a 48 anos': '',
+      '49 a 53 anos': '',
+      '54 a 58 anos': '',
+      '59 anos ou mais': ''
+    }
+  });
+
+  const [planosInput, setPlanosInput] = useState([createEmptyPlan()]);
+  const [planos, setPlanos] = useState([]);
 
   // Estados para Implantação
   const [showDeploy, setShowDeploy] = useState(false);
@@ -38,7 +79,10 @@ const Inclusao = () => {
   const [loadingDeployData, setLoadingDeployData] = useState(false);
   const [deploying, setDeploying] = useState(false);
 
-  const updateField = (field, value) => setFormData((prev) => ({ ...prev, [field]: value }));
+  const updateField = (field, value) => {
+    setErrorMsg('');
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
 
   const handleOpenDeploy = async (item) => {
     setDeployItem(item);
@@ -94,21 +138,86 @@ const Inclusao = () => {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    try { setData(await fetchInclusoes(search, statusFilter)); } catch (e) { console.error(e); }
+    try { 
+      setData(await fetchInclusoes(search, statusFilter)); 
+      const registeredPlanos = await fetchProdutos();
+      setPlanos(registeredPlanos || []);
+    } catch (e) { console.error(e); }
     setLoading(false);
   }, [search, statusFilter]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  useEffect(() => {
+    if (!showNew) {
+      setErrorMsg('');
+      setPlanosInput([createEmptyPlan()]);
+    }
+  }, [showNew]);
+
   const handleCreate = async () => {
+    if (!formData.cpf?.trim()) {
+      setErrorMsg('O preenchimento do CPF é obrigatório.');
+      return;
+    }
+    if (!validateCPF(formData.cpf)) {
+      setErrorMsg('CPF inválido. Verifique o número digitado.');
+      return;
+    }
+    if (!formData.genero) {
+      setErrorMsg('O preenchimento do Gênero é obrigatório.');
+      return;
+    }
+    if (formData.telefone?.trim()) {
+      const cleanPhone = formData.telefone.replace(/\D/g, '');
+      if (cleanPhone.length < 10 || cleanPhone.length > 11) {
+        setErrorMsg('Telefone inválido (mínimo de 10 ou 11 dígitos).');
+        return;
+      }
+    }
     setSaving(true);
     try {
-      await createInclusao(formData);
+      const planoString = planosInput.map(p => p.nome).filter(Boolean).join(', ');
+      
+      let valorMensalString = '';
+      if (planosInput.length === 1) {
+        const p = planosInput[0];
+        if (p.pricingMode === 'custo_medio') {
+          valorMensalString = p.valorMensal || 'R$ 0,00';
+        } else {
+          valorMensalString = Object.entries(p.faixasValues)
+            .filter(([_, val]) => val.trim())
+            .map(([faixa, val]) => `${faixa}: R$ ${val}`)
+            .join(' | ');
+        }
+      } else {
+        const parts = planosInput.map(p => {
+          if (!p.nome?.trim()) return null;
+          if (p.pricingMode === 'custo_medio') {
+            return `${p.nome}: ${p.valorMensal || 'R$ 0,00'}`;
+          } else {
+            const faixasStr = Object.entries(p.faixasValues)
+              .filter(([_, val]) => val.trim())
+              .map(([faixa, val]) => `${faixa}: R$ ${val}`)
+              .join(', ');
+            return `${p.nome} [Faixas]: ${faixasStr || 'Não definido'}`;
+          }
+        }).filter(Boolean);
+        valorMensalString = parts.join(' | ');
+      }
+
+      await createInclusao({
+        ...formData,
+        plano: planoString,
+        valorMensal: valorMensalString
+      });
       setShowNew(false);
       setFormData(initialFormData);
+      setErrorMsg('');
       loadData();
     } catch(e) {
       console.error(e);
+      setErrorMsg('Erro ao salvar inclusão.');
     }
     setSaving(false);
   };
@@ -138,8 +247,25 @@ const Inclusao = () => {
       <div style={{ background:'#fff', borderRadius:'8px', boxShadow:'0 1px 3px rgba(0,0,0,0.06)', overflow:'auto', marginTop:showFilters?'0':'12px' }}>
         {loading ? <div style={{display:'flex',justifyContent:'center',padding:'40px'}}><Loader2 size={24} style={{color:'#27ae60',animation:'spin 1s linear infinite'}}/></div> : (
           <table className="data-table"><thead><tr><th>Protocolo</th><th>Contrato</th><th>Empresa</th><th>Beneficiário</th><th>Nome da Mãe</th><th>CPF</th><th>Nascimento</th><th>Telefone</th><th>E-mail</th><th>Parentesco</th><th>Estado Civil</th><th>Solicitação</th><th>Status</th><th style={{ textAlign: 'center' }}>Ações</th></tr></thead>
-            <tbody>{data.map((item,i)=>(<tr key={i}>
-              <td style={{fontWeight:600,color:'#27ae60'}}>{item.protocolo}</td>
+            <tbody>{(data || []).map((item,i)=>(<tr key={i}>
+              <td style={{fontWeight:600,color:'#27ae60'}}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedProtocol(item)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    color: '#27ae60',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    textAlign: 'left'
+                  }}
+                >
+                  {item.protocolo}
+                </button>
+              </td>
               <td style={{color:'#2C7BE5',fontWeight:500}}>{item.contrato || '-'}</td>
               <td>{item.empresa}</td><td style={{fontWeight:500}}>{item.beneficiario}</td>
               <td>{item.nomeMae || '-'}</td>
@@ -171,6 +297,7 @@ const Inclusao = () => {
       <div style={{display:'flex',justifyContent:'space-between',marginTop:'12px',fontSize:'0.72rem',color:'#8a8d93'}}><span>Exibindo {data.length} registros</span></div>
 
       <Dialog open={showNew} onOpenChange={setShowNew}><DialogContent style={{maxWidth:'720px'}}><DialogHeader><DialogTitle>Nova Inclusão</DialogTitle></DialogHeader>
+        {errorMsg && <div style={{ padding: '8px 12px', background: '#ffe2e2', color: '#991b1b', border: '1px solid #fecdd3', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600 }}>⚠️ {errorMsg}</div>}
         <div style={{display:'flex',flexDirection:'column',gap:'12px',padding:'8px 0'}}>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
             <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Contrato</label><Input placeholder="EMP-2024-001" value={formData.contrato} onChange={e=>updateField('contrato', e.target.value)}/></div>
@@ -179,16 +306,16 @@ const Inclusao = () => {
           <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Nome do Beneficiário</label><Input placeholder="Nome completo" value={formData.beneficiario} onChange={e=>updateField('beneficiario', e.target.value)}/></div>
           <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Nome da Mãe</label><Input placeholder="Nome completo da mãe" value={formData.nomeMae} onChange={e=>updateField('nomeMae', e.target.value)}/></div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'12px'}}>
-            <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>CPF</label><Input placeholder="000.000.000-00" value={formData.cpf} onChange={e=>updateField('cpf', e.target.value)}/></div>
+            <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>CPF</label><Input placeholder="000.000.000-00" value={formData.cpf} onChange={e=>updateField('cpf', formatCPF(e.target.value))}/></div>
             <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Data de nascimento</label><Input type="date" value={formData.dataNascimento} onChange={e=>updateField('dataNascimento', e.target.value)}/></div>
             <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Parentesco</label>
               <select value={formData.parentesco} onChange={e=>updateField('parentesco', e.target.value)} style={{width:'100%',border:'1px solid #d8e2ef',borderRadius:'6px',padding:'8px 12px',fontSize:'0.85rem'}}>
-                <option>Titular</option><option>Cônjuge</option><option>Filho(a)</option><option>Dependente</option>
+                <option>Titular</option><option>Cônjuge</option><option>Filho(a)</option><option>Entiado</option><option>Dependente</option>
               </select>
             </div>
           </div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'12px'}}>
-            <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Telefone</label><Input placeholder="(00) 00000-0000" value={formData.telefone} onChange={e=>updateField('telefone', e.target.value)}/></div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:'12px'}}>
+            <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Telefone</label><Input placeholder="(00) 00000-0000" value={formData.telefone} onChange={e=>updateField('telefone', formatPhone(e.target.value))}/></div>
             <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>E-mail</label><Input type="email" placeholder="E-mail do beneficiário" value={formData.email} onChange={e=>updateField('email', e.target.value)}/></div>
             <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Estado Civil</label>
               <select value={formData.estadoCivil} onChange={e=>updateField('estadoCivil', e.target.value)} style={{width:'100%',border:'1px solid #d8e2ef',borderRadius:'6px',padding:'8px 12px',fontSize:'0.85rem'}}>
@@ -199,6 +326,176 @@ const Inclusao = () => {
                 <option>Viúvo(a)</option>
               </select>
             </div>
+            <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Gênero</label>
+              <select value={formData.genero || ''} onChange={e=>updateField('genero', e.target.value)} style={{width:'100%',border:'1px solid #d8e2ef',borderRadius:'6px',padding:'8px 12px',fontSize:'0.85rem'}}>
+                <option value="">Selecione</option>
+                <option>Masculino</option>
+                <option>Feminino</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '6px' }}>
+            {planosInput.map((plObj, idx) => (
+              <div 
+                key={idx} 
+                style={{ 
+                  background: '#f8f9fa', 
+                  border: '1px solid #e2e8f0', 
+                  borderRadius: '8px', 
+                  padding: '12px', 
+                  position: 'relative' 
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#495057', textTransform: 'uppercase' }}>
+                    Plano #{idx + 1}
+                  </span>
+                  {idx > 0 && (
+                    <Button 
+                      type="button" 
+                      onClick={() => {
+                        const newList = planosInput.filter((_, i) => i !== idx);
+                        setPlanosInput(newList);
+                      }} 
+                      variant="outline" 
+                      style={{ padding: '4px 8px', color: '#e63757', border: '1px solid #e63757', fontSize: '0.72rem', height: '24px' }}
+                    >
+                      Remover Plano
+                    </Button>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '0.7rem', color: '#8a8d93', fontWeight: 600, display: 'block', marginBottom: '2px' }}>Nome do Plano</label>
+                    {planos.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
+                        <select 
+                          value={plObj.isManual ? "__manual__" : plObj.nome} 
+                          onChange={e => {
+                            const val = e.target.value;
+                            const newList = [...planosInput];
+                            if (val === '__manual__') {
+                              newList[idx] = { ...newList[idx], isManual: true, nome: '' };
+                            } else {
+                              newList[idx] = { ...newList[idx], isManual: false, nome: val };
+                            }
+                            setPlanosInput(newList);
+                          }}
+                          style={{ width: '100%', border: '1px solid #d8e2ef', borderRadius: '6px', padding: '8px 12px', fontSize: '0.85rem', background: '#fff' }}
+                        >
+                          <option value="">Selecione um plano...</option>
+                          <option value="__manual__" style={{ fontWeight: 'bold', color: '#2C7BE5' }}>+ Digitar manualmente (Novo Plano)...</option>
+                          {planos.map(p => (
+                            <option key={p.id} value={p.nome}>{p.nome} ({p.seguradora})</option>
+                          ))}
+                        </select>
+                        {(plObj.isManual || !planos.some(p => p.nome === plObj.nome)) && (
+                          <Input 
+                            value={plObj.nome} 
+                            onChange={e => {
+                              const newList = [...planosInput];
+                              newList[idx] = { ...newList[idx], nome: e.target.value, isManual: true };
+                              setPlanosInput(newList);
+                            }} 
+                            placeholder="Digite o nome do plano" 
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <Input 
+                        value={plObj.nome} 
+                        onChange={e => {
+                          const newList = [...planosInput];
+                          newList[idx] = { ...newList[idx], nome: e.target.value, isManual: true };
+                          setPlanosInput(newList);
+                        }} 
+                        placeholder="Digite o nome do plano" 
+                      />
+                    )}
+                  </div>
+                  {idx === 0 && (
+                    <div style={{ alignSelf: 'flex-end' }}>
+                      <Button 
+                        type="button" 
+                        onClick={() => setPlanosInput([...planosInput, createEmptyPlan()])} 
+                        style={{ padding: '0 12px', background: '#27ae60', color: '#fff', fontSize: '1.1rem', fontWeight: 'bold', height: '38px' }}
+                      >
+                        +
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ marginTop: '8px', borderTop: '1px dashed #e2e8f0', paddingTop: '8px' }}>
+                  <label style={{ fontSize: '0.7rem', color: '#8a8d93', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Valor Mensal para este Plano</label>
+                  <div style={{ display: 'flex', gap: '16px', margin: '4px 0 8px 0' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', cursor: 'pointer', color: '#495057' }}>
+                      <input 
+                        type="radio" 
+                        name={`pricingModeInclusao-${idx}`} 
+                        value="custo_medio" 
+                        checked={plObj.pricingMode === 'custo_medio'} 
+                        onChange={() => {
+                          const newList = [...planosInput];
+                          newList[idx] = { ...newList[idx], pricingMode: 'custo_medio' };
+                          setPlanosInput(newList);
+                        }} 
+                      />
+                      Custo Médio Único
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', cursor: 'pointer', color: '#495057' }}>
+                      <input 
+                        type="radio" 
+                        name={`pricingModeInclusao-${idx}`} 
+                        aria-label="Por Faixa Etária"
+                        value="faixa_etaria" 
+                        checked={plObj.pricingMode === 'faixa_etaria'} 
+                        onChange={() => {
+                          const newList = [...planosInput];
+                          newList[idx] = { ...newList[idx], pricingMode: 'faixa_etaria' };
+                          setPlanosInput(newList);
+                        }} 
+                      />
+                      Por Faixa Etária
+                    </label>
+                  </div>
+
+                  {plObj.pricingMode === 'custo_medio' ? (
+                    <Input 
+                      value={plObj.valorMensal} 
+                      onChange={e => {
+                        const newList = [...planosInput];
+                        newList[idx] = { ...newList[idx], valorMensal: e.target.value };
+                        setPlanosInput(newList);
+                      }} 
+                      placeholder="R$ 0,00" 
+                      style={{ height: '34px', fontSize: '0.8rem' }}
+                    />
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', padding: '8px', background: '#fff', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                      {standardFaixas.map(faixa => (
+                        <div key={faixa} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <span style={{ fontSize: '0.65rem', color: '#495057', fontWeight: 600 }}>{faixa}</span>
+                          <Input 
+                            value={plObj.faixasValues[faixa] || ''} 
+                            onChange={e => {
+                              const newList = [...planosInput];
+                              const newFaixas = { ...newList[idx].faixasValues, [faixa]: e.target.value };
+                              newList[idx] = { ...newList[idx], faixasValues: newFaixas };
+                              setPlanosInput(newList);
+                            }} 
+                            placeholder="R$ 0,00" 
+                            style={{ height: '30px', fontSize: '0.75rem', padding: '4px 8px' }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
         <DialogFooter><Button variant="outline" onClick={()=>setShowNew(false)}>Cancelar</Button><Button style={{background:'#27ae60',color:'#fff'}} onClick={handleCreate} disabled={saving}>{saving?'Salvando...':'Solicitar Inclusão'}</Button></DialogFooter>
@@ -274,6 +571,122 @@ const Inclusao = () => {
               disabled={deploying || !selectedContrato || !selectedProduto || loadingDeployData}
             >
               {deploying ? 'Implantando...' : 'Confirmar Implantação 🚀'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Detalhes do Protocolo */}
+      <Dialog open={!!selectedProtocol} onOpenChange={(open) => !open && setSelectedProtocol(null)}>
+        <DialogContent style={{ maxWidth: '600px' }}>
+          <DialogHeader>
+            <DialogTitle style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1a3a52', fontSize: '1.25rem' }}>
+              📄 Detalhes da Solicitação ({selectedProtocol?.protocolo})
+            </DialogTitle>
+          </DialogHeader>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', padding: '12px 0', fontSize: '0.85rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Protocolo</span>
+              <span style={{ fontWeight: 700, color: '#1a3a52', fontSize: '0.95rem' }}>{selectedProtocol?.protocolo}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Status</span>
+              <span>
+                <span className={selectedProtocol ? getStatusBadge(selectedProtocol.status) : ''} style={{ display: 'inline-block' }}>
+                  {selectedProtocol?.status}
+                </span>
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Tipo</span>
+              <span style={{ fontWeight: 500, color: '#344050' }}>Inclusão de Beneficiário</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Data de Solicitação</span>
+              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.dataSolicitacao}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: 'span 2' }}>
+              <div style={{ height: '1px', background: '#e2e8f0', margin: '4px 0' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Beneficiário</span>
+              <span style={{ fontWeight: 600, color: '#1a3a52' }}>{selectedProtocol?.beneficiario}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>CPF</span>
+              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.cpf}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: 'span 2' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Nome da Mãe</span>
+              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.nomeMae || '-'}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Data de Nascimento</span>
+              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.dataNascimento || '-'}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Parentesco</span>
+              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.parentesco || '-'}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Gênero</span>
+              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.genero || '-'}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Estado Civil</span>
+              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.estadoCivil || '-'}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Telefone</span>
+              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.telefone || '-'}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: 'span 2' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>E-mail</span>
+              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.email || '-'}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: 'span 2' }}>
+              <div style={{ height: '1px', background: '#e2e8f0', margin: '4px 0' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Contrato Relacionado</span>
+              <span style={{ fontWeight: 600, color: '#2C7BE5' }}>{selectedProtocol?.contrato || '-'}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Empresa</span>
+              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.empresa || '-'}</span>
+            </div>
+
+            {/* Seção de Anexos */}
+            {(selectedProtocol?.anexos || selectedProtocol?.attachments || [])?.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', gridColumn: 'span 2', marginTop: '8px' }}>
+                <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Anexos / Documentos</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {(selectedProtocol?.anexos || selectedProtocol?.attachments || []).map((att, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: '#f8f9fa', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.8rem' }}>
+                      <span>📎</span>
+                      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {att.base64 ? (
+                          <a
+                            href={att.base64.startsWith('data:') ? att.base64 : `data:${att.type || 'application/octet-stream'};base64,${att.base64}`}
+                            download={att.name}
+                            style={{ color: '#2C7BE5', fontWeight: 600, textDecoration: 'underline' }}
+                          >
+                            {att.name}
+                          </a>
+                        ) : (
+                          <span style={{ fontWeight: 500, color: '#344050' }}>{att.name}</span>
+                        )}
+                        {att.size ? <span style={{ color: '#8a8d93', fontSize: '0.72rem', marginLeft: '6px' }}>({(att.size / 1024).toFixed(0)} KB)</span> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setSelectedProtocol(null)} style={{ background: '#1a3a52', color: '#fff', width: '100%' }}>
+              Fechar Detalhes
             </Button>
           </DialogFooter>
         </DialogContent>

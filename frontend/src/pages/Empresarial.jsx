@@ -5,6 +5,7 @@ import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import Pagination from '../components/Pagination';
+import { formatCNPJ, validateCNPJ } from '../lib/utils';
 
 const PAGE_SIZE = 8;
 const emptyForm = { numero:'', empresa:'', cnpj:'', seguradora:'', plano:'', vigencia:'', vencimento:'', vidas:0, status:'Ativo', valorMensal:'R$ 0,00' };
@@ -24,6 +25,41 @@ const Empresarial = ({ tabId }) => {
   const [formData, setFormData] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [planos, setPlanos] = useState([]);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const standardFaixas = [
+    '0 a 18 anos',
+    '19 a 23 anos',
+    '24 a 28 anos',
+    '29 a 33 anos',
+    '34 a 38 anos',
+    '39 a 43 anos',
+    '44 a 48 anos',
+    '49 a 53 anos',
+    '54 a 58 anos',
+    '59 anos ou mais'
+  ];
+
+  const createEmptyPlan = () => ({
+    nome: '',
+    isManual: false,
+    pricingMode: 'custo_medio',
+    valorMensal: 'R$ 0,00',
+    faixasValues: {
+      '0 a 18 anos': '',
+      '19 a 23 anos': '',
+      '24 a 28 anos': '',
+      '29 a 33 anos': '',
+      '34 a 38 anos': '',
+      '39 a 43 anos': '',
+      '44 a 48 anos': '',
+      '49 a 53 anos': '',
+      '54 a 58 anos': '',
+      '59 anos ou mais': ''
+    }
+  });
+
+  const [planosInput, setPlanosInput] = useState([createEmptyPlan()]);
 
   const isPme = tabId === 'pme';
   const displayLabel = isPme ? 'PME' : 'Empresarial';
@@ -40,15 +76,86 @@ const Empresarial = ({ tabId }) => {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  useEffect(() => {
+    if (!showNew) {
+      setErrorMsg('');
+      setPlanosInput([createEmptyPlan()]);
+    }
+  }, [showNew]);
+
   const handleCreate = async () => {
+    if (!formData.cnpj?.trim()) {
+      setErrorMsg('O preenchimento do CNPJ é obrigatório.');
+      return;
+    }
+    if (!validateCNPJ(formData.cnpj)) {
+      setErrorMsg('CNPJ inválido. Verifique o número digitado.');
+      return;
+    }
     setSaving(true);
-    try { await createContratoEmpresarial({...formData, vidas:parseInt(formData.vidas)||0, tipo: displayLabel}); setShowNew(false); setFormData(emptyForm); loadData(); } catch(e){console.error(e);}
+    try { 
+      const planoString = planosInput.map(p => p.nome).filter(Boolean).join(', ');
+      
+      let valorMensalString = '';
+      if (planosInput.length === 1) {
+        const p = planosInput[0];
+        if (p.pricingMode === 'custo_medio') {
+          valorMensalString = p.valorMensal || 'R$ 0,00';
+        } else {
+          valorMensalString = Object.entries(p.faixasValues)
+            .filter(([_, val]) => val.trim())
+            .map(([faixa, val]) => `${faixa}: R$ ${val}`)
+            .join(' | ');
+        }
+      } else {
+        const parts = planosInput.map(p => {
+          if (!p.nome?.trim()) return null;
+          if (p.pricingMode === 'custo_medio') {
+            return `${p.nome}: ${p.valorMensal || 'R$ 0,00'}`;
+          } else {
+            const faixasStr = Object.entries(p.faixasValues)
+              .filter(([_, val]) => val.trim())
+              .map(([faixa, val]) => `${faixa}: R$ ${val}`)
+              .join(', ');
+            return `${p.nome} [Faixas]: ${faixasStr || 'Não definido'}`;
+          }
+        }).filter(Boolean);
+        valorMensalString = parts.join(' | ');
+      }
+
+      await createContratoEmpresarial({
+        ...formData, 
+        plano: planoString,
+        valorMensal: valorMensalString,
+        vidas: parseInt(formData.vidas) || 0, 
+        tipo: displayLabel
+      }); 
+      setShowNew(false); 
+      setFormData(emptyForm); 
+      setErrorMsg('');
+      loadData(); 
+    } catch(e){
+      console.error(e);
+      setErrorMsg('Erro ao salvar contrato.');
+    }
     setSaving(false);
   };
 
   const handleSaveEdit = async (id) => {
+    if (!editData.cnpj?.trim()) {
+      alert('O preenchimento do CNPJ é obrigatório.');
+      return;
+    }
+    if (!validateCNPJ(editData.cnpj)) {
+      alert('CNPJ inválido. Verifique o número digitado.');
+      return;
+    }
     setSaving(true);
-    try { await updateContratoEmpresarial(id, {...editData, vidas:parseInt(editData.vidas)||0, tipo: editData.tipo || displayLabel}); setEditingId(null); loadData(); } catch(e){console.error(e);}
+    try { 
+      await updateContratoEmpresarial(id, {...editData, vidas:parseInt(editData.vidas)||0, tipo: editData.tipo || displayLabel}); 
+      setEditingId(null); 
+      loadData(); 
+    } catch(e){console.error(e);}
     setSaving(false);
   };
 
@@ -63,9 +170,18 @@ const Empresarial = ({ tabId }) => {
   };
 
   const getStatusBadge = (s) => ({'Ativo':'badge-ativo','Cancelado':'badge-cancelado','Suspenso':'badge-suspenso','Vencido':'badge-vencido'}[s]||'badge-pendente');
-  const totalPages = Math.ceil(data.length / PAGE_SIZE);
-  const paged = data.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
-  const inlineInput = (field, w) => <Input value={editData[field]||''} onChange={e=>setEditData({...editData,[field]:e.target.value})} style={{fontSize:'0.78rem',padding:'4px 8px',height:'30px',minWidth:w||'60px'}} />;
+  const totalPages = Math.ceil((data || []).length / PAGE_SIZE);
+  const paged = (data || []).slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+  const inlineInput = (field, w) => {
+    const handleChange = (e) => {
+      let val = e.target.value;
+      if (field === 'cnpj') {
+        val = formatCNPJ(val);
+      }
+      setEditData({...editData, [field]: val});
+    };
+    return <Input value={editData[field]||''} onChange={handleChange} style={{fontSize:'0.78rem',padding:'4px 8px',height:'30px',minWidth:w||'60px'}} />;
+  };
 
   return (
     <div className="animate-fade-in">
@@ -125,30 +241,173 @@ const Empresarial = ({ tabId }) => {
       </DialogContent></Dialog>
 
       <Dialog open={showNew} onOpenChange={setShowNew}><DialogContent style={{maxWidth:'600px'}}><DialogHeader><DialogTitle>Novo Contrato {isPme ? 'PME' : 'Empresarial'}</DialogTitle></DialogHeader>
+        {errorMsg && <div style={{ padding: '8px 12px', background: '#ffe2e2', color: '#991b1b', border: '1px solid #fecdd3', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, marginBottom: '8px' }}>⚠️ {errorMsg}</div>}
         <div style={{display:'flex',flexDirection:'column',gap:'10px',padding:'8px 0'}}>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Número</label><Input value={formData.numero} onChange={e=>setFormData({...formData,numero:e.target.value})} placeholder={isPme ? "PME-2024-XXX" : "EMP-2024-XXX"}/></div><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Empresa</label><Input value={formData.empresa} onChange={e=>setFormData({...formData,empresa:e.target.value})}/></div></div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>CNPJ</label><Input value={formData.cnpj} onChange={e=>setFormData({...formData,cnpj:e.target.value})} placeholder="00.000.000/0000-00"/></div><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Seguradora</label><Input value={formData.seguradora} onChange={e=>setFormData({...formData,seguradora:e.target.value})}/></div></div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr',gap:'10px'}}>
-            <div>
-              <label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Plano</label>
-              {planos.length > 0 ? (
-                <select 
-                  value={formData.plano} 
-                  onChange={e => setFormData({...formData, plano: e.target.value})}
-                  style={{ width: '100%', border: '1px solid #d8e2ef', borderRadius: '6px', padding: '8px 12px', fontSize: '0.85rem', background: '#fff' }}
-                >
-                  <option value="">Selecione um plano...</option>
-                  {planos.map(p => (
-                    <option key={p.id} value={p.nome}>{p.nome} ({p.seguradora})</option>
-                  ))}
-                </select>
-              ) : (
-                <Input value={formData.plano} onChange={e=>setFormData({...formData, plano:e.target.value})} placeholder="Digite o nome do plano" />
-              )}
-            </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>CNPJ</label><Input value={formData.cnpj} onChange={e=>{ setErrorMsg(''); setFormData({...formData,cnpj:formatCNPJ(e.target.value)}); }} placeholder="00.000.000/0000-00"/></div><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Seguradora</label><Input value={formData.seguradora} onChange={e=>setFormData({...formData,seguradora:e.target.value})}/></div></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '6px' }}>
+            {planosInput.map((plObj, idx) => (
+              <div 
+                key={idx} 
+                style={{ 
+                  background: '#f8f9fa', 
+                  border: '1px solid #e2e8f0', 
+                  borderRadius: '8px', 
+                  padding: '12px', 
+                  position: 'relative' 
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#495057', textTransform: 'uppercase' }}>
+                    Plano #{idx + 1}
+                  </span>
+                  {idx > 0 && (
+                    <Button 
+                      type="button" 
+                      onClick={() => {
+                        const newList = planosInput.filter((_, i) => i !== idx);
+                        setPlanosInput(newList);
+                      }} 
+                      variant="outline" 
+                      style={{ padding: '4px 8px', color: '#e63757', border: '1px solid #e63757', fontSize: '0.72rem', height: '24px' }}
+                    >
+                      Remover Plano
+                    </Button>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '0.7rem', color: '#8a8d93', fontWeight: 600, display: 'block', marginBottom: '2px' }}>Nome do Plano</label>
+                    {planos.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
+                        <select 
+                          value={plObj.isManual ? "__manual__" : plObj.nome} 
+                          onChange={e => {
+                            const val = e.target.value;
+                            const newList = [...planosInput];
+                            if (val === '__manual__') {
+                              newList[idx] = { ...newList[idx], isManual: true, nome: '' };
+                            } else {
+                              newList[idx] = { ...newList[idx], isManual: false, nome: val };
+                            }
+                            setPlanosInput(newList);
+                          }}
+                          style={{ width: '100%', border: '1px solid #d8e2ef', borderRadius: '6px', padding: '8px 12px', fontSize: '0.85rem', background: '#fff' }}
+                        >
+                          <option value="">Selecione um plano...</option>
+                          <option value="__manual__" style={{ fontWeight: 'bold', color: '#2C7BE5' }}>+ Digitar manualmente (Novo Plano)...</option>
+                          {planos.map(p => (
+                            <option key={p.id} value={p.nome}>{p.nome} ({p.seguradora})</option>
+                          ))}
+                        </select>
+                        {(plObj.isManual || !planos.some(p => p.nome === plObj.nome)) && (
+                          <Input 
+                            value={plObj.nome} 
+                            onChange={e => {
+                              const newList = [...planosInput];
+                              newList[idx] = { ...newList[idx], nome: e.target.value, isManual: true };
+                              setPlanosInput(newList);
+                            }} 
+                            placeholder="Digite o nome do plano" 
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <Input 
+                        value={plObj.nome} 
+                        onChange={e => {
+                          const newList = [...planosInput];
+                          newList[idx] = { ...newList[idx], nome: e.target.value, isManual: true };
+                          setPlanosInput(newList);
+                        }} 
+                        placeholder="Digite o nome do plano" 
+                      />
+                    )}
+                  </div>
+                  {idx === 0 && (
+                    <div style={{ alignSelf: 'flex-end' }}>
+                      <Button 
+                        type="button" 
+                        onClick={() => setPlanosInput([...planosInput, createEmptyPlan()])} 
+                        style={{ padding: '0 12px', background: '#4979bb', color: '#fff', fontSize: '1.1rem', fontWeight: 'bold', height: '38px' }}
+                      >
+                        +
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ marginTop: '8px', borderTop: '1px dashed #e2e8f0', paddingTop: '8px' }}>
+                  <label style={{ fontSize: '0.7rem', color: '#8a8d93', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Valor Mensal para este Plano</label>
+                  <div style={{ display: 'flex', gap: '16px', margin: '4px 0 8px 0' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', cursor: 'pointer', color: '#495057' }}>
+                      <input 
+                        type="radio" 
+                        name={`pricingMode-${idx}`} 
+                        value="custo_medio" 
+                        checked={plObj.pricingMode === 'custo_medio'} 
+                        onChange={() => {
+                          const newList = [...planosInput];
+                          newList[idx] = { ...newList[idx], pricingMode: 'custo_medio' };
+                          setPlanosInput(newList);
+                        }} 
+                      />
+                      Custo Médio Único
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', cursor: 'pointer', color: '#495057' }}>
+                      <input 
+                        type="radio" 
+                        name={`pricingMode-${idx}`} 
+                        aria-label="Por Faixa Etária"
+                        value="faixa_etaria" 
+                        checked={plObj.pricingMode === 'faixa_etaria'} 
+                        onChange={() => {
+                          const newList = [...planosInput];
+                          newList[idx] = { ...newList[idx], pricingMode: 'faixa_etaria' };
+                          setPlanosInput(newList);
+                        }} 
+                      />
+                      Por Faixa Etária
+                    </label>
+                  </div>
+
+                  {plObj.pricingMode === 'custo_medio' ? (
+                    <Input 
+                      value={plObj.valorMensal} 
+                      onChange={e => {
+                        const newList = [...planosInput];
+                        newList[idx] = { ...newList[idx], valorMensal: e.target.value };
+                        setPlanosInput(newList);
+                      }} 
+                      placeholder="R$ 0,00" 
+                      style={{ height: '34px', fontSize: '0.8rem' }}
+                    />
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', padding: '8px', background: '#fff', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                      {standardFaixas.map(faixa => (
+                        <div key={faixa} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <span style={{ fontSize: '0.65rem', color: '#495057', fontWeight: 600 }}>{faixa}</span>
+                          <Input 
+                            value={plObj.faixasValues[faixa] || ''} 
+                            onChange={e => {
+                              const newList = [...planosInput];
+                              const newFaixas = { ...newList[idx].faixasValues, [faixa]: e.target.value };
+                              newList[idx] = { ...newList[idx], faixasValues: newFaixas };
+                              setPlanosInput(newList);
+                            }} 
+                            placeholder="R$ 0,00" 
+                            style={{ height: '30px', fontSize: '0.75rem', padding: '4px 8px' }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px'}}><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Vigência</label><Input value={formData.vigencia} onChange={e=>setFormData({...formData,vigencia:e.target.value})} placeholder="01/01/2024"/></div><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Vencimento</label><Input value={formData.vencimento} onChange={e=>setFormData({...formData,vencimento:e.target.value})} placeholder="01/01/2025"/></div><div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Vidas</label><Input type="number" value={formData.vidas} onChange={e=>setFormData({...formData,vidas:e.target.value})}/></div></div>
-          <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Valor Mensal</label><Input value={formData.valorMensal} onChange={e=>setFormData({...formData,valorMensal:e.target.value})} placeholder="R$ 0,00"/></div>
         </div>
         <DialogFooter><Button variant="outline" onClick={()=>setShowNew(false)}>Cancelar</Button><Button style={{background:'#4979bb',color:'#fff'}} onClick={handleCreate} disabled={saving}>{saving?'Salvando...':'Criar'}</Button></DialogFooter>
       </DialogContent></Dialog>

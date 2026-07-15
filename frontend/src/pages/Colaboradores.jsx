@@ -22,6 +22,17 @@ const Colaboradores = ({ session, accessByRole, onAccessChange }) => {
   const [form, setForm] = useState({ nome:'', cargo:'', email:'', telefone:'', departamento:'Diretoria', status:'Ativo', usuario:'', senha:'' });
   const [saving, setSaving] = useState(false);
 
+  const [localAccess, setLocalAccess] = useState({});
+  const [hasAccessChanges, setHasAccessChanges] = useState(false);
+  const [saveAccessSuccess, setSaveAccessSuccess] = useState(false);
+
+  useEffect(() => {
+    if (accessByRole) {
+      setLocalAccess(JSON.parse(JSON.stringify(accessByRole)));
+      setHasAccessChanges(false);
+    }
+  }, [accessByRole]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try { setData(await fetchColaboradores(search)); } catch(e){console.error(e);} setLoading(false);
@@ -44,17 +55,25 @@ const Colaboradores = ({ session, accessByRole, onAccessChange }) => {
   const startEdit = (item) => { setEditingId(item.id); setEditData({ nome:item.nome, cargo:item.cargo, email:item.email, telefone:item.telefone, departamento:item.departamento, status:item.status, usuario:item.usuario||'', senha:item.senha||'' }); };
 
   const updateRoleAccess = (role, pageKey, checked) => {
-    const next = { ...accessByRole };
+    const next = { ...localAccess };
     const current = new Set(next[role] || []);
     if (checked) current.add(pageKey); else current.delete(pageKey);
     next[role] = Array.from(current);
-    onAccessChange(next);
+    setLocalAccess(next);
+    setHasAccessChanges(true);
+    setSaveAccessSuccess(false);
+  };
+
+  const handleSaveAccess = () => {
+    onAccessChange(localAccess);
+    setSaveAccessSuccess(true);
+    setHasAccessChanges(false);
+    setTimeout(() => setSaveAccessSuccess(false), 4000);
   };
 
   const totalPages = Math.max(1, Math.ceil(data.length / PAGE_SIZE));
   const paged = data.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
   const getStatusBadge = (s) => ({'Ativo':'badge-ativo','Inativo':'badge-cancelado'}[s]||'badge-pendente');
-  const inlineInput = (field) => <Input value={editData[field]||''} onChange={e=>setEditData({...editData,[field]:e.target.value})} style={{fontSize:'0.78rem',padding:'4px 8px',height:'30px'}} />;
 
   return (
     <div className="animate-fade-in">
@@ -77,13 +96,38 @@ const Colaboradores = ({ session, accessByRole, onAccessChange }) => {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(100px, 1fr))', gap: '8px' }}>
                   {AVAILABLE_PAGES.map((pageKey) => (
                     <label key={pageKey} style={{ fontSize: '0.75rem', color: '#5E6E82', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <input type="checkbox" checked={(accessByRole?.[role] || []).includes(pageKey)} onChange={(e) => updateRoleAccess(role, pageKey, e.target.checked)} />
+                      <input type="checkbox" checked={(localAccess?.[role] || []).includes(pageKey)} onChange={(e) => updateRoleAccess(role, pageKey, e.target.checked)} />
                       {pageKey}
                     </label>
                   ))}
                 </div>
               </div>
             ))}
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px', gap: '10px', alignItems: 'center' }}>
+            {saveAccessSuccess && (
+              <span style={{ fontSize: '0.8rem', color: '#27ae60', fontWeight: 600 }}>
+                ✓ Alterações de acesso salvas com sucesso!
+              </span>
+            )}
+            <Button
+              onClick={handleSaveAccess}
+              disabled={!hasAccessChanges}
+              style={{
+                background: hasAccessChanges ? '#27ae60' : '#e5e7eb',
+                color: hasAccessChanges ? '#fff' : '#a0aec0',
+                fontSize: '0.78rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: hasAccessChanges ? 'pointer' : 'not-allowed',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Save size={14} />
+              Salvar Permissões de Acesso
+            </Button>
           </div>
         </div>
       )}
@@ -111,64 +155,25 @@ const Colaboradores = ({ session, accessByRole, onAccessChange }) => {
             <tbody>
               {paged.map(item=>(
                 <tr key={item.id}>
-                  {editingId===item.id ? (
-                    <>
-                      <td>{inlineInput('nome')}</td>
-                      <td>{inlineInput('cargo')}</td>
-                      <td>{inlineInput('email')}</td>
-                      <td>{inlineInput('telefone')}</td>
-                      <td>{inlineInput('usuario')}</td>
-                      <td>{inlineInput('senha')}</td>
-                      <td>
-                        <select 
-                          value={editData.departamento} 
-                          onChange={e=>setEditData({...editData,departamento:e.target.value})} 
-                          style={{fontSize:'0.75rem',padding:'4px 6px',border:'1px solid #d8e2ef',borderRadius:'4px',width:'100%'}}
-                        >
-                          {FIXED_ROLES.map((r)=><option key={r}>{r}</option>)}
-                        </select>
-                      </td>
-                      <td>{item.dataAdmissao}</td>
-                      <td>
-                        <select 
-                          value={editData.status} 
-                          onChange={e=>setEditData({...editData,status:e.target.value})} 
-                          style={{fontSize:'0.75rem',padding:'4px 6px',border:'1px solid #d8e2ef',borderRadius:'4px'}}
-                        >
-                          <option>Ativo</option>
-                          <option>Inativo</option>
-                        </select>
-                      </td>
-                      <td>
-                        <div style={{display:'flex',gap:'4px'}}>
-                          <button onClick={()=>handleSaveEdit(item.id)} style={{background:'none',border:'1px solid #27ae60',borderRadius:'4px',padding:'4px 6px',cursor:'pointer',color:'#27ae60'}}><Save size={13}/></button>
-                          <button onClick={()=>setEditingId(null)} style={{background:'none',border:'1px solid #e63757',borderRadius:'4px',padding:'4px 6px',cursor:'pointer',color:'#e63757'}}><X size={13}/></button>
-                        </div>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td style={{fontWeight:600}}>{item.nome}</td>
-                      <td>{item.cargo}</td>
-                      <td style={{fontSize:'0.75rem',color:'#2C7BE5'}}>{item.email}</td>
-                      <td style={{fontSize:'0.75rem'}}>{item.telefone}</td>
-                      <td style={{fontSize:'0.75rem',fontWeight:500}}>{item.usuario || '-'}</td>
-                      <td style={{fontSize:'0.75rem',color:'#6b7280'}}>{item.senha || '-'}</td>
-                      <td>
-                        <span style={{background:'#edf2f9',padding:'2px 8px',borderRadius:'10px',fontSize:'0.68rem',fontWeight:500}}>
-                          {FIXED_ROLES.includes(item.departamento) ? item.departamento : 'Analista'}
-                        </span>
-                      </td>
-                      <td style={{fontSize:'0.75rem'}}>{item.dataAdmissao}</td>
-                      <td><span className={getStatusBadge(item.status)}>{item.status}</span></td>
-                      <td>
-                        <div style={{display:'flex',gap:'4px'}}>
-                          <button onClick={()=>startEdit(item)} style={{background:'none',border:'1px solid #d8e2ef',borderRadius:'4px',padding:'4px 6px',cursor:'pointer',color:'#e6832a'}}><Edit size={13}/></button>
-                          <button onClick={()=>handleDelete(item.id)} style={{background:'none',border:'1px solid #d8e2ef',borderRadius:'4px',padding:'4px 6px',cursor:'pointer',color:'#e63757'}}><Trash2 size={13}/></button>
-                        </div>
-                      </td>
-                    </>
-                  )}
+                  <td style={{fontWeight:600}}>{item.nome}</td>
+                  <td>{item.cargo}</td>
+                  <td style={{fontSize:'0.75rem',color:'#2C7BE5'}}>{item.email}</td>
+                  <td style={{fontSize:'0.75rem'}}>{item.telefone}</td>
+                  <td style={{fontSize:'0.75rem',fontWeight:500}}>{item.usuario || '-'}</td>
+                  <td style={{fontSize:'0.75rem',color:'#6b7280'}}>{item.senha || '-'}</td>
+                  <td>
+                    <span style={{background:'#edf2f9',padding:'2px 8px',borderRadius:'10px',fontSize:'0.68rem',fontWeight:500}}>
+                      {FIXED_ROLES.includes(item.departamento) ? item.departamento : 'Analista'}
+                    </span>
+                  </td>
+                  <td style={{fontSize:'0.75rem'}}>{item.dataAdmissao}</td>
+                  <td><span className={getStatusBadge(item.status)}>{item.status}</span></td>
+                  <td>
+                    <div style={{display:'flex',gap:'4px'}}>
+                      <button onClick={()=>startEdit(item)} style={{background:'none',border:'1px solid #d8e2ef',borderRadius:'4px',padding:'4px 6px',cursor:'pointer',color:'#e6832a'}}><Edit size={13}/></button>
+                      <button onClick={()=>handleDelete(item.id)} style={{background:'none',border:'1px solid #d8e2ef',borderRadius:'4px',padding:'4px 6px',cursor:'pointer',color:'#e63757'}}><Trash2 size={13}/></button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -221,6 +226,61 @@ const Colaboradores = ({ session, accessByRole, onAccessChange }) => {
           <DialogFooter>
             <Button variant="outline" onClick={()=>setShowNew(false)}>Cancelar</Button>
             <Button style={{background:'#2C7BE5',color:'#fff'}} onClick={handleCreate} disabled={saving}>{saving?'Salvando...':'Criar'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editingId !== null} onOpenChange={(open) => { if (!open) setEditingId(null); }}>
+        <DialogContent style={{maxWidth:'550px'}}>
+          <DialogHeader>
+            <DialogTitle>Editar Colaborador</DialogTitle>
+          </DialogHeader>
+          <div style={{display:'flex',flexDirection:'column',gap:'10px',padding:'8px 0'}}>
+            <div>
+              <label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Nome Completo</label>
+              <Input value={editData.nome || ''} onChange={e=>setEditData({...editData,nome:e.target.value})}/>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
+              <div>
+                <label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Cargo</label>
+                <Input value={editData.cargo || ''} onChange={e=>setEditData({...editData,cargo:e.target.value})}/>
+              </div>
+              <div>
+                <label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Perfil</label>
+                <select value={editData.departamento || 'Analista'} onChange={e=>setEditData({...editData,departamento:e.target.value})} style={{width:'100%',border:'1px solid #d8e2ef',borderRadius:'6px',padding:'8px 12px',fontSize:'0.85rem'}}>{FIXED_ROLES.map((r)=><option key={r}>{r}</option>)}</select>
+              </div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
+              <div>
+                <label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Email</label>
+                <Input value={editData.email || ''} onChange={e=>setEditData({...editData,email:e.target.value})}/>
+              </div>
+              <div>
+                <label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Telefone</label>
+                <Input value={editData.telefone || ''} onChange={e=>setEditData({...editData,telefone:e.target.value})}/>
+              </div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
+              <div>
+                <label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Nome de Usuário</label>
+                <Input value={editData.usuario || ''} onChange={e=>setEditData({...editData,usuario:e.target.value})} placeholder="Ex: analista.suporte"/>
+              </div>
+              <div>
+                <label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Senha</label>
+                <Input value={editData.senha || ''} onChange={e=>setEditData({...editData,senha:e.target.value})} placeholder="Digite a senha de acesso"/>
+              </div>
+            </div>
+            <div>
+              <label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Status</label>
+              <select value={editData.status || 'Ativo'} onChange={e=>setEditData({...editData,status:e.target.value})} style={{width:'100%',border:'1px solid #d8e2ef',borderRadius:'6px',padding:'8px 12px',fontSize:'0.85rem'}}>
+                <option value="Ativo">Ativo</option>
+                <option value="Inativo">Inativo</option>
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={()=>setEditingId(null)}>Cancelar</Button>
+            <Button style={{background:'#2C7BE5',color:'#fff'}} onClick={()=>handleSaveEdit(editingId)} disabled={saving}>{saving?'Salvando...':'Salvar Alterações'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
