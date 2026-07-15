@@ -58,6 +58,7 @@ class InclusaoBase(BaseModel):
     estadoCivil: str = ""
     plano: str = ""
     nomeMae: str = ""
+    genero: Optional[str] = ""
 
 
 class Inclusao(InclusaoBase):

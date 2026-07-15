@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { fetchPortalDonCorChat } from '../services/api';
 import { menuItems } from '../data/mockData';
 import {
   Users, Handshake, UserPlus, UserMinus, ArrowLeftRight,
@@ -77,6 +78,48 @@ const Sidebar = ({ collapsed, onToggle, onMenuClick, activeItem, allowedPages = 
   const [expandedMenus, setExpandedMenus] = useState({
     movimentacao: true, // expanded by default for a user-friendly view
   });
+
+  const [chatUnread, setChatUnread] = useState(() => Number(localStorage.getItem('doncor_chat_unread') || 0));
+  const [notificationsUnread, setNotificationsUnread] = useState(() => Number(localStorage.getItem('doncor_notifications_unread') || 0));
+
+  useEffect(() => {
+    const handleChatUnread = (e) => {
+      const count = e?.detail?.count;
+      setChatUnread(Number.isFinite(Number(count)) ? Number(count) : Number(localStorage.getItem('doncor_chat_unread') || 0));
+    };
+    const handleNotificationsUnread = (e) => {
+      const count = e?.detail?.count;
+      setNotificationsUnread(Number.isFinite(Number(count)) ? Number(count) : Number(localStorage.getItem('doncor_notifications_unread') || 0));
+    };
+
+    window.addEventListener('doncor-chat-unread', handleChatUnread);
+    window.addEventListener('doncor-notifications-unread', handleNotificationsUnread);
+
+    const handleStorage = () => {
+      setChatUnread(Number(localStorage.getItem('doncor_chat_unread') || 0));
+      setNotificationsUnread(Number(localStorage.getItem('doncor_notifications_unread') || 0));
+    };
+    window.addEventListener('storage', handleStorage);
+
+    // Initial fetch to load counts immediately
+    const loadInitialCounts = async () => {
+      try {
+        const chat = await fetchPortalDonCorChat({});
+        const unreadMovements = (chat || []).filter(item => item.protocolo && !item.read).length;
+        setNotificationsUnread(unreadMovements);
+        localStorage.setItem('doncor_notifications_unread', String(unreadMovements));
+      } catch (e) {
+        console.error("Erro ao obter contadores iniciais na Sidebar:", e);
+      }
+    };
+    loadInitialCounts();
+
+    return () => {
+      window.removeEventListener('doncor-chat-unread', handleChatUnread);
+      window.removeEventListener('doncor-notifications-unread', handleNotificationsUnread);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
 
   const toggleSubmenu = (menuId) => {
     setExpandedMenus((prev) => ({
@@ -176,9 +219,25 @@ const Sidebar = ({ collapsed, onToggle, onMenuClick, activeItem, allowedPages = 
                       onClick={() => toggleSubmenu(item.id)}
                       title={item.label}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <span className="icon"><IconComp size={16} /></span>
-                        {!collapsed && <span>{item.label}</span>}
+                      <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                        <span className="icon" style={{ position: 'relative' }}>
+                          <IconComp size={16} />
+                          {collapsed && item.id === 'movimentacao' && notificationsUnread > 0 && (
+                            <span style={{ position: 'absolute', top: -5, right: -5, background: '#fbbf24', color: '#1e3a8a', fontSize: '9px', fontWeight: 800, padding: '1px 4px', borderRadius: '50%', border: '1px solid #1e3a8a', lineHeight: 1 }}>
+                              {notificationsUnread}
+                            </span>
+                          )}
+                        </span>
+                        {!collapsed && (
+                          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', minWidth: 0 }}>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>
+                            {item.id === 'movimentacao' && notificationsUnread > 0 && (
+                              <span style={{ background: '#fbbf24', color: '#1e3a8a', fontSize: '11px', fontWeight: 800, padding: '2px 6px', borderRadius: '10px', marginLeft: 'auto', marginRight: '8px' }}>
+                                {notificationsUnread}
+                              </span>
+                            )}
+                          </span>
+                        )}
                       </div>
                       {!collapsed && (
                         <span style={{ display: 'flex', alignItems: 'center', marginRight: '4px' }}>
@@ -227,9 +286,24 @@ const Sidebar = ({ collapsed, onToggle, onMenuClick, activeItem, allowedPages = 
                   className={`sidebar-item ${activeItem === item.id ? 'active' : ''}`}
                   onClick={() => onMenuClick(item)}
                   title={item.label}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                 >
-                  <span className="icon"><IconComp size={16} /></span>
-                  {!collapsed && <span>{item.label}</span>}
+                  <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                    <span className="icon" style={{ position: 'relative' }}>
+                      <IconComp size={16} />
+                      {collapsed && item.id === 'chat' && chatUnread > 0 && (
+                        <span style={{ position: 'absolute', top: -5, right: -5, background: '#ef4444', color: '#fff', fontSize: '9px', fontWeight: 800, padding: '1px 4px', borderRadius: '50%', border: '1px solid #1e3a8a', lineHeight: 1 }}>
+                          {chatUnread}
+                        </span>
+                      )}
+                    </span>
+                    {!collapsed && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>}
+                  </div>
+                  {!collapsed && item.id === 'chat' && chatUnread > 0 && (
+                    <span style={{ background: '#ef4444', color: '#fff', fontSize: '11px', fontWeight: 800, padding: '2px 6px', borderRadius: '10px', marginLeft: 'auto', marginRight: '8px' }}>
+                      {chatUnread}
+                    </span>
+                  )}
                 </div>
               );
             })}

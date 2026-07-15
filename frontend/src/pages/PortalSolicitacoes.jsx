@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Search, Filter, Loader2, FileText, CheckCircle } from 'lucide-react';
+import { Search, Filter, Loader2, FileText, CheckCircle, Eye, Download, Paperclip } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { fetchPortalDonCorSolicitacoes, updatePortalDonCorSolicitacao } from '../services/api';
@@ -13,6 +13,21 @@ const PortalSolicitacoes = () => {
   const [tipoFilter, setTipoFilter] = useState('todos');
   const [error, setError] = useState('');
   const [selectedProtocol, setSelectedProtocol] = useState(null);
+  const [previewAtt, setPreviewAtt] = useState(null);
+
+  const handleDownloadAttachment = (att) => {
+    if (!att || !att.base64) return;
+    const link = document.createElement('a');
+    link.href = att.base64.startsWith('data:') ? att.base64 : `data:${att.type || 'application/octet-stream'};base64,${att.base64}`;
+    link.download = att.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleViewAttachment = (att) => {
+    setPreviewAtt(att);
+  };
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -305,21 +320,28 @@ const PortalSolicitacoes = () => {
                 <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Anexos / Documentos</span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {(selectedProtocol?.anexos || selectedProtocol?.attachments || []).map((att, idx) => (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: '#f8f9fa', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.8rem' }}>
-                      <span>📎</span>
-                      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {att.base64 ? (
-                          <a
-                            href={att.base64.startsWith('data:') ? att.base64 : `data:${att.type || 'application/octet-stream'};base64,${att.base64}`}
-                            download={att.name}
-                            style={{ color: '#2C7BE5', fontWeight: 600, textDecoration: 'underline' }}
-                          >
-                            {att.name}
-                          </a>
-                        ) : (
-                          <span style={{ fontWeight: 500, color: '#344050' }}>{att.name}</span>
-                        )}
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '6px 10px', background: '#f8f9fa', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.8rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                        <Paperclip size={14} color="#2C7BE5" />
+                        <span style={{ fontWeight: 600, color: '#344050', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.name}</span>
                         {att.size ? <span style={{ color: '#8a8d93', fontSize: '0.72rem', marginLeft: '6px' }}>({(att.size / 1024).toFixed(0)} KB)</span> : null}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleViewAttachment(att)}
+                          style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '2px 8px', height: '28px', cursor: 'pointer' }}
+                        >
+                          <Eye size={12} /> Visualizar
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handleDownloadAttachment(att)}
+                          style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '2px 8px', height: '28px', background: '#2C7BE5', color: '#fff', cursor: 'pointer' }}
+                        >
+                          <Download size={12} /> Baixar
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -331,6 +353,53 @@ const PortalSolicitacoes = () => {
             <Button onClick={() => setSelectedProtocol(null)} style={{ background: '#1a3a52', color: '#fff', width: '100%' }}>
               Fechar Detalhes
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para Visualização de Anexo */}
+      <Dialog open={!!previewAtt} onOpenChange={(open) => !open && setPreviewAtt(null)}>
+        <DialogContent style={{ maxWidth: '800px', width: '90%' }}>
+          <DialogHeader>
+            <DialogTitle>👁️ Visualizar Anexo: {previewAtt?.name}</DialogTitle>
+          </DialogHeader>
+          <div style={{ margin: '14px 0', minHeight: '400px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '10px' }}>
+            {previewAtt ? (
+              previewAtt.name.toLowerCase().endsWith('.pdf') || previewAtt.type?.includes('pdf') ? (
+                <iframe
+                  src={previewAtt.base64?.startsWith('data:') ? previewAtt.base64 : `data:application/pdf;base64,${previewAtt.base64}`}
+                  style={{ width: '100%', height: '550px', border: 'none', borderRadius: '4px' }}
+                  title="PDF Preview"
+                />
+              ) : previewAtt.name.toLowerCase().endsWith('.png') || previewAtt.name.toLowerCase().endsWith('.jpg') || previewAtt.name.toLowerCase().endsWith('.jpeg') || previewAtt.name.toLowerCase().endsWith('.gif') || previewAtt.type?.includes('image') ? (
+                <img
+                  src={previewAtt.base64?.startsWith('data:') ? previewAtt.base64 : `data:${previewAtt.type || 'image/png'};base64,${previewAtt.base64}`}
+                  alt={previewAtt.name}
+                  style={{ maxWidth: '100%', maxHeight: '550px', objectFit: 'contain', borderRadius: '4px' }}
+                />
+              ) : previewAtt.name.toLowerCase().endsWith('.txt') || previewAtt.type?.includes('text') ? (
+                <pre style={{ width: '100%', maxHeight: '500px', overflow: 'auto', padding: '12px', background: '#fff', border: '1px solid #d8e2ef', borderRadius: '4px', fontSize: '0.85rem', whiteSpace: 'pre-wrap' }}>
+                  {atob(previewAtt.base64.split(',')[1] || previewAtt.base64)}
+                </pre>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <Paperclip size={48} color="#8a8d93" style={{ marginBottom: '14px' }} />
+                  <p style={{ fontWeight: 600, color: '#344050' }}>Visualização não suportada para este tipo de arquivo.</p>
+                  <p style={{ fontSize: '0.78rem', color: '#8a8d93', marginTop: '4px' }}>Por favor, faça o download utilizando o botão abaixo para abrir em seu dispositivo.</p>
+                  <Button onClick={() => handleDownloadAttachment(previewAtt)} style={{ marginTop: '16px', background: '#2C7BE5', color: '#fff' }}>
+                    <Download size={14} style={{ marginRight: '6px' }} /> Baixar Arquivo
+                  </Button>
+                </div>
+              )
+            ) : null}
+          </div>
+          <DialogFooter style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            {previewAtt && (
+              <Button onClick={() => handleDownloadAttachment(previewAtt)} variant="outline">
+                <Download size={14} style={{ marginRight: '6px' }} /> Baixar
+              </Button>
+            )}
+            <Button onClick={() => setPreviewAtt(null)} style={{ background: '#2C7BE5', color: '#fff' }}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

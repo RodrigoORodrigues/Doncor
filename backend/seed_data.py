@@ -442,6 +442,10 @@ for l in normalized_lines:
     
     plano = rest_after_parentesco[:start_date_start].strip()
     
+    rest_after_start_date = rest_after_parentesco[start_date_match.end():].strip()
+    genero_char = "F" if "F" in rest_after_start_date else "M"
+    genero = "Feminino" if genero_char == "F" else "Masculino"
+    
     parsed_inclusoes.append({
         "id": str(uuid.uuid4()),
         "contrato": "EMP-MBC01",
@@ -454,11 +458,15 @@ for l in normalized_lines:
         "parentesco": parentesco,
         "estadoCivil": marital_status,
         "plano": plano,
+        "genero": genero,
         "nomeMae": nome_mae,
         "protocolo": f"INC-{str(uuid.uuid4())[:8].upper()}",
         "dataSolicitacao": start_date,
         "status": "Concluído"
     })
+
+distinct_plans = sorted(list(set(inc["plano"] for inc in parsed_inclusoes)))
+plano_string = ", ".join(distinct_plans)
 
 CONTRATOS_EMPRESARIAL = [
     {
@@ -467,7 +475,7 @@ CONTRATOS_EMPRESARIAL = [
         "cnpj": "27.644.400/0001-96",
         "empresa": "MARINA BARRA CLUBE",
         "status": "Ativo",
-        "plano": "Amil Fácil S75 QC",
+        "plano": plano_string,
         "vigencia": "11/1/2024",
         "vidas": len(parsed_inclusoes)
     }
@@ -493,6 +501,7 @@ for idx, inc in enumerate(parsed_inclusoes):
         "cpf": inc["cpf"],
         "parentesco": inc["parentesco"],
         "estadoCivil": inc["estadoCivil"],
+        "genero": inc["genero"],
         "nomeMae": inc["nomeMae"],
         "dataNascimento": inc["dataNascimento"],
         "telefone": inc["telefone"],
@@ -505,7 +514,7 @@ for idx, inc in enumerate(parsed_inclusoes):
         "origem": "portal_cliente",
         "createdAt": "2026-07-09T12:00:00Z",
         "criadoEm": "09/07/2026 12:00",
-        "payload": {}
+        "payload": {"genero": inc["genero"]}
     })
 
 # Client Portal Partner with default password '123456' for CNPJ login
@@ -548,7 +557,44 @@ EXCLUSOES = []
 
 TRANSFERENCIAS = []
 
-FATURAS = []
+FATURAS = [
+    {
+        "id": "FAT-MBC-01",
+        "numero": "FAT-001",
+        "contrato": "EMP-MBC01",
+        "seguradora": "Amil",
+        "competencia": "04/2026",
+        "vencimento": "10/04/2026",
+        "valor": "R$ 45.240,00",
+        "valorPago": "R$ 45.240,00",
+        "status": "Paga",
+        "vidas": len(parsed_inclusoes),
+    },
+    {
+        "id": "FAT-MBC-02",
+        "numero": "FAT-002",
+        "contrato": "EMP-MBC01",
+        "seguradora": "Amil",
+        "competencia": "05/2026",
+        "vencimento": "10/05/2026",
+        "valor": "R$ 45.240,00",
+        "valorPago": "R$ 45.240,00",
+        "status": "Paga",
+        "vidas": len(parsed_inclusoes),
+    },
+    {
+        "id": "FAT-MBC-03",
+        "numero": "FAT-003",
+        "contrato": "EMP-MBC01",
+        "seguradora": "Amil",
+        "competencia": "06/2026",
+        "vencimento": "10/06/2026",
+        "valor": "R$ 45.240,00",
+        "valorPago": "",
+        "status": "Aberta",
+        "vidas": len(parsed_inclusoes),
+    }
+]
 
 COMISSOES = []
 
@@ -557,6 +603,25 @@ TAREFAS_PENDENTES = []
 MOVIMENTACOES_RECENTES = []
 
 SEGURADORAS = []
+
+BOLETOS_BAIXADOS = [
+    {
+        "id": "BOL-MBC-01",
+        "status": "sucesso",
+        "apolice_id": "EMP-MBC01",
+        "contrato": "EMP-MBC01",
+        "arquivo_nome": "Fatura_Amil_06_2026.pdf",
+        "arquivo_path": "boletos/Fatura_Amil_06_2026.pdf",
+        "storage_path": "boletos/Fatura_Amil_06_2026.pdf",
+        "arquivo_url": "https://example.com/mock.pdf",
+        "public_url": "https://example.com/mock.pdf",
+        "tamanho_bytes": 1048576,
+        "content_type": "application/pdf",
+        "createdAt": "2026-07-09T12:00:00Z",
+        "criadoEm": "09/07/2026 12:00",
+        "origem": "rpa",
+    }
+]
 
 import uuid
 
@@ -618,6 +683,7 @@ async def seed_database(db):
         "colaboradores": COLABORADORES,
         "portal_parceiros": PORTAL_PARCEIROS,
         "portal_solicitacoes": PORTAL_SOLICITACOES,
+        "boletos_baixados": BOLETOS_BAIXADOS,
     }
 
     for collection_name, data in collections_data.items():

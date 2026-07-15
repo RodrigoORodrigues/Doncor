@@ -284,6 +284,7 @@ def _normalize_partner_payload(payload: Dict[str, Any], now_iso: Callable, now_b
         "contratos": contratos,
         "status": str(payload.get("status") or "Ativo").strip() or "Ativo",
         "observacoes": str(payload.get("observacoes") or payload.get("observação") or "").strip(),
+        "acessoSinistralidade": bool(payload.get("acessoSinistralidade", False)),
         "updatedAt": now_iso(),
         "atualizadoEm": now_br(),
     }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchInclusoes, createInclusao, updateInclusao, fetchContratosEmpresarial, fetchContratosAdesao, fetchProdutos } from '../services/api';
-import { UserPlus, Search, Filter, Loader2 } from 'lucide-react';
+import { UserPlus, Search, Filter, Loader2, Eye, Download, Paperclip, Pencil, X } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
@@ -33,6 +33,55 @@ const Inclusao = () => {
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [selectedProtocol, setSelectedProtocol] = useState(null);
+  const [previewAtt, setPreviewAtt] = useState(null);
+  
+  const [isEditing, setIsEditing] = useState(false);
+  const [editFormData, setEditFormData] = useState(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editErrorMsg, setEditErrorMsg] = useState('');
+
+  const handleEditSave = async () => {
+    if (!editFormData.beneficiario?.trim()) {
+      setEditErrorMsg('O preenchimento do Beneficiário é obrigatório.');
+      return;
+    }
+    if (!editFormData.cpf?.trim()) {
+      setEditErrorMsg('O preenchimento do CPF é obrigatório.');
+      return;
+    }
+    if (!validateCPF(editFormData.cpf)) {
+      setEditErrorMsg('CPF inválido. Verifique o número digitado.');
+      return;
+    }
+    setEditSaving(true);
+    setEditErrorMsg('');
+    try {
+      const updated = await updateInclusao(editFormData.id, editFormData);
+      setData(prev => prev.map(item => item.id === editFormData.id ? updated : item));
+      setSelectedProtocol(updated);
+      setIsEditing(false);
+      setEditFormData(null);
+    } catch (e) {
+      console.error(e);
+      setEditErrorMsg('Erro ao salvar as alterações.');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleDownloadAttachment = (att) => {
+    if (!att || !att.base64) return;
+    const link = document.createElement('a');
+    link.href = att.base64.startsWith('data:') ? att.base64 : `data:${att.type || 'application/octet-stream'};base64,${att.base64}`;
+    link.download = att.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleViewAttachment = (att) => {
+    setPreviewAtt(att);
+  };
 
   const standardFaixas = [
     '0 a 18 anos',
@@ -278,16 +327,29 @@ const Inclusao = () => {
               <td>{item.dataSolicitacao}</td>
               <td><span className={getStatusBadge(item.status)}>{item.status}</span></td>
               <td style={{ textAlign: 'center' }}>
-                {item.status !== 'Concluído' && item.status !== 'Aprovado' ? (
-                  <Button 
-                    onClick={() => handleOpenDeploy(item)} 
-                    style={{ background: '#27ae60', color: '#fff', fontSize: '0.72rem', padding: '4px 8px', height: 'auto', fontWeight: 600 }}
+                <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
+                  {item.status !== 'Concluído' && item.status !== 'Aprovado' ? (
+                    <Button 
+                      onClick={() => handleOpenDeploy(item)} 
+                      style={{ background: '#27ae60', color: '#fff', fontSize: '0.72rem', padding: '4px 8px', height: '28px', fontWeight: 600 }}
+                    >
+                      🚀 Implantar
+                    </Button>
+                  ) : (
+                    <span style={{ fontSize: '0.72rem', color: '#27ae60', fontWeight: 600 }}>Implantado</span>
+                  )}
+                  <Button
+                    onClick={() => {
+                      setSelectedProtocol(item);
+                      setEditFormData({ ...item });
+                      setIsEditing(true);
+                    }}
+                    variant="outline"
+                    style={{ fontSize: '0.72rem', padding: '4px 8px', height: '28px', color: '#344050', display: 'flex', alignItems: 'center', gap: '4px' }}
                   >
-                    🚀 Implantar
+                    <Pencil size={12} /> Editar
                   </Button>
-                ) : (
-                  <span style={{ fontSize: '0.72rem', color: '#27ae60', fontWeight: 600 }}>Implantado</span>
-                )}
+                </div>
               </td>
             </tr>))}</tbody>
           </table>
@@ -577,26 +639,56 @@ const Inclusao = () => {
       </Dialog>
 
       {/* Dialog Detalhes do Protocolo */}
-      <Dialog open={!!selectedProtocol} onOpenChange={(open) => !open && setSelectedProtocol(null)}>
+      <Dialog open={!!selectedProtocol} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedProtocol(null);
+          setIsEditing(false);
+          setEditFormData(null);
+          setEditErrorMsg('');
+        }
+      }}>
         <DialogContent style={{ maxWidth: '600px' }}>
           <DialogHeader>
             <DialogTitle style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1a3a52', fontSize: '1.25rem' }}>
               📄 Detalhes da Solicitação ({selectedProtocol?.protocolo})
             </DialogTitle>
           </DialogHeader>
+
+          {isEditing && editErrorMsg && (
+            <div style={{ padding: '8px 12px', background: '#ffe2e2', color: '#991b1b', border: '1px solid #fecdd3', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600 }}>
+              ⚠️ {editErrorMsg}
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', padding: '12px 0', fontSize: '0.85rem' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Protocolo</span>
               <span style={{ fontWeight: 700, color: '#1a3a52', fontSize: '0.95rem' }}>{selectedProtocol?.protocolo}</span>
             </div>
+            
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Status</span>
-              <span>
-                <span className={selectedProtocol ? getStatusBadge(selectedProtocol.status) : ''} style={{ display: 'inline-block' }}>
-                  {selectedProtocol?.status}
+              {isEditing ? (
+                <select
+                  value={editFormData?.status || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
+                  style={{ width: '100%', border: '1px solid #d8e2ef', borderRadius: '6px', padding: '6px 10px', fontSize: '0.85rem', background: '#fff' }}
+                >
+                  <option value="Pendente">Pendente</option>
+                  <option value="Em Análise">Em Análise</option>
+                  <option value="Aprovado">Aprovado</option>
+                  <option value="Concluído">Concluído</option>
+                  <option value="Recusado">Recusado</option>
+                </select>
+              ) : (
+                <span>
+                  <span className={selectedProtocol ? getStatusBadge(selectedProtocol.status) : ''} style={{ display: 'inline-block' }}>
+                    {selectedProtocol?.status}
+                  </span>
                 </span>
-              </span>
+              )}
             </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Tipo</span>
               <span style={{ fontWeight: 500, color: '#344050' }}>Inclusão de Beneficiário</span>
@@ -608,75 +700,199 @@ const Inclusao = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: 'span 2' }}>
               <div style={{ height: '1px', background: '#e2e8f0', margin: '4px 0' }} />
             </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Beneficiário</span>
-              <span style={{ fontWeight: 600, color: '#1a3a52' }}>{selectedProtocol?.beneficiario}</span>
+              {isEditing ? (
+                <Input
+                  value={editFormData?.beneficiario || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, beneficiario: e.target.value })}
+                  style={{ height: '34px', fontSize: '0.85rem' }}
+                />
+              ) : (
+                <span style={{ fontWeight: 600, color: '#1a3a52' }}>{selectedProtocol?.beneficiario}</span>
+              )}
             </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>CPF</span>
-              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.cpf}</span>
+              {isEditing ? (
+                <Input
+                  value={editFormData?.cpf || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, cpf: formatCPF(e.target.value) })}
+                  style={{ height: '34px', fontSize: '0.85rem' }}
+                />
+              ) : (
+                <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.cpf}</span>
+              )}
             </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: 'span 2' }}>
               <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Nome da Mãe</span>
-              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.nomeMae || '-'}</span>
+              {isEditing ? (
+                <Input
+                  value={editFormData?.nomeMae || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, nomeMae: e.target.value })}
+                  style={{ height: '34px', fontSize: '0.85rem' }}
+                />
+              ) : (
+                <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.nomeMae || '-'}</span>
+              )}
             </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Data de Nascimento</span>
-              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.dataNascimento || '-'}</span>
+              {isEditing ? (
+                <Input
+                  value={editFormData?.dataNascimento || ''}
+                  placeholder="DD/MM/AAAA"
+                  onChange={(e) => setEditFormData({ ...editFormData, dataNascimento: e.target.value })}
+                  style={{ height: '34px', fontSize: '0.85rem' }}
+                />
+              ) : (
+                <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.dataNascimento || '-'}</span>
+              )}
             </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Parentesco</span>
-              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.parentesco || '-'}</span>
+              {isEditing ? (
+                <select
+                  value={editFormData?.parentesco || 'Titular'}
+                  onChange={(e) => setEditFormData({ ...editFormData, parentesco: e.target.value })}
+                  style={{ width: '100%', border: '1px solid #d8e2ef', borderRadius: '6px', padding: '6px 10px', fontSize: '0.85rem', background: '#fff' }}
+                >
+                  <option value="Titular">Titular</option>
+                  <option value="Cônjuge">Cônjuge</option>
+                  <option value="Filho(a)">Filho(a)</option>
+                  <option value="Outro">Outro</option>
+                </select>
+              ) : (
+                <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.parentesco || '-'}</span>
+              )}
             </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Gênero</span>
-              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.genero || '-'}</span>
+              {isEditing ? (
+                <select
+                  value={editFormData?.genero || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, genero: e.target.value })}
+                  style={{ width: '100%', border: '1px solid #d8e2ef', borderRadius: '6px', padding: '6px 10px', fontSize: '0.85rem', background: '#fff' }}
+                >
+                  <option value="">Selecione...</option>
+                  <option value="Masculino">Masculino</option>
+                  <option value="Feminino">Feminino</option>
+                </select>
+              ) : (
+                <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.genero || '-'}</span>
+              )}
             </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Estado Civil</span>
-              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.estadoCivil || '-'}</span>
+              {isEditing ? (
+                <select
+                  value={editFormData?.estadoCivil || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, estadoCivil: e.target.value })}
+                  style={{ width: '100%', border: '1px solid #d8e2ef', borderRadius: '6px', padding: '6px 10px', fontSize: '0.85rem', background: '#fff' }}
+                >
+                  <option value="">Selecione...</option>
+                  <option value="Solteiro(a)">Solteiro(a)</option>
+                  <option value="Casado(a)">Casado(a)</option>
+                  <option value="Divorciado(a)">Divorciado(a)</option>
+                  <option value="Viúvo(a)">Viúvo(a)</option>
+                  <option value="União Estável">União Estável</option>
+                </select>
+              ) : (
+                <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.estadoCivil || '-'}</span>
+              )}
             </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Telefone</span>
-              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.telefone || '-'}</span>
+              {isEditing ? (
+                <Input
+                  value={editFormData?.telefone || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, telefone: formatPhone(e.target.value) })}
+                  style={{ height: '34px', fontSize: '0.85rem' }}
+                />
+              ) : (
+                <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.telefone || '-'}</span>
+              )}
             </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: 'span 2' }}>
               <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>E-mail</span>
-              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.email || '-'}</span>
+              {isEditing ? (
+                <Input
+                  value={editFormData?.email || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                  style={{ height: '34px', fontSize: '0.85rem' }}
+                />
+              ) : (
+                <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.email || '-'}</span>
+              )}
             </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: 'span 2' }}>
               <div style={{ height: '1px', background: '#e2e8f0', margin: '4px 0' }} />
             </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Contrato Relacionado</span>
-              <span style={{ fontWeight: 600, color: '#2C7BE5' }}>{selectedProtocol?.contrato || '-'}</span>
+              {isEditing ? (
+                <Input
+                  value={editFormData?.contrato || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, contrato: e.target.value })}
+                  style={{ height: '34px', fontSize: '0.85rem' }}
+                />
+              ) : (
+                <span style={{ fontWeight: 600, color: '#2C7BE5' }}>{selectedProtocol?.contrato || '-'}</span>
+              )}
             </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Empresa</span>
-              <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.empresa || '-'}</span>
+              {isEditing ? (
+                <Input
+                  value={editFormData?.empresa || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, empresa: e.target.value })}
+                  style={{ height: '34px', fontSize: '0.85rem' }}
+                />
+              ) : (
+                <span style={{ fontWeight: 500, color: '#344050' }}>{selectedProtocol?.empresa || '-'}</span>
+              )}
             </div>
 
             {/* Seção de Anexos */}
-            {(selectedProtocol?.anexos || selectedProtocol?.attachments || [])?.length > 0 && (
+            {!isEditing && (selectedProtocol?.anexos || selectedProtocol?.attachments || [])?.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', gridColumn: 'span 2', marginTop: '8px' }}>
                 <span style={{ color: '#8a8d93', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase' }}>Anexos / Documentos</span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {(selectedProtocol?.anexos || selectedProtocol?.attachments || []).map((att, idx) => (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: '#f8f9fa', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.8rem' }}>
-                      <span>📎</span>
-                      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {att.base64 ? (
-                          <a
-                            href={att.base64.startsWith('data:') ? att.base64 : `data:${att.type || 'application/octet-stream'};base64,${att.base64}`}
-                            download={att.name}
-                            style={{ color: '#2C7BE5', fontWeight: 600, textDecoration: 'underline' }}
-                          >
-                            {att.name}
-                          </a>
-                        ) : (
-                          <span style={{ fontWeight: 500, color: '#344050' }}>{att.name}</span>
-                        )}
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '6px 10px', background: '#f8f9fa', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.8rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                        <Paperclip size={14} color="#2C7BE5" />
+                        <span style={{ fontWeight: 600, color: '#344050', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.name}</span>
                         {att.size ? <span style={{ color: '#8a8d93', fontSize: '0.72rem', marginLeft: '6px' }}>({(att.size / 1024).toFixed(0)} KB)</span> : null}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleViewAttachment(att)}
+                          style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '2px 8px', height: '28px', cursor: 'pointer' }}
+                        >
+                          <Eye size={12} /> Visualizar
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handleDownloadAttachment(att)}
+                          style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '2px 8px', height: '28px', background: '#2C7BE5', color: '#fff', cursor: 'pointer' }}
+                        >
+                          <Download size={12} /> Baixar
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -684,10 +900,96 @@ const Inclusao = () => {
               </div>
             )}
           </div>
-          <DialogFooter>
-            <Button onClick={() => setSelectedProtocol(null)} style={{ background: '#1a3a52', color: '#fff', width: '100%' }}>
-              Fechar Detalhes
-            </Button>
+          <DialogFooter style={{ display: 'flex', gap: '8px', width: '100%' }}>
+            {isEditing ? (
+              <>
+                <Button 
+                  onClick={() => {
+                    setIsEditing(false);
+                    setEditFormData(null);
+                    setEditErrorMsg('');
+                  }} 
+                  variant="outline" 
+                  style={{ flex: 1 }}
+                  disabled={editSaving}
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={handleEditSave} 
+                  style={{ background: '#27ae60', color: '#fff', flex: 1 }}
+                  disabled={editSaving}
+                >
+                  {editSaving ? 'Salvando...' : 'Salvar Alterações'}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button 
+                  onClick={() => {
+                    setEditFormData({ ...selectedProtocol });
+                    setIsEditing(true);
+                  }} 
+                  variant="outline" 
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '4px', borderColor: '#2C7BE5', color: '#2C7BE5' }}
+                >
+                  <Pencil size={14} /> Editar
+                </Button>
+                <Button 
+                  onClick={() => setSelectedProtocol(null)} 
+                  style={{ background: '#1a3a52', color: '#fff', flex: 1 }}
+                >
+                  Fechar Detalhes
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para Visualização de Anexo */}
+      <Dialog open={!!previewAtt} onOpenChange={(open) => !open && setPreviewAtt(null)}>
+        <DialogContent style={{ maxWidth: '800px', width: '90%' }}>
+          <DialogHeader>
+            <DialogTitle>👁️ Visualizar Anexo: {previewAtt?.name}</DialogTitle>
+          </DialogHeader>
+          <div style={{ margin: '14px 0', minHeight: '400px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '10px' }}>
+            {previewAtt ? (
+              previewAtt.name.toLowerCase().endsWith('.pdf') || previewAtt.type?.includes('pdf') ? (
+                <iframe
+                  src={previewAtt.base64?.startsWith('data:') ? previewAtt.base64 : `data:application/pdf;base64,${previewAtt.base64}`}
+                  style={{ width: '100%', height: '550px', border: 'none', borderRadius: '4px' }}
+                  title="PDF Preview"
+                />
+              ) : previewAtt.name.toLowerCase().endsWith('.png') || previewAtt.name.toLowerCase().endsWith('.jpg') || previewAtt.name.toLowerCase().endsWith('.jpeg') || previewAtt.name.toLowerCase().endsWith('.gif') || previewAtt.type?.includes('image') ? (
+                <img
+                  src={previewAtt.base64?.startsWith('data:') ? previewAtt.base64 : `data:${previewAtt.type || 'image/png'};base64,${previewAtt.base64}`}
+                  alt={previewAtt.name}
+                  style={{ maxWidth: '100%', maxHeight: '550px', objectFit: 'contain', borderRadius: '4px' }}
+                />
+              ) : previewAtt.name.toLowerCase().endsWith('.txt') || previewAtt.type?.includes('text') ? (
+                <pre style={{ width: '100%', maxHeight: '500px', overflow: 'auto', padding: '12px', background: '#fff', border: '1px solid #d8e2ef', borderRadius: '4px', fontSize: '0.85rem', whiteSpace: 'pre-wrap' }}>
+                  {atob(previewAtt.base64.split(',')[1] || previewAtt.base64)}
+                </pre>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <Paperclip size={48} color="#8a8d93" style={{ marginBottom: '14px' }} />
+                  <p style={{ fontWeight: 600, color: '#344050' }}>Visualização não suportada para este tipo de arquivo.</p>
+                  <p style={{ fontSize: '0.78rem', color: '#8a8d93', marginTop: '4px' }}>Por favor, faça o download utilizando o botão abaixo para abrir em seu dispositivo.</p>
+                  <Button onClick={() => handleDownloadAttachment(previewAtt)} style={{ marginTop: '16px', background: '#2C7BE5', color: '#fff' }}>
+                    <Download size={14} style={{ marginRight: '6px' }} /> Baixar Arquivo
+                  </Button>
+                </div>
+              )
+            ) : null}
+          </div>
+          <DialogFooter style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            {previewAtt && (
+              <Button onClick={() => handleDownloadAttachment(previewAtt)} variant="outline">
+                <Download size={14} style={{ marginRight: '6px' }} /> Baixar
+              </Button>
+            )}
+            <Button onClick={() => setPreviewAtt(null)} style={{ background: '#2C7BE5', color: '#fff' }}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

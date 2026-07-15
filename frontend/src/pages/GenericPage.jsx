@@ -56,7 +56,7 @@ const GenericPage = ({ pageId, pageLabel }) => {
       }
     }
     return {
-      nome: 'Donfim Corretora',
+      nome: 'Carlos Eduardo Silva',
       email: 'donfim@gmail.com',
       telefone: '(11) 99999-0000',
       logo: ''
@@ -103,7 +103,7 @@ const GenericPage = ({ pageId, pageLabel }) => {
         <div style={cardStyle}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #edf2f9', paddingBottom: '16px', marginBottom: '20px' }}>
             <h2 id="page-title-profile" style={{ margin: 0, color: '#1e293b', fontSize: '1.25rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <User size={22} color="#2C7BE5" /> Meu Perfil Corporativo
+              <User size={22} color="#2C7BE5" /> {pageLabel || 'Meu Perfil Corporativo'}
             </h2>
           </div>
 

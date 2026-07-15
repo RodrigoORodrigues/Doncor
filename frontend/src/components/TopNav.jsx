@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { fetchSaldoVidas, fetchPortalDonCorChat, markPortalDonCorChatRead } from '../services/api';
 import {
   Menu, Bell, Lightbulb, ChevronDown,
-  User, Settings, LogOut, HelpCircle, Paperclip
+  User, Settings, LogOut, HelpCircle, Paperclip, Eye, Download
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -21,6 +21,21 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
 
   const [notifications, setNotifications] = useState([]);
   const [selectedNotification, setSelectedNotification] = useState(null);
+  const [previewAtt, setPreviewAtt] = useState(null);
+
+  const handleDownloadAttachment = (att) => {
+    if (!att || !att.base64) return;
+    const link = document.createElement('a');
+    link.href = att.base64.startsWith('data:') ? att.base64 : `data:${att.type || 'application/octet-stream'};base64,${att.base64}`;
+    link.download = att.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleViewAttachment = (att) => {
+    setPreviewAtt(att);
+  };
 
   const loadNotifications = async () => {
     try {
@@ -42,6 +57,11 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
   const notificationUnreadCount = useMemo(() => {
     return notifications.filter(n => !n.read).length;
   }, [notifications]);
+
+  useEffect(() => {
+    localStorage.setItem('doncor_notifications_unread', String(notificationUnreadCount));
+    window.dispatchEvent(new CustomEvent('doncor-notifications-unread', { detail: { count: notificationUnreadCount } }));
+  }, [notificationUnreadCount]);
 
   const handleMarkAsRead = async (id) => {
     try {
@@ -244,7 +264,7 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
                   <p style={{ margin: '4px 0', fontSize: '0.78rem', color: '#344050', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.text}</p>
                   
                   {item.attachments && item.attachments.length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+                    <div style={{ display: 'none', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
                       {item.attachments.map((att, idx) => (
                         <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', fontWeight: 600 }}>
                           <Paperclip size={12} color="#5e6e82" />
@@ -443,21 +463,28 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
                 <span style={{ color: '#8a8d93', fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Documentos Anexados</span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {selectedNotification.attachments.map((att, index) => (
-                    <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.8rem' }}>
-                      <Paperclip size={14} color="#2C7BE5" />
-                      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {att.base64 ? (
-                          <a
-                            href={att.base64.startsWith('data:') ? att.base64 : `data:${att.type || 'application/octet-stream'};base64,${att.base64}`}
-                            download={att.name}
-                            style={{ color: '#2C7BE5', fontWeight: 700, textDecoration: 'underline' }}
-                          >
-                            {att.name}
-                          </a>
-                        ) : (
-                          <span style={{ color: '#344050', fontWeight: 600 }}>{att.name}</span>
-                        )}
+                    <div key={index} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.8rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                        <Paperclip size={14} color="#2C7BE5" />
+                        <span style={{ color: '#344050', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.name}</span>
                         {att.size ? <span style={{ color: '#8a8d93', fontSize: '0.72rem', marginLeft: '6px' }}>({(att.size / 1024).toFixed(0)} KB)</span> : null}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleViewAttachment(att)}
+                          style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '2px 8px', height: '28px', cursor: 'pointer' }}
+                        >
+                          <Eye size={12} /> Visualizar
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handleDownloadAttachment(att)}
+                          style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '2px 8px', height: '28px', background: '#2C7BE5', color: '#fff', cursor: 'pointer' }}
+                        >
+                          <Download size={12} /> Baixar
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -467,6 +494,53 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
           </div>
           <DialogFooter>
             <Button onClick={() => setSelectedNotification(null)} style={{ background: '#2C7BE5', color: '#fff' }}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para Visualização de Anexo */}
+      <Dialog open={!!previewAtt} onOpenChange={(open) => !open && setPreviewAtt(null)}>
+        <DialogContent style={{ maxWidth: '800px', width: '90%' }}>
+          <DialogHeader>
+            <DialogTitle>👁️ Visualizar Anexo: {previewAtt?.name}</DialogTitle>
+          </DialogHeader>
+          <div style={{ margin: '14px 0', minHeight: '400px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '10px' }}>
+            {previewAtt ? (
+              previewAtt.name.toLowerCase().endsWith('.pdf') || previewAtt.type?.includes('pdf') ? (
+                <iframe
+                  src={previewAtt.base64?.startsWith('data:') ? previewAtt.base64 : `data:application/pdf;base64,${previewAtt.base64}`}
+                  style={{ width: '100%', height: '550px', border: 'none', borderRadius: '4px' }}
+                  title="PDF Preview"
+                />
+              ) : previewAtt.name.toLowerCase().endsWith('.png') || previewAtt.name.toLowerCase().endsWith('.jpg') || previewAtt.name.toLowerCase().endsWith('.jpeg') || previewAtt.name.toLowerCase().endsWith('.gif') || previewAtt.type?.includes('image') ? (
+                <img
+                  src={previewAtt.base64?.startsWith('data:') ? previewAtt.base64 : `data:${previewAtt.type || 'image/png'};base64,${previewAtt.base64}`}
+                  alt={previewAtt.name}
+                  style={{ maxWidth: '100%', maxHeight: '550px', objectFit: 'contain', borderRadius: '4px' }}
+                />
+              ) : previewAtt.name.toLowerCase().endsWith('.txt') || previewAtt.type?.includes('text') ? (
+                <pre style={{ width: '100%', maxHeight: '500px', overflow: 'auto', padding: '12px', background: '#fff', border: '1px solid #d8e2ef', borderRadius: '4px', fontSize: '0.85rem', whiteSpace: 'pre-wrap' }}>
+                  {atob(previewAtt.base64.split(',')[1] || previewAtt.base64)}
+                </pre>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <Paperclip size={48} color="#8a8d93" style={{ marginBottom: '14px' }} />
+                  <p style={{ fontWeight: 600, color: '#344050' }}>Visualização não suportada para este tipo de arquivo.</p>
+                  <p style={{ fontSize: '0.78rem', color: '#8a8d93', marginTop: '4px' }}>Por favor, faça o download utilizando o botão abaixo para abrir em seu dispositivo.</p>
+                  <Button onClick={() => handleDownloadAttachment(previewAtt)} style={{ marginTop: '16px', background: '#2C7BE5', color: '#fff' }}>
+                    <Download size={14} style={{ marginRight: '6px' }} /> Baixar Arquivo
+                  </Button>
+                </div>
+              )
+            ) : null}
+          </div>
+          <DialogFooter style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            {previewAtt && (
+              <Button onClick={() => handleDownloadAttachment(previewAtt)} variant="outline">
+                <Download size={14} style={{ marginRight: '6px' }} /> Baixar
+              </Button>
+            )}
+            <Button onClick={() => setPreviewAtt(null)} style={{ background: '#2C7BE5', color: '#fff' }}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -35,6 +35,8 @@ const PortalParceiros = () => {
   const [formData, setFormData] = useState(initialFormData);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [dialogError, setDialogError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -49,12 +51,19 @@ const PortalParceiros = () => {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const updateField = (field, value) => setFormData((prev) => ({ ...prev, [field]: value }));
+  const updateField = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => ({ ...prev, [field]: false }));
+    }
+  };
 
   const openCreate = () => {
     setEditing(null);
     setFormData(initialFormData);
     setError('');
+    setDialogError('');
+    setFieldErrors({});
     setShowForm(true);
   };
 
@@ -74,17 +83,59 @@ const PortalParceiros = () => {
       acessoSinistralidade: !!item.acessoSinistralidade,
     });
     setError('');
+    setDialogError('');
+    setFieldErrors({});
     setShowForm(true);
   };
 
   const handleSave = async () => {
     setSaving(true);
-    setError('');
-    try {
-      if (!editing && !formData.senha) throw new Error('Cadastre uma senha inicial para este acesso.');
-      if (formData.senha && formData.senha.length < 6) throw new Error('A senha deve ter pelo menos 6 caracteres.');
-      if (formData.senha !== formData.confirmarSenha) throw new Error('A confirmação da senha não confere.');
+    setDialogError('');
+    const newErrors = {};
 
+    if (!formData.nome.trim()) {
+      newErrors.nome = true;
+    }
+
+    const digits = onlyDigits(formData.documento);
+    if (!digits || (digits.length !== 11 && digits.length !== 14)) {
+      newErrors.documento = true;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!formData.email.trim() || !emailRegex.test(formData.email)) {
+      newErrors.email = true;
+    }
+
+    if (!editing) {
+      if (!formData.senha) {
+        newErrors.senha = true;
+      } else if (formData.senha.length < 6) {
+        newErrors.senha = true;
+      }
+      if (formData.senha !== formData.confirmarSenha) {
+        newErrors.confirmarSenha = true;
+      }
+    } else {
+      if (formData.senha) {
+        if (formData.senha.length < 6) {
+          newErrors.senha = true;
+        }
+        if (formData.senha !== formData.confirmarSenha) {
+          newErrors.confirmarSenha = true;
+        }
+      }
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setFieldErrors(newErrors);
+      setDialogError('Por favor, corrija os erros de preenchimento destacados em vermelho.');
+      setSaving(false);
+      return;
+    }
+
+    setFieldErrors({});
+    try {
       const payload = { ...formData, contratos: parseContracts(formData.contratos) };
       delete payload.confirmarSenha;
       if (!payload.senha) delete payload.senha;
@@ -96,7 +147,8 @@ const PortalParceiros = () => {
       await loadData();
     } catch (err) {
       console.error(err);
-      setError(err?.response?.data?.detail || err.message || 'Não foi possível salvar o cadastro.');
+      const backendMsg = err?.response?.data?.detail || err.message || 'Não foi possível salvar o cadastro.';
+      setDialogError(backendMsg);
     }
     setSaving(false);
   };
@@ -159,39 +211,129 @@ const PortalParceiros = () => {
       </div>
       <div style={{display:'flex',justifyContent:'space-between',marginTop:'12px',fontSize:'0.72rem',color:'#8a8d93'}}><span>Exibindo {data.length} registros</span><span>Portal externo: /portal-doncor</span></div>
 
-      <Dialog open={showForm} onOpenChange={setShowForm}><DialogContent style={{maxWidth:'760px'}}><DialogHeader><DialogTitle>{editing ? 'Editar Acesso do Portal' : 'Novo Acesso do Portal do Cliente'}</DialogTitle></DialogHeader>
-        <div style={{display:'flex',flexDirection:'column',gap:'12px',padding:'8px 0'}}>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
-            <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Nome / Responsável</label><Input placeholder="Nome do responsável ou beneficiário" value={formData.nome} onChange={e=>updateField('nome', e.target.value)}/></div>
-            <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Empresa</label><Input placeholder="Nome da empresa" value={formData.empresa} onChange={e=>updateField('empresa', e.target.value)}/></div>
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent style={{maxWidth:'760px'}}>
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Editar Acesso do Portal' : 'Novo Acesso do Portal do Cliente'}</DialogTitle>
+          </DialogHeader>
+          <div style={{display:'flex',flexDirection:'column',gap:'12px',padding:'8px 0'}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
+              <div>
+                <label style={{fontSize:'0.72rem',color: fieldErrors.nome ? '#ef4444' : '#8a8d93',fontWeight:600}}>
+                  Nome / Responsável {fieldErrors.nome && '*'}
+                </label>
+                <Input 
+                  placeholder="Nome do responsável ou beneficiário" 
+                  value={formData.nome} 
+                  onChange={e=>updateField('nome', e.target.value)}
+                  style={fieldErrors.nome ? { borderColor: '#ef4444', borderWidth: '1px' } : {}}
+                />
+              </div>
+              <div>
+                <label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Empresa</label>
+                <Input placeholder="Nome da empresa" value={formData.empresa} onChange={e=>updateField('empresa', e.target.value)}/>
+              </div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'12px'}}>
+              <div>
+                <label style={{fontSize:'0.72rem',color: fieldErrors.documento ? '#ef4444' : '#8a8d93',fontWeight:600}}>
+                  CPF ou CNPJ {fieldErrors.documento && '*'}
+                </label>
+                <Input 
+                  placeholder="Somente números ou formatado" 
+                  value={formData.documento} 
+                  onChange={e=>updateField('documento', e.target.value)}
+                  style={fieldErrors.documento ? { borderColor: '#ef4444', borderWidth: '1px' } : {}}
+                />
+              </div>
+              <div>
+                <label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Telefone</label>
+                <Input placeholder="(00) 00000-0000" value={formData.telefone} onChange={e=>updateField('telefone', e.target.value)}/>
+              </div>
+              <div>
+                <label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Status</label>
+                <select value={formData.status} onChange={e=>updateField('status', e.target.value)} style={{width:'100%',border:'1px solid #d8e2ef',borderRadius:'6px',padding:'8px 12px',fontSize:'0.85rem'}}>
+                  <option>Ativo</option>
+                  <option>Inativo</option>
+                  <option>Bloqueado</option>
+                </select>
+              </div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
+              <div>
+                <label style={{fontSize:'0.72rem',color: fieldErrors.senha ? '#ef4444' : '#8a8d93',fontWeight:600}}>
+                  {editing ? 'Nova senha do portal (opcional)' : 'Senha inicial do portal'} {fieldErrors.senha && '*'}
+                </label>
+                <Input 
+                  type="password" 
+                  placeholder={editing ? 'Preencha somente para trocar a senha' : 'Mínimo 6 caracteres'} 
+                  value={formData.senha} 
+                  onChange={e=>updateField('senha', e.target.value)}
+                  style={fieldErrors.senha ? { borderColor: '#ef4444', borderWidth: '1px' } : {}}
+                />
+              </div>
+              <div>
+                <label style={{fontSize:'0.72rem',color: fieldErrors.confirmarSenha ? '#ef4444' : '#8a8d93',fontWeight:600}}>
+                  Confirmar senha {fieldErrors.confirmarSenha && '*'}
+                </label>
+                <Input 
+                  type="password" 
+                  placeholder="Repita a senha" 
+                  value={formData.confirmarSenha} 
+                  onChange={e=>updateField('confirmarSenha', e.target.value)}
+                  style={fieldErrors.confirmarSenha ? { borderColor: '#ef4444', borderWidth: '1px' } : {}}
+                />
+              </div>
+            </div>
+            <div>
+              <label style={{fontSize:'0.72rem',color: fieldErrors.email ? '#ef4444' : '#8a8d93',fontWeight:600}}>
+                E-mail {fieldErrors.email && '*'}
+              </label>
+              <Input 
+                type="email" 
+                placeholder="email@empresa.com.br" 
+                value={formData.email} 
+                onChange={e=>updateField('email', e.target.value)}
+                style={fieldErrors.email ? { borderColor: '#ef4444', borderWidth: '1px' } : {}}
+              />
+            </div>
+            <div>
+              <label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Contratos vinculados</label>
+              <Input placeholder="Ex.: EMP-2024-001, EMP-2024-002" value={formData.contratos} onChange={e=>updateField('contratos', e.target.value)}/>
+              <div style={{fontSize:'0.68rem',color:'#8a8d93',marginTop:'4px'}}>Separe contratos por vírgula, ponto e vírgula ou quebra de linha. Se deixar vazio, o portal tentará localizar automaticamente pelo CPF/CNPJ nos contratos/movimentações.</div>
+            </div>
+            <div>
+              <label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Observações</label>
+              <textarea placeholder="Observações internas sobre este acesso" value={formData.observacoes} onChange={e=>updateField('observacoes', e.target.value)} style={{width:'100%',minHeight:'78px',border:'1px solid #d8e2ef',borderRadius:'6px',padding:'8px 12px',fontSize:'0.85rem',fontFamily:'inherit'}} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', marginTop: '4px' }}>
+              <input 
+                type="checkbox" 
+                id="acessoSinistralidade"
+                checked={!!formData.acessoSinistralidade} 
+                onChange={e => updateField('acessoSinistralidade', e.target.checked)} 
+                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#2C7BE5' }}
+              />
+              <label htmlFor="acessoSinistralidade" style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+                Liberar acesso à seção "Sinistralidade e BI" para este cliente
+              </label>
+            </div>
           </div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'12px'}}>
-            <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>CPF ou CNPJ</label><Input placeholder="Somente números ou formatado" value={formData.documento} onChange={e=>updateField('documento', e.target.value)}/></div>
-            <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Telefone</label><Input placeholder="(00) 00000-0000" value={formData.telefone} onChange={e=>updateField('telefone', e.target.value)}/></div>
-            <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Status</label><select value={formData.status} onChange={e=>updateField('status', e.target.value)} style={{width:'100%',border:'1px solid #d8e2ef',borderRadius:'6px',padding:'8px 12px',fontSize:'0.85rem'}}><option>Ativo</option><option>Inativo</option><option>Bloqueado</option></select></div>
-          </div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
-            <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>{editing ? 'Nova senha do portal (opcional)' : 'Senha inicial do portal'}</label><Input type="password" placeholder={editing ? 'Preencha somente para trocar a senha' : 'Mínimo 6 caracteres'} value={formData.senha} onChange={e=>updateField('senha', e.target.value)}/></div>
-            <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Confirmar senha</label><Input type="password" placeholder="Repita a senha" value={formData.confirmarSenha} onChange={e=>updateField('confirmarSenha', e.target.value)}/></div>
-          </div>
-          <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>E-mail</label><Input type="email" placeholder="email@empresa.com.br" value={formData.email} onChange={e=>updateField('email', e.target.value)}/></div>
-          <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Contratos vinculados</label><Input placeholder="Ex.: EMP-2024-001, EMP-2024-002" value={formData.contratos} onChange={e=>updateField('contratos', e.target.value)}/><div style={{fontSize:'0.68rem',color:'#8a8d93',marginTop:'4px'}}>Separe contratos por vírgula, ponto e vírgula ou quebra de linha. Se deixar vazio, o portal tentará localizar automaticamente pelo CPF/CNPJ nos contratos/movimentações.</div></div>
-          <div><label style={{fontSize:'0.72rem',color:'#8a8d93',fontWeight:600}}>Observações</label><textarea placeholder="Observações internas sobre este acesso" value={formData.observacoes} onChange={e=>updateField('observacoes', e.target.value)} style={{width:'100%',minHeight:'78px',border:'1px solid #d8e2ef',borderRadius:'6px',padding:'8px 12px',fontSize:'0.85rem',fontFamily:'inherit'}} /></div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', marginTop: '4px' }}>
-            <input 
-              type="checkbox" 
-              id="acessoSinistralidade"
-              checked={!!formData.acessoSinistralidade} 
-              onChange={e => updateField('acessoSinistralidade', e.target.checked)} 
-              style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#2C7BE5' }}
-            />
-            <label htmlFor="acessoSinistralidade" style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
-              Liberar acesso à seção "Sinistralidade e BI" para este cliente
-            </label>
-          </div>
-        </div>
-        <DialogFooter><Button variant="outline" onClick={()=>setShowForm(false)}>Cancelar</Button><Button style={{background:'#2C7BE5',color:'#fff'}} onClick={handleSave} disabled={saving}>{saving?'Salvando...':'Salvar Acesso'}</Button></DialogFooter>
-      </DialogContent></Dialog>
+          <DialogFooter style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'stretch' }}>
+            {dialogError && (
+              <div style={{ color: '#be123c', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', background: '#fff1f2', border: '1px solid #fecdd3', padding: '8px 12px', borderRadius: '6px' }}>
+                <span>⚠️</span> {dialogError}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', width: '100%' }}>
+              <Button variant="outline" onClick={()=>setShowForm(false)}>Cancelar</Button>
+              <Button style={{background:'#2C7BE5',color:'#fff'}} onClick={handleSave} disabled={saving}>
+                {saving?'Salvando...':'Salvar Acesso'}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
