@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { fetchSaldoVidas, fetchNotifications, markNotificationRead } from '../services/api';
 import {
   Menu, Bell, Lightbulb, ChevronDown,
-  User, Settings, LogOut, HelpCircle, MessageCircle
+  User, Settings, LogOut, HelpCircle, MessageCircle, ArrowRightLeft, UserPlus, UserMinus
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -122,20 +122,43 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
             {notifications.length === 0 ? (
               <div style={{ padding: '12px', fontSize: '0.8rem', color: '#8a8d93' }}>Nenhuma notificação nova</div>
             ) : (
-              notifications.map(n => (
-                <DropdownMenuItem key={n.id} style={{ cursor: 'pointer', fontSize: '0.8rem', display: 'flex', gap: '8px', alignItems: 'center' }} onClick={() => {
-                  markNotificationRead(n.id).then(() => {
-                    setNotifications(prev => prev.filter(item => item.id !== n.id));
-                  });
-                  if (n.type === 'chat') openChat();
-                }}>
-                  {n.type === 'chat' && <MessageCircle size={14} color="#2C7BE5" />}
-                  {n.type === 'inclusao' && <div style={{width: 8, height: 8, borderRadius: '50%', background: '#10B981'}} />}
-                  {n.type === 'exclusao' && <div style={{width: 8, height: 8, borderRadius: '50%', background: '#DC2626'}} />}
-                  {n.type === 'transferencia' && <div style={{width: 8, height: 8, borderRadius: '50%', background: '#F59E0B'}} />}
-                  <span>{n.text}</span>
-                </DropdownMenuItem>
-              ))
+              <>
+                {['chat', 'inclusao', 'exclusao', 'transferencia'].map(type => {
+                  const typeNotifications = notifications.filter(n => n.type === type);
+                  if (typeNotifications.length === 0) return null;
+                  const title = { chat: 'Chat', inclusao: 'Inclusão', exclusao: 'Exclusão', transferencia: 'Transferência' }[type];
+                  return (
+                    <div key={type}>
+                      <div style={{ padding: '8px 12px', fontWeight: 600, fontSize: '0.7rem', color: '#5E6E82', background: '#f9fafb' }}>{title}</div>
+                      {typeNotifications.map(n => (
+                        <DropdownMenuItem key={n.id} style={{ cursor: 'pointer', fontSize: '0.8rem', display: 'flex', gap: '8px', alignItems: 'center' }} onClick={() => {
+                          markNotificationRead(n.id).then(() => {
+                            setNotifications(prev => prev.filter(item => item.id !== n.id));
+                          });
+                          if (n.type === 'chat') openChat();
+                          else if (n.type === 'inclusao') onMenuClick?.({ id: 'inclusao', label: 'Inclusão', icon: 'UserPlus', page: 'inclusao' });
+                          else if (n.type === 'exclusao') onMenuClick?.({ id: 'exclusao', label: 'Exclusão', icon: 'UserMinus', page: 'exclusao' });
+                          else if (n.type === 'transferencia') onMenuClick?.({ id: 'transferencia', label: 'Transferência', icon: 'ArrowRightLeft', page: 'transferencia' });
+                        }}>
+                        <div style={{
+                          width: 24, height: 24, borderRadius: '50%',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          background: n.type === 'chat' ? 'rgba(44,123,229,0.1)' :
+                                      n.type === 'inclusao' ? 'rgba(16,185,129,0.1)' :
+                                      n.type === 'exclusao' ? 'rgba(220,38,38,0.1)' : 'rgba(245,158,11,0.1)'
+                        }}>
+                          {n.type === 'chat' && <MessageCircle size={14} color="#2C7BE5" />}
+                          {n.type === 'inclusao' && <UserPlus size={14} color="#10B981" />}
+                          {n.type === 'exclusao' && <UserMinus size={14} color="#DC2626" />}
+                          {n.type === 'transferencia' && <ArrowRightLeft size={14} color="#F59E0B" />}
+                        </div>
+                        <span>{n.text}</span>
+                        </DropdownMenuItem>
+                      ))}
+                    </div>
+                  );
+                })}
+              </>
             )}
           </DropdownMenuContent>
         </DropdownMenu>

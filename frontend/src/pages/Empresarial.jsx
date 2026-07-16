@@ -166,7 +166,7 @@ const Empresarial = ({ tabId }) => {
 
   const startEdit = (item) => {
     setEditingId(item.id);
-    setEditData({ numero:item.numero, empresa:item.empresa, cnpj:item.cnpj, seguradora:item.seguradora, plano:item.plano || '', vigencia:item.vigencia, vencimento:item.vencimento, vidas:item.vidas, status:item.status, valorMensal:item.valorMensal, tipo: item.tipo || displayLabel });
+    setEditData({ numero:item.numero, empresa:item.empresa, cnpj:item.cnpj, seguradora:item.seguradora, produto: item.produto || '', plano:item.plano || '', vigencia:item.vigencia, vencimento:item.vencimento, vidas:item.vidas, status:item.status, valorMensal:item.valorMensal, tipo: item.tipo || displayLabel });
   };
 
   const handleDelete = async (id) => {

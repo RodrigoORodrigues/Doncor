@@ -550,6 +550,14 @@ async def create_transferencia(data: TransferenciaCreate):
     obj.protocolo = _next_protocol("TRF", await db.transferencias.count_documents({}) + 1)
     obj.dataSolicitacao = datetime.now().strftime("%d/%m/%Y")
     await db.transferencias.insert_one(obj.model_dump())
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "documento": obj.cpf,
+        "type": "transferencia",
+        "text": f"Nova solicitação de Transferência: {obj.protocolo}",
+        "read": False,
+        "createdAt": datetime.now(timezone.utc).isoformat()
+    })
     return obj.model_dump()
 
 

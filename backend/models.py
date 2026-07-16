@@ -211,9 +211,21 @@ class ColaboradorCreate(ColaboradorBase):
     pass
 
 
+class BeneficiarioBase(BaseModel):
+    contrato: str
+    nome: str
+    cpf: str
+    dataNascimento: str
+    plano: str
+    status: str = "Ativo"
+
+
+class Beneficiario(BeneficiarioBase):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+
+
 class OperadoraCredencial(BaseModel):
     model_config = ConfigDict(extra="allow")
-
     nome: str = ""
     url: str
     usuario: str

@@ -560,6 +560,14 @@ async def _insert_operational_request(db, tipo: str, item: Dict[str, Any], paylo
             "planos": payload.get("planos") or [],
             "operadora": payload.get("operadora") or "",
         })
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "documento": base.get("cpf"),
+            "type": "inclusao",
+            "text": f"Nova solicitação de Inclusão: {base['protocolo']}",
+            "read": False,
+            "createdAt": now_iso()
+        })
     elif tipo == "exclusao":
         await db.exclusoes.insert_one({
             **base,
@@ -568,6 +576,14 @@ async def _insert_operational_request(db, tipo: str, item: Dict[str, Any], paylo
             "tipoExclusao": payload.get("tipoMovimentacao") or "",
             "planos": payload.get("planos") or [],
             "operadora": payload.get("operadora") or "",
+        })
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "documento": base.get("cpf"),
+            "type": "exclusao",
+            "text": f"Nova solicitação de Exclusão: {base['protocolo']}",
+            "read": False,
+            "createdAt": now_iso()
         })
 
 
@@ -1236,6 +1252,15 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
         }
         await db.portal_chat.insert_one(item)
         item.pop("_id", None)
+        # Add notification for chat
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "documento": documento,
+            "type": "chat",
+            "text": f"Nova mensagem de {empresa}",
+            "read": False,
+            "createdAt": now_iso()
+        })
         await _schedule_chat_notification(db, background_tasks, item)
         return item
 

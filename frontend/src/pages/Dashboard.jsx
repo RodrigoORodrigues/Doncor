@@ -80,9 +80,9 @@ const Dashboard = () => {
         })}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', marginBottom: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px', marginBottom: '24px' }}>
         <div style={{ background: '#fff', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
-          <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1a3a52', marginBottom: '16px' }}>Movimentações Mensais</h3>
+          <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1a3a52', marginBottom: '16px', background: '#f8fafc', padding: '10px', borderRadius: '4px', borderBottom: '2px solid #e2e8f0' }}>Movimentações Mensais</h3>
           {chartData && chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={chartData}>
@@ -98,48 +98,22 @@ const Dashboard = () => {
             </ResponsiveContainer>
           ) : (
             <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6c7680', fontSize: '0.85rem' }}>
-              Nenhum registro de movimentação encontrado. Os dados serão exibidos quando houver movimentações.
+              Nenhum registro de movimentação encontrado.
             </div>
           )}
         </div>
         <div style={{ background: '#fff', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
-          <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1a3a52', marginBottom: '16px' }}>Vidas por Seguradora</h3>
+          <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1a3a52', marginBottom: '16px', background: '#f8fafc', padding: '10px', borderRadius: '4px', borderBottom: '2px solid #e2e8f0' }}>Vidas por Seguradora</h3>
           <ResponsiveContainer width="100%" height={240}>
             <PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2} dataKey="value">
               {pieData.map((_, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}
             </Pie><Tooltip contentStyle={{ fontSize: '0.75rem', borderRadius: '6px', border: '1px solid #e3e6f0' }} /></PieChart>
           </ResponsiveContainer>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center', marginTop: '8px' }}>
-            {pieData.map((item, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.65rem', color: '#6c7680' }}>
-                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: COLORS[i % COLORS.length] }} />{item.name}
-              </div>
-            ))}
-          </div>
         </div>
-      </div>
-
-      {saldo && (
-        <div style={{ background: '#fff', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1a3a52', margin: 0 }}>Saldo de Vidas</h3>
-            <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#2a5fcf' }}>{saldo.percentual_total}%</span>
-          </div>
-          <Progress value={saldo.percentual_total} className="h-3" style={{ backgroundColor: '#eef4fb' }} />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginTop: '12px' }}>
-            <div style={{ fontSize: '0.75rem' }}><span style={{ color: '#6c7680' }}>Total: </span><span style={{ fontWeight: 600, color: '#1a3a52', fontSize: '1rem' }}>{saldo.total_vidas?.toLocaleString('pt-BR')}</span></div>
-            <div style={{ fontSize: '0.75rem' }}><span style={{ color: '#6c7680' }}>Ativas: </span><span style={{ fontWeight: 600, color: '#27ae60', fontSize: '1rem' }}>{saldo.vidas_ativas?.toLocaleString('pt-BR')}</span></div>
-            <div style={{ fontSize: '0.75rem' }}><span style={{ color: '#6c7680' }}>Suspensas: </span><span style={{ fontWeight: 600, color: '#e6832a', fontSize: '1rem' }}>{saldo.vidas_suspensas?.toLocaleString('pt-BR')}</span></div>
-            <div style={{ fontSize: '0.75rem' }}><span style={{ color: '#6c7680' }}>Canceladas: </span><span style={{ fontWeight: 600, color: '#e63757', fontSize: '1rem' }}>{saldo.vidas_canceladas?.toLocaleString('pt-BR')}</span></div>
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
         <div style={{ background: '#fff', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
-          <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1a3a52', marginBottom: '12px' }}>Solicitações Pendentes</h3>
+          <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1a3a52', marginBottom: '16px', background: '#f8fafc', padding: '10px', borderRadius: '4px', borderBottom: '2px solid #e2e8f0' }}>Solicitações Pendentes</h3>
           {tarefas && tarefas.length > 0 ? (
-            <table className="data-table">
+            <table className="data-table" style={{width: '100%'}}>
               <thead>
                 <tr>
                   <th>Tipo</th>
@@ -185,8 +159,8 @@ const Dashboard = () => {
           )}
         </div>
         <div style={{ background: '#fff', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
-          <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1a3a52', marginBottom: '12px' }}>Movimentações Recentes</h3>
-          <table className="data-table"><thead><tr><th>Tipo</th><th>Contrato</th><th>Beneficiário</th><th>Data</th><th>Status</th></tr></thead>
+          <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1a3a52', marginBottom: '16px', background: '#f8fafc', padding: '10px', borderRadius: '4px', borderBottom: '2px solid #e2e8f0' }}>Movimentações Recentes</h3>
+          <table className="data-table" style={{width: '100%'}}><thead><tr><th>Tipo</th><th>Contrato</th><th>Beneficiário</th><th>Data</th><th>Status</th></tr></thead>
             <tbody>{movimentacoes.map((m, i) => (<tr key={i}><td style={{fontWeight:500}}>{m.tipo}</td><td style={{color:'#2a5fcf',fontWeight:500}}>{m.contrato}</td><td>{m.beneficiario}</td><td>{m.data}</td><td><span className={getStatusBadge(m.status)}>{m.status}</span></td></tr>))}</tbody>
           </table>
         </div>

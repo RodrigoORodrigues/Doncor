@@ -265,6 +265,12 @@ const PortalDonCor = () => {
   const [loading, setLoading] = useState(false);
   const [payload, setPayload] = useState(null);
   const totalInclusoes = useMemo(() => payload?.totalInclusoes || 0, [payload]);
+  const formulariosPorCategoria = useMemo(() => {
+    return formularioCategories.map(cat => ({
+      ...cat,
+      docs: formularios.filter(f => f.category === cat.id)
+    }));
+  }, [formularios]);
   const [messages, setMessages] = useState([]);
   const filteredChatMessages = useMemo(() => messages.filter((m) => !m.protocolo), [messages]);
   const [contratosDb, setContratosDb] = useState([]);
@@ -659,6 +665,7 @@ const PortalDonCor = () => {
     const attachments = movementAttachments[section];
 
     if (section === 'inclusao') {
+      if (!form.contrato) missingFields.push('Contrato');
       if (!form.operadora) missingFields.push('Operadora');
       if (form.operadora === 'Outra' && !form.outraOperadora?.trim()) missingFields.push('Nome da outra Operadora');
       if (!form.planos || form.planos.length === 0) missingFields.push('Pelo menos um Plano (Saúde/Dental)');
@@ -741,6 +748,9 @@ const PortalDonCor = () => {
     const form = movementForms[section];
     if (fieldName === 'planos') {
       return !form.planos || form.planos.length === 0;
+    }
+    if (fieldName === 'contrato') {
+      return !form.contrato || !form.contrato.trim();
     }
     if (fieldName === 'outraOperadora') {
       return form.operadora === 'Outra' && (!form.outraOperadora || !form.outraOperadora.trim());
@@ -1377,25 +1387,25 @@ const PortalDonCor = () => {
                   <span style={{ color: theme.muted }}>Plano:</span>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' }}>
                     {item.plano.split(',').map((p, idx) => (
-                      <button 
+                      <div 
                         key={idx}
+                        style={{ 
+                          background: '#fff',
+                          border: `1px solid ${theme.border}`,
+                          borderRadius: 8,
+                          padding: '12px',
+                          marginBottom: '10px',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                          cursor: 'pointer'
+                        }}
                         onClick={() => {
                           setSelectedPlan(p.trim());
                           setShowBeneficiariesModal(true);
                         }}
-                        style={{ 
-                          background: '#eff6ff', 
-                          color: theme.blue, 
-                          border: `1px solid ${theme.blue}`,
-                          borderRadius: 6,
-                          padding: '2px 8px',
-                          fontSize: '0.75rem',
-                          cursor: 'pointer',
-                          fontWeight: 600
-                        }}
                       >
-                        {p.trim()}
-                      </button>
+                        <div style={{ fontWeight: 700, fontSize: '0.85rem', color: theme.text }}>{p.trim()}</div>
+                        <div style={{ fontSize: '0.7rem', color: theme.muted, marginTop: 4 }}>Clique para ver beneficiários</div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -1621,6 +1631,24 @@ const PortalDonCor = () => {
             <Building2 size={20}/> Dados do Contrato
           </h3>
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+            <div>
+              <label style={fieldLabel}>Contrato *</label>
+              <select
+                style={{
+                  ...selectStyle,
+                  border: isFieldInvalid('inclusao', 'contrato') ? '2px solid #EF4444' : `1px solid ${theme.border}`,
+                  boxShadow: isFieldInvalid('inclusao', 'contrato') ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+                value={form.contrato || ''}
+                onChange={(event) => updateMovementField('inclusao', 'contrato', event.target.value)}
+              >
+                <option value="">Selecione o Contrato</option>
+                {contratos.map((c) => (
+                  <option key={c.contrato} value={c.contrato}>{c.contrato} - {c.plano}</option>
+                ))}
+              </select>
+            </div>
             <div>
               <label style={fieldLabel}>Operadora *</label>
               <select
