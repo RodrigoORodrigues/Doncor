@@ -265,12 +265,6 @@ const PortalDonCor = () => {
   const [loading, setLoading] = useState(false);
   const [payload, setPayload] = useState(null);
   const totalInclusoes = useMemo(() => payload?.totalInclusoes || 0, [payload]);
-  const formulariosPorCategoria = useMemo(() => {
-    return formularioCategories.map(cat => ({
-      ...cat,
-      docs: formularios.filter(f => f.category === cat.id)
-    }));
-  }, [formularios]);
   const [messages, setMessages] = useState([]);
   const filteredChatMessages = useMemo(() => messages.filter((m) => !m.protocolo), [messages]);
   const [contratosDb, setContratosDb] = useState([]);
@@ -278,6 +272,14 @@ const PortalDonCor = () => {
   const [contratosStatusFilter, setContratosStatusFilter] = useState('Todos');
   const [contratosVigenciaFilter, setContratosVigenciaFilter] = useState('Todas');
   const [selectedContratoDetail, setSelectedContratoDetail] = useState(null);
+  const [formularios, setFormularios] = useState([]);
+  
+  const formulariosPorCategoria = useMemo(() => {
+    return formularioCategories.map(cat => ({
+      ...cat,
+      docs: formularios.filter(f => f.category === cat.id)
+    }));
+  }, [formularios]);
   const [selectedProtocolDetail, setSelectedProtocolDetail] = useState(null);
   const [showBeneficiariesModal, setShowBeneficiariesModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('');
@@ -298,7 +300,6 @@ const PortalDonCor = () => {
   };
   const [message, setMessage] = useState('');
   const [attachment, setAttachment] = useState(null);
-  const [formularios, setFormularios] = useState([]);
   const [solicitacoes, setSolicitacoes] = useState([]);
   const [sinistralidade, setSinistralidade] = useState([]);
   const [solicitacoesSearch, setSolicitacoesSearch] = useState('');
