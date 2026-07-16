@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { fetchSaldoVidas } from '../services/api';
+import { fetchSaldoVidas, fetchNotifications, markNotificationRead } from '../services/api';
 import {
   Menu, Bell, Lightbulb, ChevronDown,
-  User, Settings, LogOut, HelpCircle
+  User, Settings, LogOut, HelpCircle, MessageCircle
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -14,7 +14,7 @@ import {
 
 const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, session }) => {
   const [saldoVidas, setSaldoVidas] = useState({ percentual_total: 0 });
-  const [chatUnread, setChatUnread] = useState(() => Number(localStorage.getItem('doncor_chat_unread') || 0));
+  const [notifications, setNotifications] = useState([]);
   const userName = session?.username || 'Usuário';
   const userData = {
     name: userName,
@@ -25,20 +25,10 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
 
   useEffect(() => {
     fetchSaldoVidas().then(setSaldoVidas).catch(console.error);
-  }, []);
-
-  useEffect(() => {
-    const updateUnread = (event) => {
-      const count = event?.detail?.count;
-      setChatUnread(Number.isFinite(Number(count)) ? Number(count) : Number(localStorage.getItem('doncor_chat_unread') || 0));
-    };
-    window.addEventListener('doncor-chat-unread', updateUnread);
-    window.addEventListener('storage', updateUnread);
-    return () => {
-      window.removeEventListener('doncor-chat-unread', updateUnread);
-      window.removeEventListener('storage', updateUnread);
-    };
-  }, []);
+    if (session?.documento) {
+        fetchNotifications(session.documento).then(setNotifications).catch(console.error);
+    }
+  }, [session]);
 
   const openChat = () => {
     onMenuClick?.({ id: 'chat', label: 'Chat', icon: 'MessageCircle', page: 'chat' });
@@ -85,46 +75,70 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
 
         <div style={{ width: '1px', height: '24px', background: 'rgba(44,123,229,0.2)', margin: '0 4px' }} />
 
-        <button
-          onClick={openChat}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '35px',
-            height: '35px',
-            background: 'transparent',
-            border: '1px solid #d8e2ef',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            color: chatUnread > 0 ? '#2C7BE5' : '#5E6E82',
-            position: 'relative',
-            transition: 'all 0.2s'
-          }}
-          title={chatUnread > 0 ? `${chatUnread} nova(s) mensagem(ns) no Chat` : 'Notificações do Chat'}
-        >
-          <Bell size={16} />
-          {chatUnread > 0 && (
-            <span style={{
-              position: 'absolute',
-              top: '-2px',
-              right: '-2px',
-              background: '#e63757',
-              color: '#fff',
-              borderRadius: '50%',
-              minWidth: '16px',
-              height: '16px',
-              padding: '0 4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '0.6rem',
-              fontWeight: 700
-            }}>
-              {chatUnread > 99 ? '99+' : chatUnread}
-            </span>
-          )}
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '35px',
+                height: '35px',
+                background: 'transparent',
+                border: '1px solid #d8e2ef',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                color: '#5E6E82',
+                position: 'relative',
+                transition: 'all 0.2s'
+              }}
+              title="Notificações"
+            >
+              <Bell size={16} />
+              {notifications.length > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: '-2px',
+                  right: '-2px',
+                  background: '#e63757',
+                  color: '#fff',
+                  borderRadius: '50%',
+                  minWidth: '16px',
+                  height: '16px',
+                  padding: '0 4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.6rem',
+                  fontWeight: 700
+                }}>
+                  {notifications.length > 99 ? '99+' : notifications.length}
+                </span>
+              )}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" style={{ minWidth: '300px', maxHeight: '400px', overflowY: 'auto' }}>
+            <div style={{ padding: '8px 12px', fontWeight: 700, fontSize: '0.8rem', borderBottom: '1px solid #f0f2f5' }}>Notificações</div>
+            {notifications.length === 0 ? (
+              <div style={{ padding: '12px', fontSize: '0.8rem', color: '#8a8d93' }}>Nenhuma notificação nova</div>
+            ) : (
+              notifications.map(n => (
+                <DropdownMenuItem key={n.id} style={{ cursor: 'pointer', fontSize: '0.8rem', display: 'flex', gap: '8px', alignItems: 'center' }} onClick={() => {
+                  markNotificationRead(n.id).then(() => {
+                    setNotifications(prev => prev.filter(item => item.id !== n.id));
+                  });
+                  if (n.type === 'chat') openChat();
+                }}>
+                  {n.type === 'chat' && <MessageCircle size={14} color="#2C7BE5" />}
+                  {n.type === 'inclusao' && <div style={{width: 8, height: 8, borderRadius: '50%', background: '#10B981'}} />}
+                  {n.type === 'exclusao' && <div style={{width: 8, height: 8, borderRadius: '50%', background: '#DC2626'}} />}
+                  {n.type === 'transferencia' && <div style={{width: 8, height: 8, borderRadius: '50%', background: '#F59E0B'}} />}
+                  <span>{n.text}</span>
+                </DropdownMenuItem>
+              ))
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <div style={{
           display: 'flex',

@@ -1262,3 +1262,16 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
                 await db.portal_chat.update_one({"id": item.get("id")}, {"$set": {"read": True}})
                 matched += 1
         return {"ok": True, "updated": matched}
+
+    @app.get("/api/portal-doncor/notifications")
+    async def portal_doncor_notifications(documento: str = Query(...)):
+        doc = _digits(documento)
+        notifications = await db.notifications.find({"documento": doc, "read": False}).sort("createdAt", -1).to_list(100)
+        for n in notifications:
+            n.pop("_id", None)
+        return notifications
+
+    @app.patch("/api/portal-doncor/notifications/{id}/read")
+    async def portal_doncor_notifications_read(id: str):
+        await db.notifications.update_one({"id": id}, {"$set": {"read": True}})
+        return {"ok": True}

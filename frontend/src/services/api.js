@@ -338,6 +338,9 @@ export const fetchPortalDonCorChat = ({ documento = "", empresa = "" } = {}) =>
 export const sendPortalDonCorChat = (data) => api.post("/portal-doncor/chat", data).then((r) => r.data);
 export const markPortalDonCorChatRead = (data) => api.patch("/portal-doncor/chat/read", data).then((r) => r.data);
 
+export const fetchNotifications = (documento) => getArray("/portal-doncor/notifications", { params: { documento } });
+export const markNotificationRead = (id) => api.patch(`/portal-doncor/notifications/${id}/read`).then((r) => r.data);
+
 export const fetchLgpdConfig = () => api.get("/portal-doncor/lgpd/config").then((r) => r.data);
 export const saveLgpdConfig = (data) => api.post("/portal-doncor/lgpd/nova-versao", data).then((r) => r.data);
 export const fetchLgpdAceites = () => api.get("/portal-doncor/lgpd/aceites").then((r) => r.data);
