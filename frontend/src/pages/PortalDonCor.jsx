@@ -272,6 +272,8 @@ const PortalDonCor = () => {
   const [contratosVigenciaFilter, setContratosVigenciaFilter] = useState('Todas');
   const [selectedContratoDetail, setSelectedContratoDetail] = useState(null);
   const [selectedProtocolDetail, setSelectedProtocolDetail] = useState(null);
+  const [showBeneficiariesModal, setShowBeneficiariesModal] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState('');
   const [previewAtt, setPreviewAtt] = useState(null);
 
   const handleDownloadAttachment = (att) => {
@@ -952,33 +954,71 @@ const PortalDonCor = () => {
     });
     return base;
   }, [solicitacoes]);
+
+  const solicitacoesPorMes = useMemo(() => {
+    const counts = {};
+    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    
+    solicitacoes.forEach(item => {
+      if (item.createdAt) {
+        const date = new Date(item.createdAt);
+        const month = months[date.getMonth()];
+        counts[month] = (counts[month] || 0) + 1;
+      }
+    });
+
+    return months.map(month => ({
+      name: month,
+      value: counts[month] || 0
+    }));
+  }, [solicitacoes]);
+
   const maxSolicitacoesStatus = useMemo(() => Math.max(...solicitacoesPorStatus.map((item) => item.value), 1), [solicitacoesPorStatus]);
   const maxSolicitacoesTipo = useMemo(() => Math.max(...solicitacoesPorTipo.map((item) => item.value), 1), [solicitacoesPorTipo]);
   const ultimasSolicitacoes = useMemo(() => solicitacoes.slice(0, 4), [solicitacoes]);
   const demandasPendentes = useMemo(() => solicitacoes.filter((item) => !String(item.status || '').toLowerCase().includes('concl')).slice(0, 4), [solicitacoes]);
   const demandasConcluidas = useMemo(() => solicitacoes.filter((item) => String(item.status || '').toLowerCase().includes('concl')).slice(0, 4), [solicitacoes]);
-  const formulariosPorCategoria = useMemo(() => {
-    const grouped = formularioCategories.map((category) => ({
-      ...category,
-      docs: formularios.filter((item) => item.categoria === category.id),
+  const inclusoesConcluidas = useMemo(() => {
+    return solicitacoes.filter(item =>
+      plain(item.status || '').includes('concl') &&
+      plain(item.tipo || item.tipoLabel || '').includes('inclusao')
+    );
+  }, [solicitacoes]);
+
+  const generoData = useMemo(() => {
+    const M = inclusoesConcluidas.filter(item => plain(item.genero || '').includes('m')).length;
+    const F = inclusoesConcluidas.filter(item => plain(item.genero || '').includes('f')).length;
+    const total = M + F;
+    return [
+      { name: 'M', value: M, color: '#2C7BE5', percentage: total > 0 ? `${((M / total) * 100).toFixed(2).replace('.', ',')}%` : '0%' },
+      { name: 'F', value: F, color: '#e63757', percentage: total > 0 ? `${((F / total) * 100).toFixed(2).replace('.', ',')}%` : '0%' }
+    ];
+  }, [inclusoesConcluidas]);
+
+  const titularidadeData = useMemo(() => {
+    const T = inclusoesConcluidas.filter(item => plain(item.parentesco || '').includes('titular')).length;
+    const D = inclusoesConcluidas.filter(item => plain(item.parentesco || '').includes('dependente')).length;
+    const total = T + D;
+    return [
+      { name: 'T', value: T, color: '#166534', percentage: total > 0 ? `${((T / total) * 100).toFixed(2).replace('.', ',')}%` : '0%' },
+      { name: 'D', value: D, color: '#a3e635', percentage: total > 0 ? `${((D / total) * 100).toFixed(2).replace('.', ',')}%` : '0%' }
+    ];
+  }, [inclusoesConcluidas]);
+
+  const vidasPorSeguradoraData = useMemo(() => {
+    const data = contratos.reduce((acc, item) => {
+      const seguradora = item.seguradora || 'Outros';
+      acc[seguradora] = (acc[seguradora] || 0) + (parseInt(item.vidas) || 0);
+      return acc;
+    }, {});
+    return Object.keys(data).map((key) => ({
+      name: key,
+      value: data[key],
+      color: '#' + Math.floor(Math.random()*16777215).toString(16), // Placeholder color strategy
     }));
-    const customCategories = formularios
-      .filter((item) => !formularioCategories.some((category) => category.id === item.categoria))
-      .reduce((acc, item) => {
-        const key = item.categoria || 'outros';
-        const current = acc.get(key) || {
-          id: key,
-          title: item.categoriaLabel || 'Outros documentos',
-          icon: item.categoriaIcone || '📄',
-          description: item.categoriaDescricao || 'Documentos necessários para atendimento.',
-          docs: [],
-        };
-        current.docs.push(item);
-        acc.set(key, current);
-        return acc;
-      }, new Map());
-    return [...grouped, ...Array.from(customCategories.values())];
-  }, [formularios]);
+  }, [contratos]);
+
+  const totalVidas = useMemo(() => contratos.reduce((acc, item) => acc + (parseInt(item.vidas) || 0), 0), [contratos]);
 
   const openFormulario = (item) => {
     const url = getPortalFormularioDownloadUrl(item);
@@ -1112,7 +1152,7 @@ const PortalDonCor = () => {
 
   const renderDashboard = () => (
     <>
-      <SectionTitle title={`Bem-vindo ao seu Portal, ${empresa}`} subtitle="Resumo das operações ativas por seção." action={<Button onClick={() => { setActiveSection('movimentacao'); setActiveMovementTab('inclusao'); }} style={{ background: theme.blue, color: '#fff', display: 'flex', gap: 8 }}><FileText size={15}/>Novo chamado</Button>} />
+      <SectionTitle title={`Bem vindo ao seu Portal, ${empresa}`} subtitle="Resumo das operações ativas por seção." action={<Button onClick={() => { setActiveSection('movimentacao'); setActiveMovementTab('inclusao'); }} style={{ background: theme.blue, color: '#fff', display: 'flex', gap: 8 }}><FileText size={15}/>Novo chamado</Button>} />
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4, minmax(0, 1fr))', gap:14, marginBottom:16 }}>
         <StatCard title="Contratos vigentes" value={payload?.resumo?.contratos || contratos.length || 0} subtitle="Ativos" icon={FolderOpen} onClick={() => setActiveSection('contratos')}/>
         <StatCard title="Boletos disponíveis" value={payload?.resumo?.boletos || boletos.length || 0} subtitle="PDFs no sistema" icon={Download} tone={theme.ok} onClick={() => setActiveSection('faturas')}/>
@@ -1121,26 +1161,25 @@ const PortalDonCor = () => {
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:16, marginBottom:16 }}>
         <section style={{ ...card, padding:18 }}>
-          <SectionTitle title="Evolução do Sistema - Portal do Cliente" subtitle="Gráficos referentes aos dados do sistema" />
+          <SectionTitle title="Solicitações por Mês" subtitle="Acompanhe o volume de solicitações ao longo dos últimos meses." />
           <div style={{ width: '100%', height: 300, marginTop: 20 }}>
-            {chartData.every(d => d.solicitacoes === 0 && d.boletos === 0) ? (
-              <EmptyState>Os gráficos serão exibidos após a primeira movimentação ou boleto.</EmptyState>
+            {solicitacoes.length === 0 ? (
+              <EmptyState>Nenhuma solicitação encontrada.</EmptyState>
             ) : (
               <ResponsiveContainer>
-                <BarChart data={chartData}>
+                <BarChart data={solicitacoesPorMes}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: theme.muted, fontSize: 12}} dy={10} />
                   <YAxis axisLine={false} tickLine={false} tick={{fill: theme.muted, fontSize: 12}} />
                   <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                  <Bar dataKey="solicitacoes" name="Solicitações" fill={theme.primary} radius={[4, 4, 0, 0]} barSize={30} />
-                  <Bar dataKey="boletos" name="Boletos Acessados" fill={theme.blue} radius={[4, 4, 0, 0]} barSize={30} />
+                  <Bar dataKey="value" name="Solicitações" fill={theme.primary} radius={[4, 4, 0, 0]} barSize={30} />
                 </BarChart>
               </ResponsiveContainer>
             )}
           </div>
 
-          {/* Seção com os Gráficos adicionais de Gênero e Titularidade */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, marginTop: 32, borderTop: '1px solid #f0f2f5', paddingTop: 24 }}>
+          {/* Seção com os Gráficos adicionais de Gênero, Titularidade e Seguradora */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20, marginTop: 32, borderTop: '1px solid #f0f2f5', paddingTop: 24 }}>
             {/* Gráfico de Gênero */}
             <div style={{ background: '#fff', border: `1px solid ${theme.border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column' }}>
               <div style={{ background: '#15A4C4', color: '#fff', padding: '10px 16px', textAlign: 'center', fontWeight: '700', fontSize: '0.88rem', letterSpacing: '0.3px' }}>
@@ -1151,10 +1190,7 @@ const PortalDonCor = () => {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={[
-                          { name: 'M', value: 49, color: '#2C7BE5', percentage: '62,82%' },
-                          { name: 'F', value: 29, color: '#e63757', percentage: '37,18%' }
-                        ]}
+                        data={generoData}
                         cx="50%"
                         cy="50%"
                         innerRadius={55}
@@ -1164,10 +1200,7 @@ const PortalDonCor = () => {
                         label={({ value, percentage }) => `${value} (${percentage})`}
                         labelLine={true}
                       >
-                        {[
-                          { name: 'M', value: 49, color: '#2C7BE5', percentage: '62,82%' },
-                          { name: 'F', value: 29, color: '#e63757', percentage: '37,18%' }
-                        ].map((entry, index) => (
+                        {generoData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
@@ -1185,7 +1218,7 @@ const PortalDonCor = () => {
                     textAlign: 'center',
                     pointerEvents: 'none'
                   }}>
-                    <div style={{ fontSize: '2.2rem', fontWeight: '800', color: theme.text, lineHeight: 1 }}>78</div>
+                    <div style={{ fontSize: '2.2rem', fontWeight: '800', color: theme.text, lineHeight: 1 }}>{totalInclusoes}</div>
                   </div>
                 </div>
                 
@@ -1212,10 +1245,7 @@ const PortalDonCor = () => {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={[
-                          { name: 'T', value: 58, color: '#166534', percentage: '74,36%' },
-                          { name: 'D', value: 20, color: '#a3e635', percentage: '25,64%' }
-                        ]}
+                        data={titularidadeData}
                         cx="50%"
                         cy="50%"
                         innerRadius={55}
@@ -1225,10 +1255,7 @@ const PortalDonCor = () => {
                         label={({ value, percentage }) => `${value} (${percentage})`}
                         labelLine={true}
                       >
-                        {[
-                          { name: 'T', value: 58, color: '#166534', percentage: '74,36%' },
-                          { name: 'D', value: 20, color: '#a3e635', percentage: '25,64%' }
-                        ].map((entry, index) => (
+                        {titularidadeData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
@@ -1246,7 +1273,7 @@ const PortalDonCor = () => {
                     textAlign: 'center',
                     pointerEvents: 'none'
                   }}>
-                    <div style={{ fontSize: '2.2rem', fontWeight: '800', color: theme.text, lineHeight: 1 }}>78</div>
+                    <div style={{ fontSize: '2.2rem', fontWeight: '800', color: theme.text, lineHeight: 1 }}>{totalInclusoes}</div>
                   </div>
                 </div>
                 
@@ -1259,6 +1286,54 @@ const PortalDonCor = () => {
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#a3e635', display: 'inline-block' }} /> D
                   </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Gráfico de Vidas por Seguradora */}
+            <div style={{ background: '#fff', border: `1px solid ${theme.border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ background: '#15A4C4', color: '#fff', padding: '10px 16px', textAlign: 'center', fontWeight: '700', fontSize: '0.88rem', letterSpacing: '0.3px' }}>
+                Vidas por Seguradora
+              </div>
+              <div style={{ padding: '24px 16px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                <div style={{ position: 'relative', width: '100%', height: 220, maxWidth: 280, display: 'flex', justifyContent: 'center' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={vidasPorSeguradoraData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={75}
+                        paddingAngle={0}
+                        dataKey="value"
+                      >
+                        {vidasPorSeguradoraData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    textAlign: 'center',
+                    pointerEvents: 'none'
+                  }}>
+                    <div style={{ fontSize: '1.8rem', fontWeight: '800', color: theme.text, lineHeight: 1 }}>{totalVidas}</div>
+                  </div>
+                </div>
+                
+                {/* Legenda Seguradoras */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8, marginTop: 16, fontSize: '0.78rem', color: theme.text, width: '100%' }}>
+                  {vidasPorSeguradoraData.map((item, index) => (
+                    <span key={item.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: '50%', background: item.color, display: 'inline-block' }} /> {item.name}
+                    </span>
+                  ))}
                 </div>
               </div>
             </div>
@@ -1299,7 +1374,29 @@ const PortalDonCor = () => {
               <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, fontSize: '0.8rem' }}>
                   <span style={{ color: theme.muted }}>Plano:</span>
-                  <strong style={{ color: theme.text }}>{item.plano}</strong>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' }}>
+                    {item.plano.split(',').map((p, idx) => (
+                      <button 
+                        key={idx}
+                        onClick={() => {
+                          setSelectedPlan(p.trim());
+                          setShowBeneficiariesModal(true);
+                        }}
+                        style={{ 
+                          background: '#eff6ff', 
+                          color: theme.blue, 
+                          border: `1px solid ${theme.blue}`,
+                          borderRadius: 6,
+                          padding: '2px 8px',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          fontWeight: 600
+                        }}
+                      >
+                        {p.trim()}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, fontSize: '0.8rem' }}>
                   <span style={{ color: theme.muted }}>Vigência:</span>
@@ -2239,19 +2336,20 @@ const PortalDonCor = () => {
           }}>
             {contratos.length === 0 ? (
               <div style={{ color: theme.muted, fontSize: '0.9rem', gridColumn: '1 / -1' }}>Nenhum contrato encontrado.</div>
-            ) : contratos.map((item, idx) => (
-              <label key={item.contrato || idx} style={{ ...radioCard, alignItems: 'center', cursor: 'pointer' }}>
-                <input 
-                  type="checkbox" 
-                  checked={form.planos.includes(item.contrato)} 
-                  onChange={() => toggleMovementArrayValue('alteracao', 'planos', item.contrato)} 
-                />
-                <div>
-                  <strong style={{ color: theme.text }}>{item.plano || item.seguradora || 'Saúde'}</strong>
-                  <div style={{ color: theme.muted, fontSize: '0.82rem' }}>{item.contrato !== 'Contrato Principal' ? `Apólice nº ${item.contrato}` : item.contrato}</div>
-                </div>
-              </label>
-            ))}
+            ) : (
+              <select
+                value={form.planos[0] || ''}
+                onChange={(e) => updateMovementField('alteracao', 'planos', [e.target.value])}
+                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `1px solid ${theme.border}`, background: '#fff', fontSize: '0.9rem', color: theme.text }}
+              >
+                <option value="">Selecione um contrato...</option>
+                {contratos.map((item, idx) => (
+                  <option key={item.contrato || idx} value={item.contrato}>
+                    {item.plano || item.seguradora || 'Saúde'} - Apólice nº {item.contrato}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
           {isFieldInvalid('alteracao', 'planos') && (
             <span style={{ color: '#EF4444', fontSize: '0.74rem', fontWeight: 800, marginTop: 4, display: 'block' }}>
@@ -3144,15 +3242,15 @@ const PortalDonCor = () => {
             <button
               onClick={() => {
                 setActiveSection('chat');
-                const unread = filteredChatMessages.filter(m => m.direction === 'incoming' && !m.read).length;
+                const unread = messages.filter(m => !m.read && (m.protocolo || m.direction === 'incoming')).length;
                 if (unread > 0) markPortalDonCorChatRead({ documento: session.documento, empresa: session.empresa }).then(() => loadPortal(session));
               }}
               style={{ border:`1px solid ${theme.border}`, background:'#fff', borderRadius:12, padding:9, color:theme.muted, position: 'relative', cursor: 'pointer' }}
             >
               <Bell size={16}/>
-              {filteredChatMessages.filter(m => m.direction === 'incoming' && !m.read).length > 0 && (
+              {messages.filter(m => !m.read && (m.protocolo || m.direction === 'incoming')).length > 0 && (
                 <span style={{ position: 'absolute', top: -5, right: -5, background: '#e63757', color: '#fff', fontSize: '10px', fontWeight: 800, padding: '2px 5px', borderRadius: '50%' }}>
-                  {filteredChatMessages.filter(m => m.direction === 'incoming' && !m.read).length}
+                  {messages.filter(m => !m.read && (m.protocolo || m.direction === 'incoming')).length}
                 </span>
               )}
             </button>
@@ -3375,6 +3473,27 @@ const PortalDonCor = () => {
               style={{ width: '100%', background: '#EF4444', color: '#fff', fontWeight: 900, height: 46, borderRadius: 12, transition: 'all 0.2s ease' }}
             >
               Entendido, Corrigir Agora
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {showBeneficiariesModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.4)', backdropFilter: 'blur(3px)', zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: '#fff', borderRadius: 18, padding: 28, width: '100%', maxWidth: 500, boxShadow: '0 20px 40px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: `1px solid ${theme.border}`, paddingBottom: 14 }}>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', color: theme.text, display: 'flex', alignItems: 'center', gap: 10 }}>
+                👥 Beneficiários: {selectedPlan}
+              </h3>
+              <button onClick={() => setShowBeneficiariesModal(false)} style={{ background: 'transparent', border: 0, fontSize: '1.25rem', cursor: 'pointer', color: theme.muted }}>&times;</button>
+            </div>
+            
+            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              <p style={{ color: theme.muted, fontSize: '0.9rem' }}>Funcionalidade em desenvolvimento. Listagem de beneficiários para este plano será exibida aqui.</p>
+            </div>
+
+            <Button onClick={() => setShowBeneficiariesModal(false)} style={{ background: theme.blue, color: '#fff', width: '100%', height: 44, marginTop: 20 }}>
+              Fechar
             </Button>
           </div>
         </div>

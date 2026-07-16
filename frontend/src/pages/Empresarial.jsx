@@ -142,6 +142,7 @@ const Empresarial = ({ tabId }) => {
   };
 
   const handleSaveEdit = async (id) => {
+    console.log('Tentando salvar edição para ID:', id, 'com dados:', editData);
     if (!editData.cnpj?.trim()) {
       alert('O preenchimento do CNPJ é obrigatório.');
       return;
@@ -153,9 +154,13 @@ const Empresarial = ({ tabId }) => {
     setSaving(true);
     try { 
       await updateContratoEmpresarial(id, {...editData, vidas:parseInt(editData.vidas)||0, tipo: editData.tipo || displayLabel}); 
+      console.log('Edição salva com sucesso!');
       setEditingId(null); 
       loadData(); 
-    } catch(e){console.error(e);}
+    } catch(e){
+      console.error('Erro ao salvar edição:', e);
+      alert('Erro ao salvar alterações. Verifique o console.');
+    }
     setSaving(false);
   };
 

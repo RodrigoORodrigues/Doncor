@@ -55,8 +55,8 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
   }, []);
 
   const notificationUnreadCount = useMemo(() => {
-    return notifications.filter(n => !n.read).length;
-  }, [notifications]);
+    return notifications.filter(n => !n.read).length + chatUnread;
+  }, [notifications, chatUnread]);
 
   useEffect(() => {
     localStorage.setItem('doncor_notifications_unread', String(notificationUnreadCount));
@@ -168,6 +168,22 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
             <Menu size={20} />
           </button>
         )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '10px' }}>
+          {brokerProfile.logo ? (
+            <img src={brokerProfile.logo} alt="Logo" style={{ height: '75px', width: '150px', objectFit: 'contain', borderRadius: '12px', border: '1px solid #eee', padding: '4px', animation: 'pulse-border 2s infinite' }} />
+          ) : (
+            <div style={{ width: '60px', height: '60px', background: '#4979bb', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '1.5rem', fontWeight: 600 }}>
+              {brokerProfile.nome.split(' ').map(n => n[0]).slice(0, 2).join('')}
+            </div>
+          )}
+          <style>{`
+            @keyframes pulse-border {
+              0% { box-shadow: 0 0 0 0 rgba(44, 123, 229, 0.7); }
+              70% { box-shadow: 0 0 0 8px rgba(44, 123, 229, 0); }
+              100% { box-shadow: 0 0 0 0 rgba(44, 123, 229, 0); }
+            }
+          `}</style>
+        </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -341,7 +357,7 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
                   overflow: 'hidden',
                   padding: '2px'
                 }}>
-                  <img src={brokerProfile.logo} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                  <img src={brokerProfile.logo} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '12px', border: '1px solid #eee', padding: '4px', animation: 'pulse-border 2s infinite' }} />
                 </div>
               ) : (
                 <div style={{
