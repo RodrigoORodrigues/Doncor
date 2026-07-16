@@ -265,22 +265,13 @@ const PortalDonCor = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [payload, setPayload] = useState(null);
-  const totalInclusoes = useMemo(() => payload?.totalInclusoes || 0, [payload]);
   const [messages, setMessages] = useState([]);
-  const filteredChatMessages = useMemo(() => messages.filter((m) => !m.protocolo), [messages]);
   const [contratosDb, setContratosDb] = useState([]);
   const [contratosSearch, setContratosSearch] = useState('');
   const [contratosStatusFilter, setContratosStatusFilter] = useState('Todos');
   const [contratosVigenciaFilter, setContratosVigenciaFilter] = useState('Todas');
   const [selectedContratoDetail, setSelectedContratoDetail] = useState(null);
   const [formularios, setFormularios] = useState([]);
-  
-  const formulariosPorCategoria = useMemo(() => {
-    return formularioCategories.map(cat => ({
-      ...cat,
-      docs: formularios.filter(f => f.category === cat.id)
-    }));
-  }, [formularios]);
   const [selectedProtocolDetail, setSelectedProtocolDetail] = useState(null);
   const [showBeneficiariesModal, setShowBeneficiariesModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('');
@@ -288,6 +279,29 @@ const PortalDonCor = () => {
   const [beneficiarioSearch, setBeneficiarioSearch] = useState('');
   const [loadingBeneficiarios, setLoadingBeneficiarios] = useState(false);
   const [previewAtt, setPreviewAtt] = useState(null);
+  const [message, setMessage] = useState('');
+  const [attachment, setAttachment] = useState(null);
+  const [solicitacoes, setSolicitacoes] = useState([]);
+  const [sinistralidade, setSinistralidade] = useState([]);
+  const [solicitacoesSearch, setSolicitacoesSearch] = useState('');
+  const [solicitacoesTipo, setSolicitacoesTipo] = useState('todos');
+  const [solicitacoesStatus, setSolicitacoesStatus] = useState('todos');
+  const [movementForms, setMovementForms] = useState(defaultMovementForms);
+  const [movementAttachments, setMovementAttachments] = useState(defaultMovementAttachments);
+  const [submittingMovement, setSubmittingMovement] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
+
+  // Derived values and memoized computations - AFTER all state is defined
+  const totalInclusoes = useMemo(() => payload?.totalInclusoes || 0, [payload]);
+  const filteredChatMessages = useMemo(() => messages.filter((m) => !m.protocolo), [messages]);
+  const formulariosPorCategoria = useMemo(() => {
+    return formularioCategories.map(cat => ({
+      ...cat,
+      docs: formularios.filter(f => f.category === cat.id)
+    }));
+  }, [formularios]);
 
   const handleDownloadAttachment = (att) => {
     if (!att || !att.base64) return;
@@ -302,19 +316,6 @@ const PortalDonCor = () => {
   const handleViewAttachment = (att) => {
     setPreviewAtt(att);
   };
-  const [message, setMessage] = useState('');
-  const [attachment, setAttachment] = useState(null);
-  const [solicitacoes, setSolicitacoes] = useState([]);
-  const [sinistralidade, setSinistralidade] = useState([]);
-  const [solicitacoesSearch, setSolicitacoesSearch] = useState('');
-  const [solicitacoesTipo, setSolicitacoesTipo] = useState('todos');
-  const [solicitacoesStatus, setSolicitacoesStatus] = useState('todos');
-  const [movementForms, setMovementForms] = useState(defaultMovementForms);
-  const [movementAttachments, setMovementAttachments] = useState(defaultMovementAttachments);
-  const [submittingMovement, setSubmittingMovement] = useState(false);
-  const [successMsg, setSuccessMsg] = useState('');
-  const [profileSaving, setProfileSaving] = useState(false);
-  const [profileError, setProfileError] = useState('');
 
   const empresa = session?.empresa || session?.nome || 'Cliente';
 
