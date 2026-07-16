@@ -25,7 +25,8 @@ import {
   saveLgpdConfig,
   fetchLgpdAceites,
   aceitarLgpd,
-  markPortalDonCorChatRead
+  markPortalDonCorChatRead,
+  fetchPortalDonCorBeneficiarios
 } from '../services/api';
 
 const STORAGE_KEY = 'doncor_portal_cliente_session';
@@ -283,6 +284,9 @@ const PortalDonCor = () => {
   const [selectedProtocolDetail, setSelectedProtocolDetail] = useState(null);
   const [showBeneficiariesModal, setShowBeneficiariesModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('');
+  const [beneficiarios, setBeneficiarios] = useState([]);
+  const [beneficiarioSearch, setBeneficiarioSearch] = useState('');
+  const [loadingBeneficiarios, setLoadingBeneficiarios] = useState(false);
   const [previewAtt, setPreviewAtt] = useState(null);
 
   const handleDownloadAttachment = (att) => {
@@ -409,6 +413,12 @@ const PortalDonCor = () => {
     const timer = setInterval(() => loadPortal(session), PORTAL_REFRESH_MS);
     return () => clearInterval(timer);
   }, [session, loadPortal]);
+
+  useEffect(() => {
+    if (showBeneficiariesModal && selectedPlan) {
+      loadBeneficiarios(selectedPlan);
+    }
+  }, [showBeneficiariesModal, selectedPlan]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -555,6 +565,24 @@ const PortalDonCor = () => {
     setDocumento('');
     setSenha('');
     setShowPassBox(false);
+  };
+
+  const loadBeneficiarios = async (plan) => {
+    if (!session || !plan) return;
+    setLoadingBeneficiarios(true);
+    try {
+      const data = await fetchPortalDonCorBeneficiarios({
+        documento: session.documento,
+        plano: plan,
+        search: beneficiarioSearch
+      });
+      setBeneficiarios(data || []);
+    } catch (err) {
+      console.error('Erro ao carregar beneficiários:', err);
+      setBeneficiarios([]);
+    } finally {
+      setLoadingBeneficiarios(false);
+    }
   };
 
   const handleDeleteSolicitacao = async (id) => {
@@ -3510,7 +3538,7 @@ const PortalDonCor = () => {
 
       {showBeneficiariesModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.4)', backdropFilter: 'blur(3px)', zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div style={{ background: '#fff', borderRadius: 18, padding: 28, width: '100%', maxWidth: 500, boxShadow: '0 20px 40px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ background: '#fff', borderRadius: 18, padding: 28, width: '100%', maxWidth: 900, maxHeight: '90vh', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: `1px solid ${theme.border}`, paddingBottom: 14 }}>
               <h3 style={{ margin: 0, fontSize: '1.25rem', color: theme.text, display: 'flex', alignItems: 'center', gap: 10 }}>
                 👥 Beneficiários: {selectedPlan}
@@ -3518,13 +3546,93 @@ const PortalDonCor = () => {
               <button onClick={() => setShowBeneficiariesModal(false)} style={{ background: 'transparent', border: 0, fontSize: '1.25rem', cursor: 'pointer', color: theme.muted }}>&times;</button>
             </div>
             
-            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-              <p style={{ color: theme.muted, fontSize: '0.9rem' }}>Funcionalidade em desenvolvimento. Listagem de beneficiários para este plano será exibida aqui.</p>
+            <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
+              <Input
+                type="text"
+                placeholder="Buscar beneficiário..."
+                value={beneficiarioSearch}
+                onChange={(e) => setBeneficiarioSearch(e.target.value)}
+                style={{ flex: 1, height: 40, padding: '10px 14px', border: `1px solid ${theme.border}`, borderRadius: 8, fontSize: '0.9rem' }}
+              />
+              <button
+                onClick={() => loadBeneficiarios(selectedPlan)}
+                style={{ background: theme.blue, color: '#fff', border: 0, padding: '10px 16px', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem' }}
+              >
+                🔄 Atualizar
+              </button>
+            </div>
+            
+            <div style={{ flex: 1, overflowY: 'auto', marginBottom: 16, border: `1px solid ${theme.border}`, borderRadius: 8 }}>
+              {loadingBeneficiarios ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200, fontSize: '0.9rem', color: theme.muted }}>
+                  <span>Carregando beneficiários...</span>
+                </div>
+              ) : beneficiarios.length === 0 ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200, fontSize: '0.9rem', color: theme.muted }}>
+                  <span>Nenhum beneficiário encontrado para este plano.</span>
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr style={{ background: '#f1f5f9', borderBottom: `2px solid ${theme.border}`, position: 'sticky', top: 0, zIndex: 10 }}>
+                      <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 800, color: theme.text, whiteSpace: 'nowrap' }}>Nome</th>
+                      <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 800, color: theme.text, whiteSpace: 'nowrap' }}>CPF</th>
+                      <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 800, color: theme.text, whiteSpace: 'nowrap' }}>Nascimento</th>
+                      <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 800, color: theme.text, whiteSpace: 'nowrap' }}>Parentesco</th>
+                      <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 800, color: theme.text, whiteSpace: 'nowrap' }}>Estado Civil</th>
+                      <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 800, color: theme.text, whiteSpace: 'nowrap' }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {beneficiarios.map((ben, idx) => (
+                      <tr 
+                        key={ben.id || idx} 
+                        style={{ 
+                          borderBottom: `1px solid ${theme.border}`, 
+                          background: idx % 2 === 0 ? '#f9fafb' : '#fff',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#eff6ff'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = idx % 2 === 0 ? '#f9fafb' : '#fff'}
+                      >
+                        <td style={{ padding: '12px 14px', fontWeight: 700, color: theme.text }}>
+                          {ben.beneficiario}
+                          <br />
+                          <span style={{ fontSize: '0.75rem', color: theme.muted, fontWeight: 400 }}>
+                            {ben.nomeMae}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 14px', color: theme.text, fontFamily: 'monospace' }}>
+                          {ben.cpf}
+                        </td>
+                        <td style={{ padding: '12px 14px', color: theme.text, whiteSpace: 'nowrap' }}>
+                          {ben.dataNascimento}
+                        </td>
+                        <td style={{ padding: '12px 14px', color: theme.text }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '3px 8px', borderRadius: 4, background: '#eff6ff', color: theme.blue, border: `1px solid ${theme.border}` }}>
+                            {ben.parentesco || '-'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 14px', color: theme.text }}>
+                          {ben.estadoCivil || '-'}
+                        </td>
+                        <td style={{ padding: '12px 14px' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '4px 10px', borderRadius: 6, background: ben.status === 'Concluído' ? '#dcfce7' : '#fef3c7', color: ben.status === 'Concluído' ? '#166534' : '#b45309', whiteSpace: 'nowrap' }}>
+                            {ben.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
 
-            <Button onClick={() => setShowBeneficiariesModal(false)} style={{ background: theme.blue, color: '#fff', width: '100%', height: 44, marginTop: 20 }}>
-              Fechar
-            </Button>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <Button onClick={() => setShowBeneficiariesModal(false)} style={{ background: theme.blue, color: '#fff', flex: 1, height: 44 }}>
+                Fechar
+              </Button>
+            </div>
           </div>
         </div>
       )}

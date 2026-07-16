@@ -1300,3 +1300,87 @@ def attach_portal_routes(app, db, _proj: Callable | None = None, _now_iso_func: 
     async def portal_doncor_notifications_read(id: str):
         await db.notifications.update_one({"id": id}, {"$set": {"read": True}})
         return {"ok": True}
+
+    @app.get("/api/portal-doncor/beneficiarios")
+    async def portal_doncor_beneficiarios(
+        documento: str = Query(default=""),
+        contrato: str = Query(default=""),
+        plano: str = Query(default=""),
+        search: str = Query(default=""),
+        limit: int = Query(default=500, ge=1, le=1000),
+    ):
+        """Retorna beneficiários filtrados por contrato e plano."""
+        try:
+            all_beneficiarios = await _all(db.inclusoes, "criadoEm", limit)
+            filtered = all_beneficiarios
+            
+            # Filtrar por documento se fornecido
+            if documento:
+                doc = _digits(documento)
+                if doc:
+                    context = await _find_partner_context(db, documento)
+                    contrato_numeros = set(context.get("contratoNumeros") or [])
+                    empresa = context.get("empresa", "")
+                    
+                    filtered = [
+                        item for item in filtered
+                        if item.get("contrato") in contrato_numeros or 
+                        str(item.get("empresa") or "").strip().lower() == str(empresa or "").strip().lower()
+                    ]
+            
+            # Filtrar por contrato específico
+            if contrato:
+                contrato_clean = str(contrato).strip()
+                filtered = [item for item in filtered if str(item.get("contrato") or "").strip() == contrato_clean]
+            
+            # Filtrar por plano específico
+            if plano:
+                plano_clean = str(plano).strip().lower()
+                filtered = [
+                    item for item in filtered
+                    if plano_clean in str(item.get("plano") or "").strip().lower()
+                ]
+            
+            # Busca por texto
+            if search:
+                term = str(search).strip().lower()
+                term_digits = _digits(term)
+                filtered = [
+                    item for item in filtered
+                    if term in " ".join(str(item.get(key) or "").lower() for key in ["beneficiario", "nomeMae", "email"])
+                    or (term_digits and term_digits in _digits(item.get("cpf")))
+                ]
+            
+            # Formatar resposta
+            result = []
+            for item in filtered:
+                result.append({
+                    "id": item.get("id"),
+                    "beneficiario": item.get("beneficiario"),
+                    "cpf": item.get("cpf"),
+                    "dataNascimento": item.get("dataNascimento"),
+                    "nomeMae": item.get("nomeMae"),
+                    "parentesco": item.get("parentesco"),
+                    "estadoCivil": item.get("estadoCivil"),
+                    "genero": item.get("genero"),
+                    "email": item.get("email"),
+                    "telefone": item.get("telefone"),
+                    "contrato": item.get("contrato"),
+                    "empresa": item.get("empresa"),
+                    "plano": item.get("plano"),
+                    "status": item.get("status"),
+                    "dataSolicitacao": item.get("dataSolicitacao"),
+                })
+            
+            # Ordenar por data (decrescente) e depois por nome
+            result = sorted(
+                result,
+                key=lambda x: (x.get("dataSolicitacao") or "", x.get("beneficiario") or ""),
+                reverse=True
+            )
+            
+            return result
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Erro ao buscar beneficiários: {str(exc)}")
