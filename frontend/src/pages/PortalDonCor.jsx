@@ -264,6 +264,7 @@ const PortalDonCor = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [payload, setPayload] = useState(null);
+  const totalInclusoes = useMemo(() => payload?.totalInclusoes || 0, [payload]);
   const [messages, setMessages] = useState([]);
   const filteredChatMessages = useMemo(() => messages.filter((m) => !m.protocolo), [messages]);
   const [contratosDb, setContratosDb] = useState([]);
