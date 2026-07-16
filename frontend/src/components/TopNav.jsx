@@ -20,6 +20,7 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
   const userName = session?.username || 'Usuário';
 
   const [notifications, setNotifications] = useState([]);
+  const [chatMessages, setChatMessages] = useState([]);
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [previewAtt, setPreviewAtt] = useState(null);
 
@@ -40,9 +41,11 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
   const loadNotifications = async () => {
     try {
       const chat = await fetchPortalDonCorChat({});
-      // Filter only movement notifications (messages that have a 'protocolo' field)
-      const movementNotifications = (chat || []).filter(item => item.protocolo);
-      setNotifications(movementNotifications);
+      // Separate movement notifications (messages that have a 'protocolo' field)
+      const movements = (chat || []).filter(item => item.protocolo);
+      const chatMessages = (chat || []).filter(item => !item.protocolo && item.senderRole === 'portal');
+      setNotifications(movements);
+      setChatMessages(chatMessages); // I need to add this state
     } catch (e) {
       console.error("Erro ao carregar notificações no TopNav:", e);
     }

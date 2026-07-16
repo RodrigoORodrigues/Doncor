@@ -1160,7 +1160,7 @@ const PortalDonCor = () => {
         <StatCard title="Solicitações abertas" value={solicitacoesAbertas} subtitle="Aguardando conclusão" icon={FileText} tone={theme.warning} onClick={() => setActiveSection('solicitacoes')}/>
         <StatCard title="Mensagens no chat" value={mensagensAtendimento} subtitle="Atendimento registrado" icon={MessageCircle} tone={theme.primary} onClick={() => setActiveSection('chat')}/>
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:16, marginBottom:16 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:16, marginBottom:16 }}>
         <section style={{ ...card, padding:18 }}>
           <SectionTitle title="Solicitações por Mês" subtitle="Acompanhe o volume de solicitações ao longo dos últimos meses." />
           <div style={{ width: '100%', height: 300, marginTop: 20 }}>
@@ -1178,9 +1178,10 @@ const PortalDonCor = () => {
               </ResponsiveContainer>
             )}
           </div>
+        </section>
 
           {/* Seção com os Gráficos adicionais de Gênero, Titularidade e Seguradora */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20, marginTop: 32, borderTop: '1px solid #f0f2f5', paddingTop: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 20, marginTop: 32, borderTop: '1px solid #f0f2f5', paddingTop: 24 }}>
             {/* Gráfico de Gênero */}
             <div style={{ background: '#fff', border: `1px solid ${theme.border}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column' }}>
               <div style={{ background: '#15A4C4', color: '#fff', padding: '10px 16px', textAlign: 'center', fontWeight: '700', fontSize: '0.88rem', letterSpacing: '0.3px' }}>
@@ -1339,7 +1340,6 @@ const PortalDonCor = () => {
               </div>
             </div>
           </div>
-        </section>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:16 }}>
         <section style={{ ...card, padding:18 }}>
@@ -3243,15 +3243,15 @@ const PortalDonCor = () => {
             <button
               onClick={() => {
                 setActiveSection('chat');
-                const unread = messages.filter(m => !m.read && (m.protocolo || m.direction === 'incoming')).length;
+                const unread = messages.filter(m => !m.read && !m.protocolo && m.senderRole !== 'portal').length;
                 if (unread > 0) markPortalDonCorChatRead({ documento: session.documento, empresa: session.empresa }).then(() => loadPortal(session));
               }}
               style={{ border:`1px solid ${theme.border}`, background:'#fff', borderRadius:12, padding:9, color:theme.muted, position: 'relative', cursor: 'pointer' }}
             >
               <Bell size={16}/>
-              {messages.filter(m => !m.read && (m.protocolo || m.direction === 'incoming')).length > 0 && (
+              {messages.filter(m => !m.read && !m.protocolo && m.senderRole !== 'portal').length > 0 && (
                 <span style={{ position: 'absolute', top: -5, right: -5, background: '#e63757', color: '#fff', fontSize: '10px', fontWeight: 800, padding: '2px 5px', borderRadius: '50%' }}>
-                  {messages.filter(m => !m.read && (m.protocolo || m.direction === 'incoming')).length}
+                  {messages.filter(m => !m.read && !m.protocolo && m.senderRole !== 'portal').length}
                 </span>
               )}
             </button>
