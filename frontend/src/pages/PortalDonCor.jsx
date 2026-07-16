@@ -418,7 +418,7 @@ const PortalDonCor = () => {
     if (showBeneficiariesModal && selectedPlan) {
       loadBeneficiarios(selectedPlan);
     }
-  }, [showBeneficiariesModal, selectedPlan]);
+  }, [showBeneficiariesModal, selectedPlan, loadBeneficiarios]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -567,7 +567,7 @@ const PortalDonCor = () => {
     setShowPassBox(false);
   };
 
-  const loadBeneficiarios = async (plan) => {
+  const loadBeneficiarios = useCallback(async (plan) => {
     if (!session || !plan) return;
     setLoadingBeneficiarios(true);
     try {
@@ -583,7 +583,7 @@ const PortalDonCor = () => {
     } finally {
       setLoadingBeneficiarios(false);
     }
-  };
+  }, [session, beneficiarioSearch]);
 
   const handleDeleteSolicitacao = async (id) => {
     if (!id) return;
