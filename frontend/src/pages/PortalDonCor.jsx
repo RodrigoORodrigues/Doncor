@@ -29,6 +29,9 @@ import {
   fetchPortalDonCorBeneficiarios
 } from '../services/api';
 
+// Marca para redeploy manual na branch `white`
+const DEPLOY_MARK = `white-deploy-${new Date().toISOString()}`;
+
 const STORAGE_KEY = 'doncor_portal_cliente_session';
 const PORTAL_REFRESH_MS = 30000;
 const readSession = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch { return null; } };
