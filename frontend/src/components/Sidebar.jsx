@@ -105,9 +105,15 @@ const Sidebar = ({ collapsed, onToggle, onMenuClick, activeItem, allowedPages = 
     const loadInitialCounts = async () => {
       try {
         const chat = await fetchPortalDonCorChat({});
+        // Separate movement notifications (items with protocolo) and chat (items without protocolo)
         const unreadMovements = (chat || []).filter(item => item.protocolo && !item.read).length;
+        const unreadChat = (chat || []).filter(item => !item.protocolo && item.direction === 'incoming' && !item.read).length;
+
         setNotificationsUnread(unreadMovements);
         localStorage.setItem('doncor_notifications_unread', String(unreadMovements));
+
+        setChatUnread(unreadChat);
+        localStorage.setItem('doncor_chat_unread', String(unreadChat));
       } catch (e) {
         console.error("Erro ao obter contadores iniciais na Sidebar:", e);
       }
