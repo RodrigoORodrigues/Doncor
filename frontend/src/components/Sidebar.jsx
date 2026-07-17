@@ -79,13 +79,10 @@ const Sidebar = ({ collapsed, onToggle, onMenuClick, activeItem, allowedPages = 
     movimentacao: true, // expanded by default for a user-friendly view
   });
 
-  const [chatUnread, setChatUnread] = useState(0);
-  const [notificationsUnread, setNotificationsUnread] = useState(0);
+  const [chatUnread, setChatUnread] = useState(() => Number(localStorage.getItem('doncor_chat_unread') || 0));
+  const [notificationsUnread, setNotificationsUnread] = useState(() => Number(localStorage.getItem('doncor_notifications_unread') || 0));
 
   useEffect(() => {
-    setChatUnread(Number(localStorage.getItem('doncor_chat_unread') || 0));
-    setNotificationsUnread(Number(localStorage.getItem('doncor_notifications_unread') || 0));
-
     const handleChatUnread = (e) => {
       const count = e?.detail?.count;
       setChatUnread(Number.isFinite(Number(count)) ? Number(count) : Number(localStorage.getItem('doncor_chat_unread') || 0));
