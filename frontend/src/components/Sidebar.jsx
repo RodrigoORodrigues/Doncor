@@ -79,17 +79,31 @@ const Sidebar = ({ collapsed, onToggle, onMenuClick, activeItem, allowedPages = 
     movimentacao: true, // expanded by default for a user-friendly view
   });
 
-  const [chatUnread, setChatUnread] = useState(() => Number(localStorage.getItem('doncor_chat_unread') || 0));
-  const [notificationsUnread, setNotificationsUnread] = useState(() => Number(localStorage.getItem('doncor_notifications_unread') || 0));
+  const [chatUnread, setChatUnread] = useState(() => {
+    try {
+      return Number(localStorage.getItem('doncor_chat_unread') || 0);
+    } catch (e) {
+      console.warn("Could not access localStorage for chatUnread", e);
+      return 0;
+    }
+  });
+  const [notificationsUnread, setNotificationsUnread] = useState(() => {
+    try {
+      return Number(localStorage.getItem('doncor_notifications_unread') || 0);
+    } catch (e) {
+      console.warn("Could not access localStorage for notificationsUnread", e);
+      return 0;
+    }
+  });
 
   useEffect(() => {
     const handleChatUnread = (e) => {
       const count = e?.detail?.count;
-      setChatUnread(Number.isFinite(Number(count)) ? Number(count) : Number(localStorage.getItem('doncor_chat_unread') || 0));
+      setChatUnread(Number.isFinite(Number(count)) ? Number(count) : 0);
     };
     const handleNotificationsUnread = (e) => {
       const count = e?.detail?.count;
-      setNotificationsUnread(Number.isFinite(Number(count)) ? Number(count) : Number(localStorage.getItem('doncor_notifications_unread') || 0));
+      setNotificationsUnread(Number.isFinite(Number(count)) ? Number(count) : 0);
     };
 
     window.addEventListener('doncor-chat-unread', handleChatUnread);
