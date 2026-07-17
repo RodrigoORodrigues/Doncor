@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { fetchSaldoVidas, fetchNotifications, markNotificationRead } from '../services/api';
+import React, { useState, useEffect, useMemo } from 'react';
+import { fetchSaldoVidas, fetchPortalDonCorChat, markPortalDonCorChatRead } from '../services/api';
 import {
   Menu, Bell, Lightbulb, ChevronDown,
-  User, Settings, LogOut, HelpCircle, MessageCircle, ArrowRightLeft, UserPlus, UserMinus
+  User, Settings, LogOut, HelpCircle, Paperclip, Eye, Download
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -11,24 +11,141 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
+import { Button } from './ui/button';
 
 const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, session }) => {
   const [saldoVidas, setSaldoVidas] = useState({ percentual_total: 0 });
-  const [notifications, setNotifications] = useState([]);
+  const [chatUnread, setChatUnread] = useState(() => Number(localStorage.getItem('doncor_chat_unread') || 0));
   const userName = session?.username || 'Usuário';
+
+  const [notifications, setNotifications] = useState([]);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [selectedNotification, setSelectedNotification] = useState(null);
+  const [previewAtt, setPreviewAtt] = useState(null);
+
+  const handleDownloadAttachment = (att) => {
+    if (!att || !att.base64) return;
+    const link = document.createElement('a');
+    link.href = att.base64.startsWith('data:') ? att.base64 : `data:${att.type || 'application/octet-stream'};base64,${att.base64}`;
+    link.download = att.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleViewAttachment = (att) => {
+    setPreviewAtt(att);
+  };
+
+  const loadNotifications = async () => {
+    try {
+      const chat = await fetchPortalDonCorChat({});
+      // Separate movement notifications (messages that have a 'protocolo' field)
+      const movements = (chat || []).filter(item => item.protocolo);
+      const chatMessages = (chat || []).filter(item => !item.protocolo && item.senderRole === 'portal');
+      setNotifications(movements);
+      setChatMessages(chatMessages); // I need to add this state
+    } catch (e) {
+      console.error("Erro ao carregar notificações no TopNav:", e);
+    }
+  };
+
+  useEffect(() => {
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 15000); // Poll every 15s
+    return () => clearInterval(interval);
+  }, []);
+
+  const notificationUnreadCount = useMemo(() => {
+    return notifications.filter(n => !n.read).length;
+  }, [notifications]);
+
+  useEffect(() => {
+    localStorage.setItem('doncor_notifications_unread', String(notificationUnreadCount));
+    window.dispatchEvent(new CustomEvent('doncor-notifications-unread', { detail: { count: notificationUnreadCount } }));
+  }, [notificationUnreadCount]);
+
+  const handleMarkAsRead = async (id) => {
+    try {
+      await markPortalDonCorChatRead({ id });
+      loadNotifications();
+    } catch (e) {
+      console.error("Erro ao marcar notificação como lida:", e);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      await markPortalDonCorChatRead({ all_notifications: true });
+      loadNotifications();
+    } catch (e) {
+      console.error("Erro ao marcar todas as notificações como lidas:", e);
+    }
+  };
+
+  const handleProtocolClick = (item) => {
+    setSelectedNotification(item);
+    if (!item.read) {
+      handleMarkAsRead(item.id);
+    }
+  };
+
+  const [brokerProfile, setBrokerProfile] = useState(() => {
+    const cached = localStorage.getItem('doncor_profile_broker');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed.nome) return parsed;
+      } catch (e) {}
+    }
+    return {
+      nome: userName,
+      email: `${userName.toLowerCase()}@doncor.local`,
+      logo: ''
+    };
+  });
+
   const userData = {
-    name: userName,
-    email: `${userName.toLowerCase()}@doncor.local`,
-    role: session?.role || 'Colaborador',
+    name: brokerProfile.nome,
+    email: brokerProfile.email,
     company: 'Don Cor'
   };
 
   useEffect(() => {
     fetchSaldoVidas().then(setSaldoVidas).catch(console.error);
-    if (session?.documento) {
-        fetchNotifications(session.documento).then(setNotifications).catch(console.error);
-    }
-  }, [session]);
+  }, []);
+
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      const cached = localStorage.getItem('doncor_profile_broker');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed.nome) {
+            setBrokerProfile(parsed);
+          }
+        } catch (e) {}
+      }
+    };
+    window.addEventListener('doncor-profile-updated', handleProfileUpdate);
+    return () => {
+      window.removeEventListener('doncor-profile-updated', handleProfileUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    const updateUnread = (event) => {
+      const count = event?.detail?.count;
+      setChatUnread(Number.isFinite(Number(count)) ? Number(count) : Number(localStorage.getItem('doncor_chat_unread') || 0));
+    };
+    window.addEventListener('doncor-chat-unread', updateUnread);
+    window.addEventListener('storage', updateUnread);
+    return () => {
+      window.removeEventListener('doncor-chat-unread', updateUnread);
+      window.removeEventListener('storage', updateUnread);
+    };
+  }, []);
 
   const openChat = () => {
     onMenuClick?.({ id: 'chat', label: 'Chat', icon: 'MessageCircle', page: 'chat' });
@@ -54,6 +171,22 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
             <Menu size={20} />
           </button>
         )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '10px' }}>
+          {brokerProfile.logo ? (
+            <img src={brokerProfile.logo} alt="Logo" style={{ height: '75px', width: '150px', objectFit: 'contain', borderRadius: '12px', border: '1px solid #eee', padding: '4px', animation: 'pulse-border 2s infinite' }} />
+          ) : (
+            <div style={{ width: '60px', height: '60px', background: '#4979bb', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '1.5rem', fontWeight: 600 }}>
+              {brokerProfile.nome.split(' ').map(n => n[0]).slice(0, 2).join('')}
+            </div>
+          )}
+          <style>{`
+            @keyframes pulse-border {
+              0% { box-shadow: 0 0 0 0 rgba(44, 123, 229, 0.7); }
+              70% { box-shadow: 0 0 0 8px rgba(44, 123, 229, 0); }
+              100% { box-shadow: 0 0 0 0 rgba(44, 123, 229, 0); }
+            }
+          `}</style>
+        </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -78,6 +211,7 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
+              aria-label="bell-btn"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -88,14 +222,14 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
                 border: '1px solid #d8e2ef',
                 borderRadius: '6px',
                 cursor: 'pointer',
-                color: '#5E6E82',
+                color: notificationUnreadCount > 0 ? '#2C7BE5' : '#5E6E82',
                 position: 'relative',
                 transition: 'all 0.2s'
               }}
-              title="Notificações"
+              title={notificationUnreadCount > 0 ? `${notificationUnreadCount} nova(s) movimentação(ões)` : 'Notificações de Movimentações'}
             >
               <Bell size={16} />
-              {notifications.length > 0 && (
+              {notificationUnreadCount > 0 && (
                 <span style={{
                   position: 'absolute',
                   top: '-2px',
@@ -112,53 +246,74 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
                   fontSize: '0.6rem',
                   fontWeight: 700
                 }}>
-                  {notifications.length > 99 ? '99+' : notifications.length}
+                  {notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}
                 </span>
               )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" style={{ minWidth: '300px', maxHeight: '400px', overflowY: 'auto' }}>
-            <div style={{ padding: '8px 12px', fontWeight: 700, fontSize: '0.8rem', borderBottom: '1px solid #f0f2f5' }}>Notificações</div>
+          <DropdownMenuContent align="end" style={{ width: '400px', maxHeight: '480px', overflowY: 'auto', padding: '12px', background: '#fff', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', border: '1px solid #d8e2ef', borderRadius: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', borderBottom: '1px solid #f0f2f5', paddingBottom: '8px' }}>
+              <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#344050' }}>Notificações de Movimentações</span>
+              {notificationUnreadCount > 0 && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleMarkAllAsRead(); }} 
+                  style={{ background: 'none', border: 'none', color: '#2C7BE5', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Marcar todas como lidas
+                </button>
+              )}
+            </div>
+
             {notifications.length === 0 ? (
-              <div style={{ padding: '12px', fontSize: '0.8rem', color: '#8a8d93' }}>Nenhuma notificação nova</div>
+              <div style={{ padding: '24px 8px', textAlign: 'center', color: '#8a8d93', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                Nenhuma notificação de movimentação.
+              </div>
             ) : (
-              <>
-                {['chat', 'inclusao', 'exclusao', 'transferencia'].map(type => {
-                  const typeNotifications = notifications.filter(n => n.type === type);
-                  if (typeNotifications.length === 0) return null;
-                  const title = { chat: 'Chat', inclusao: 'Inclusão', exclusao: 'Exclusão', transferencia: 'Transferência' }[type];
-                  return (
-                    <div key={type}>
-                      <div style={{ padding: '8px 12px', fontWeight: 600, fontSize: '0.7rem', color: '#5E6E82', background: '#f9fafb' }}>{title}</div>
-                      {typeNotifications.map(n => (
-                        <DropdownMenuItem key={n.id} style={{ cursor: 'pointer', fontSize: '0.8rem', display: 'flex', gap: '8px', alignItems: 'center' }} onClick={() => {
-                          markNotificationRead(n.id).then(() => {
-                            setNotifications(prev => prev.filter(item => item.id !== n.id));
-                          });
-                          if (n.type === 'chat') openChat();
-                          else if (n.type === 'inclusao') onMenuClick?.({ id: 'inclusao', label: 'Inclusão', icon: 'UserPlus', page: 'inclusao' });
-                          else if (n.type === 'exclusao') onMenuClick?.({ id: 'exclusao', label: 'Exclusão', icon: 'UserMinus', page: 'exclusao' });
-                          else if (n.type === 'transferencia') onMenuClick?.({ id: 'transferencia', label: 'Transferência', icon: 'ArrowRightLeft', page: 'transferencia' });
-                        }}>
-                        <div style={{
-                          width: 24, height: 24, borderRadius: '50%',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          background: n.type === 'chat' ? 'rgba(44,123,229,0.1)' :
-                                      n.type === 'inclusao' ? 'rgba(16,185,129,0.1)' :
-                                      n.type === 'exclusao' ? 'rgba(220,38,38,0.1)' : 'rgba(245,158,11,0.1)'
-                        }}>
-                          {n.type === 'chat' && <MessageCircle size={14} color="#2C7BE5" />}
-                          {n.type === 'inclusao' && <UserPlus size={14} color="#10B981" />}
-                          {n.type === 'exclusao' && <UserMinus size={14} color="#DC2626" />}
-                          {n.type === 'transferencia' && <ArrowRightLeft size={14} color="#F59E0B" />}
+              notifications.map((item) => (
+                <div key={item.id} style={{ padding: '10px', borderBottom: '1px solid #f8fafc', borderRadius: '6px', background: !item.read ? '#eff6ff' : 'transparent', marginBottom: '4px', position: 'relative' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '4px' }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleProtocolClick(item); }}
+                      style={{ background: 'none', border: 'none', color: '#2C7BE5', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', padding: 0, textDecoration: 'underline', textAlign: 'left' }}
+                    >
+                      Protocolo: {item.protocolo}
+                    </button>
+                    <span style={{ fontSize: '0.65rem', color: '#8a8d93' }}>{item.createdAt ? new Date(item.createdAt).toLocaleDateString('pt-BR') : ''}</span>
+                  </div>
+                  <p style={{ margin: '4px 0', fontSize: '0.78rem', color: '#344050', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.text}</p>
+                  
+                  {item.attachments && item.attachments.length > 0 && (
+                    <div style={{ display: 'none', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+                      {item.attachments.map((att, idx) => (
+                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', fontWeight: 600 }}>
+                          <Paperclip size={12} color="#5e6e82" />
+                          {att.base64 ? (
+                            <a
+                              href={att.base64.startsWith('data:') ? att.base64 : `data:${att.type || 'application/octet-stream'};base64,${att.base64}`}
+                              download={att.name}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ color: '#2C7BE5', textDecoration: 'underline', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '280px' }}
+                            >
+                              {att.name}
+                            </a>
+                          ) : (
+                            <span style={{ color: '#5e6e82', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '280px' }}>{att.name}</span>
+                          )}
                         </div>
-                        <span>{n.text}</span>
-                        </DropdownMenuItem>
                       ))}
                     </div>
-                  );
-                })}
-              </>
+                  )}
+                  
+                  {!item.read && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleMarkAsRead(item.id); }}
+                      style={{ position: 'absolute', right: '10px', top: '10px', background: 'none', border: 'none', color: '#8a8d93', fontSize: '0.65rem', cursor: 'pointer' }}
+                    >
+                      ✓ Lido
+                    </button>
+                  )}
+                </div>
+              ))
             )}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -192,36 +347,84 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
               borderRadius: '6px',
               transition: 'all 0.2s'
             }}>
-              <div style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                background: '#4979bb',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                fontSize: '0.75rem',
-                fontWeight: 600
-              }}>
-                {userData.name.split(' ').map(n => n[0]).slice(0, 2).join('')}
-              </div>
+              {brokerProfile.logo ? (
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: '#fff',
+                  border: '1px solid #d8e2ef',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  padding: '2px'
+                }}>
+                  <img src={brokerProfile.logo} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '12px', border: '1px solid #eee', padding: '4px', animation: 'pulse-border 2s infinite' }} />
+                </div>
+              ) : (
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: '#4979bb',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  fontSize: '0.75rem',
+                  fontWeight: 600
+                }}>
+                  {userData.name.split(' ').map(n => n[0]).slice(0, 2).join('')}
+                </div>
+              )}
               <div style={{ textAlign: 'left' }}>
                 <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#344050', lineHeight: 1.2 }}>
                   {userData.name.split(' ').slice(0, 2).join(' ')}
-                </div>
-                <div style={{ fontSize: '0.62rem', color: '#8a8d93' }}>
-                  {userData.role}
                 </div>
               </div>
               <ChevronDown size={14} color="#5E6E82" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" style={{ minWidth: '200px' }}>
-            <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f2f5' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#344050' }}>{userData.name}</div>
-              <div style={{ fontSize: '0.7rem', color: '#8a8d93' }}>{userData.email}</div>
-              <div style={{ fontSize: '0.65rem', color: '#8a8d93', marginTop: '2px' }}>{userData.company}</div>
+          <DropdownMenuContent align="end" style={{ minWidth: '220px' }}>
+            <div style={{ padding: '12px', borderBottom: '1px solid #f0f2f5', display: 'flex', gap: '10px', alignItems: 'center' }}>
+              {brokerProfile.logo ? (
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '8px',
+                  background: '#fff',
+                  border: '1px solid #d8e2ef',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  padding: '3px',
+                  flexShrink: 0
+                }}>
+                  <img src={brokerProfile.logo} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                </div>
+              ) : (
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  background: '#e0ebf7',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#2C7BE5',
+                  fontSize: '0.9rem',
+                  fontWeight: 700,
+                  flexShrink: 0
+                }}>
+                  {userData.name.split(' ').map(n => n[0]).slice(0, 2).join('')}
+                </div>
+              )}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#344050', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{userData.name}</div>
+                <div style={{ fontSize: '0.7rem', color: '#8a8d93', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{userData.email}</div>
+              </div>
             </div>
             <DropdownMenuItem
               style={{ cursor: 'pointer', fontSize: '0.8rem' }}
@@ -248,6 +451,118 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Dialog Detalhes do Protocolo */}
+      <Dialog open={!!selectedNotification} onOpenChange={(open) => !open && setSelectedNotification(null)}>
+        <DialogContent style={{ maxWidth: '550px' }}>
+          <DialogHeader>
+            <DialogTitle>📄 Detalhes da Notificação ({selectedNotification?.protocolo})</DialogTitle>
+          </DialogHeader>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', fontSize: '0.82rem', color: '#344050', margin: '14px 0' }}>
+            <div>
+              <span style={{ color: '#8a8d93', fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>Protocolo</span>
+              <div style={{ fontWeight: 800, color: '#2C7BE5', fontSize: '0.95rem', marginTop: 2 }}>{selectedNotification?.protocolo}</div>
+            </div>
+            <div>
+              <span style={{ color: '#8a8d93', fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>Data Notificação</span>
+              <div style={{ fontWeight: 600, marginTop: 2 }}>{selectedNotification?.createdAt ? new Date(selectedNotification.createdAt).toLocaleString('pt-BR') : '-'}</div>
+            </div>
+            <div style={{ gridColumn: 'span 2' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>Empresa</span>
+              <div style={{ fontWeight: 600, marginTop: 2 }}>{selectedNotification?.empresa || selectedNotification?.company || '-'}</div>
+            </div>
+            <div style={{ gridColumn: 'span 2' }}>
+              <span style={{ color: '#8a8d93', fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>Detalhes</span>
+              <div style={{ marginTop: 2, background: '#f8fafc', border: '1px solid #e2e8f0', padding: '10px', borderRadius: '8px', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{selectedNotification?.text}</div>
+            </div>
+
+            {/* Anexos */}
+            {selectedNotification?.attachments && selectedNotification.attachments.length > 0 && (
+              <div style={{ gridColumn: 'span 2', marginTop: '8px' }}>
+                <span style={{ color: '#8a8d93', fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Documentos Anexados</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {selectedNotification.attachments.map((att, index) => (
+                    <div key={index} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '8px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.8rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                        <Paperclip size={14} color="#2C7BE5" />
+                        <span style={{ color: '#344050', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.name}</span>
+                        {att.size ? <span style={{ color: '#8a8d93', fontSize: '0.72rem', marginLeft: '6px' }}>({(att.size / 1024).toFixed(0)} KB)</span> : null}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleViewAttachment(att)}
+                          style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '2px 8px', height: '28px', cursor: 'pointer' }}
+                        >
+                          <Eye size={12} /> Visualizar
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handleDownloadAttachment(att)}
+                          style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '2px 8px', height: '28px', background: '#2C7BE5', color: '#fff', cursor: 'pointer' }}
+                        >
+                          <Download size={12} /> Baixar
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setSelectedNotification(null)} style={{ background: '#2C7BE5', color: '#fff' }}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para Visualização de Anexo */}
+      <Dialog open={!!previewAtt} onOpenChange={(open) => !open && setPreviewAtt(null)}>
+        <DialogContent style={{ maxWidth: '800px', width: '90%' }}>
+          <DialogHeader>
+            <DialogTitle>👁️ Visualizar Anexo: {previewAtt?.name}</DialogTitle>
+          </DialogHeader>
+          <div style={{ margin: '14px 0', minHeight: '400px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '10px' }}>
+            {previewAtt ? (
+              previewAtt.name.toLowerCase().endsWith('.pdf') || previewAtt.type?.includes('pdf') ? (
+                <iframe
+                  src={previewAtt.base64?.startsWith('data:') ? previewAtt.base64 : `data:application/pdf;base64,${previewAtt.base64}`}
+                  style={{ width: '100%', height: '550px', border: 'none', borderRadius: '4px' }}
+                  title="PDF Preview"
+                />
+              ) : previewAtt.name.toLowerCase().endsWith('.png') || previewAtt.name.toLowerCase().endsWith('.jpg') || previewAtt.name.toLowerCase().endsWith('.jpeg') || previewAtt.name.toLowerCase().endsWith('.gif') || previewAtt.type?.includes('image') ? (
+                <img
+                  src={previewAtt.base64?.startsWith('data:') ? previewAtt.base64 : `data:${previewAtt.type || 'image/png'};base64,${previewAtt.base64}`}
+                  alt={previewAtt.name}
+                  style={{ maxWidth: '100%', maxHeight: '550px', objectFit: 'contain', borderRadius: '4px' }}
+                />
+              ) : previewAtt.name.toLowerCase().endsWith('.txt') || previewAtt.type?.includes('text') ? (
+                <pre style={{ width: '100%', maxHeight: '500px', overflow: 'auto', padding: '12px', background: '#fff', border: '1px solid #d8e2ef', borderRadius: '4px', fontSize: '0.85rem', whiteSpace: 'pre-wrap' }}>
+                  {atob(previewAtt.base64.split(',')[1] || previewAtt.base64)}
+                </pre>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <Paperclip size={48} color="#8a8d93" style={{ marginBottom: '14px' }} />
+                  <p style={{ fontWeight: 600, color: '#344050' }}>Visualização não suportada para este tipo de arquivo.</p>
+                  <p style={{ fontSize: '0.78rem', color: '#8a8d93', marginTop: '4px' }}>Por favor, faça o download utilizando o botão abaixo para abrir em seu dispositivo.</p>
+                  <Button onClick={() => handleDownloadAttachment(previewAtt)} style={{ marginTop: '16px', background: '#2C7BE5', color: '#fff' }}>
+                    <Download size={14} style={{ marginRight: '6px' }} /> Baixar Arquivo
+                  </Button>
+                </div>
+              )
+            ) : null}
+          </div>
+          <DialogFooter style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            {previewAtt && (
+              <Button onClick={() => handleDownloadAttachment(previewAtt)} variant="outline">
+                <Download size={14} style={{ marginRight: '6px' }} /> Baixar
+              </Button>
+            )}
+            <Button onClick={() => setPreviewAtt(null)} style={{ background: '#2C7BE5', color: '#fff' }}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
