@@ -161,7 +161,17 @@ const Chat = ({ session }) => {
           ) : companies.map((name) => (
             <button
               key={name}
-              onClick={() => setSelectedCompany(name)}
+              onClick={async () => {
+                setSelectedCompany(name);
+                try {
+                  await markPortalDonCorChatRead({ documento: companyDocuments[name] || '', empresa: name });
+                } catch (e) {
+                  console.error('Erro ao marcar mensagens como lidas ao abrir empresa:', e);
+                }
+                const remainingUnread = messages.filter((item) => item.direction === 'incoming' && !item.read && !item.protocolo && ((item.company || item.empresa) !== name)).length;
+                saveUnread(remainingUnread);
+                setMessages((items) => items.map((item) => ((item.company === name || item.empresa === name) ? { ...item, read: true } : item)));
+              }}
               style={{
                 width:'100%', textAlign:'left', border:'1px solid #e3e6f0', borderRadius:'8px', background:selectedCompany === name ? '#eef4fb' : '#fff',
                 padding:'10px', marginBottom:'8px', cursor:'pointer', color:'#344050', display:'flex', justifyContent:'space-between', alignItems:'center'

@@ -277,7 +277,9 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
                     </button>
                     <span style={{ fontSize: '0.65rem', color: '#8a8d93' }}>{item.createdAt ? new Date(item.createdAt).toLocaleDateString('pt-BR') : ''}</span>
                   </div>
-                  <p style={{ margin: '4px 0', fontSize: '0.78rem', color: '#344050', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.text}</p>
+                  <p style={{ margin: '4px 0', fontSize: '0.78rem', color: '#344050', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {item.empresa || item.company || '-'}
+                  </p>
                   
                   {item.attachments && item.attachments.length > 0 && (
                     <div style={{ display: 'none', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
