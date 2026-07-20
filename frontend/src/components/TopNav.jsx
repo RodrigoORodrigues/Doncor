@@ -278,16 +278,11 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
                     </button>
                     <span style={{ fontSize: '0.65rem', color: '#8a8d93' }}>{item.createdAt ? new Date(item.createdAt).toLocaleDateString('pt-BR') : ''}</span>
                   </div>
-<<<<<<< HEAD
                   <p style={{ margin: '4px 0', fontSize: '0.78rem', color: '#344050', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {item.empresa || item.company || '-'}
                   </p>
-                  
-=======
-                  <p style={{ margin: '4px 0', fontSize: '0.78rem', color: '#344050', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.text}</p>
->>>>>>> 731fec8a094557c9837c6f299c50726ae2ac67e1
                   {item.attachments && item.attachments.length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+                    <div style={{ display: 'none', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
                       {item.attachments.map((att, idx) => (
                         <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', fontWeight: 600 }}>
                           <Paperclip size={12} color="#5e6e82" />
@@ -340,7 +335,7 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
                     </button>
                     <span style={{ fontSize: '0.65rem', color: '#8a8d93' }}>{item.createdAt ? new Date(item.createdAt).toLocaleDateString('pt-BR') : ''}</span>
                   </div>
-                  <p style={{ margin: '4px 0', fontSize: '0.78rem', color: '#344050', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.text || item.attachmentName || 'Mensagem com anexo'}</p>
+                  {/* Conteúdo do chat oculto no dropdown: mostra apenas o nome da empresa */}
                   {!item.read && (
                     <button
                       onClick={(e) => { e.stopPropagation(); handleMarkAsRead(item.id); }}
