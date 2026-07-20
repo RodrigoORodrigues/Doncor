@@ -383,6 +383,71 @@ const PortalDonCor = () => {
     setLoading(false);
   }, [session]);
 
+  const isSystemMessage = (item) => {
+    if (!item || item.protocolo) return false;
+    if (item.direction !== 'incoming') return false;
+    const senderRole = String(item.senderRole || '').toLowerCase();
+    const sender = String(item.sender || '').toLowerCase();
+    return senderRole === 'system' || sender.includes('sistema') || /sistema/i.test(sender);
+  };
+
+  useEffect(() => {
+    setUnreadSystemMessages(messages.filter((item) => !item.read && isSystemMessage(item)).length);
+    try {
+      const seen = JSON.parse(localStorage.getItem('doncor_portal_seen_concluded_solicitacoes') || '[]');
+      const unseen = solicitacoes
+        .filter((item) => String(item.status || '').toLowerCase().includes('concl'))
+        .map((item) => item.id || item.protocolo)
+        .filter(Boolean)
+        .filter((id) => !seen.includes(id));
+      setUnseenConcludedSolicitacoes(unseen.length);
+    } catch (err) {
+      setUnseenConcludedSolicitacoes(solicitacoes.filter((item) => String(item.status || '').toLowerCase().includes('concl')).length);
+    }
+  }, [messages, solicitacoes]);
+
+  const markConcludedSolicitacoesSeen = () => {
+    try {
+      const seen = JSON.parse(localStorage.getItem('doncor_portal_seen_concluded_solicitacoes') || '[]');
+      const concludedIds = solicitacoes
+        .filter((item) => String(item.status || '').toLowerCase().includes('concl'))
+        .map((item) => item.id || item.protocolo)
+        .filter(Boolean);
+      const updated = Array.from(new Set([...seen, ...concludedIds]));
+      localStorage.setItem('doncor_portal_seen_concluded_solicitacoes', JSON.stringify(updated));
+      setUnseenConcludedSolicitacoes(0);
+    } catch (err) {
+      console.error('Erro ao marcar solicitações concluídas como vistas:', err);
+    }
+  };
+
+  const handlePortalBellClick = async () => {
+    if (unreadSystemMessages > 0 && session) {
+      try {
+        await markPortalDonCorChatRead({ documento: session.documento, empresa: session.empresa });
+        setUnreadSystemMessages(0);
+      } catch (err) {
+        console.error('Erro ao marcar mensagens do Portal DonCor como lidas:', err);
+      }
+    }
+
+    if (unseenConcludedSolicitacoes > 0) {
+      markConcludedSolicitacoesSeen();
+    }
+
+    if (unreadSystemMessages > 0) {
+      setActiveSection('chat');
+    } else if (unseenConcludedSolicitacoes > 0) {
+      setActiveSection('solicitacoes');
+    } else {
+      setActiveSection('chat');
+    }
+
+    if (session) {
+      await loadPortal(session);
+    }
+  };
+
   const loadLgpdGovernance = useCallback(async () => {
     try {
       const data = await fetchLgpdAceites();
@@ -3303,17 +3368,13 @@ const PortalDonCor = () => {
           <div style={{ width:420 }}><Input placeholder="Buscar..." /></div>
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
             <button
-              onClick={() => {
-                setActiveSection('chat');
-                const unread = messages.filter(m => !m.read && !m.protocolo && m.direction === 'outgoing').length;
-                if (unread > 0) markPortalDonCorChatRead({ documento: session.documento, empresa: session.empresa }).then(() => loadPortal(session));
-              }}
+              onClick={handlePortalBellClick}
               style={{ border:`1px solid ${theme.border}`, background:'#fff', borderRadius:12, padding:9, color:theme.muted, position: 'relative', cursor: 'pointer' }}
             >
               <Bell size={16}/>
-              {messages.filter(m => !m.read && !m.protocolo && m.direction === 'outgoing').length > 0 && (
+              {((unreadSystemMessages || 0) + (unseenConcludedSolicitacoes || 0)) > 0 && (
                 <span style={{ position: 'absolute', top: -5, right: -5, background: '#e63757', color: '#fff', fontSize: '10px', fontWeight: 800, padding: '2px 5px', borderRadius: '50%' }}>
-                  {messages.filter(m => !m.read && !m.protocolo && m.direction === 'outgoing').length}
+                  {unreadSystemMessages + unseenConcludedSolicitacoes}
                 </span>
               )}
             </button>
