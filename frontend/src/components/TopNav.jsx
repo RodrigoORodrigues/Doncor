@@ -16,10 +16,10 @@ import { Button } from './ui/button';
 
 const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, session }) => {
   const [saldoVidas, setSaldoVidas] = useState({ percentual_total: 0 });
-  const [chatUnread, setChatUnread] = useState(() => Number(localStorage.getItem('doncor_chat_unread') || 0));
   const userName = session?.username || 'Usuário';
 
   const [notifications, setNotifications] = useState([]);
+  const [chatNotifications, setChatNotifications] = useState([]);
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [previewAtt, setPreviewAtt] = useState(null);
 
@@ -40,9 +40,9 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
   const loadNotifications = async () => {
     try {
       const chat = await fetchPortalDonCorChat({});
-      // Filter only movement notifications (messages that have a 'protocolo' field)
-      const movementNotifications = (chat || []).filter(item => item.protocolo);
-      setNotifications(movementNotifications);
+      const items = chat || [];
+      setNotifications(items.filter(item => item.protocolo));
+      setChatNotifications(items.filter(item => !item.protocolo && item.direction === 'incoming'));
     } catch (e) {
       console.error("Erro ao carregar notificações no TopNav:", e);
     }
@@ -54,14 +54,14 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
     return () => clearInterval(interval);
   }, []);
 
-  const notificationUnreadCount = useMemo(() => {
-    return notifications.filter(n => !n.read).length + chatUnread;
-  }, [notifications, chatUnread]);
+  const movementUnreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
+  const chatUnreadCount = useMemo(() => chatNotifications.filter(n => !n.read).length, [chatNotifications]);
+  const notificationUnreadCount = movementUnreadCount + chatUnreadCount;
 
   useEffect(() => {
-    localStorage.setItem('doncor_notifications_unread', String(notificationUnreadCount));
-    window.dispatchEvent(new CustomEvent('doncor-notifications-unread', { detail: { count: notificationUnreadCount } }));
-  }, [notificationUnreadCount]);
+    localStorage.setItem('doncor_notifications_unread', String(movementUnreadCount));
+    window.dispatchEvent(new CustomEvent('doncor-notifications-unread', { detail: { count: movementUnreadCount } }));
+  }, [movementUnreadCount]);
 
   const handleMarkAsRead = async (id) => {
     try {
@@ -74,7 +74,11 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
 
   const handleMarkAllAsRead = async () => {
     try {
-      await markPortalDonCorChatRead({ all_notifications: true });
+      const unreadChatIds = chatNotifications.filter((item) => !item.read).map((item) => item.id);
+      await Promise.all([
+        markPortalDonCorChatRead({ all_notifications: true }),
+        ...unreadChatIds.map((id) => markPortalDonCorChatRead({ id })),
+      ]);
       loadNotifications();
     } catch (e) {
       console.error("Erro ao marcar todas as notificações como lidas:", e);
@@ -86,6 +90,13 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
     if (!item.read) {
       handleMarkAsRead(item.id);
     }
+  };
+
+  const handleChatNotificationClick = (item) => {
+    if (!item.read) {
+      handleMarkAsRead(item.id);
+    }
+    openChat();
   };
 
   const [brokerProfile, setBrokerProfile] = useState(() => {
@@ -128,19 +139,6 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
     window.addEventListener('doncor-profile-updated', handleProfileUpdate);
     return () => {
       window.removeEventListener('doncor-profile-updated', handleProfileUpdate);
-    };
-  }, []);
-
-  useEffect(() => {
-    const updateUnread = (event) => {
-      const count = event?.detail?.count;
-      setChatUnread(Number.isFinite(Number(count)) ? Number(count) : Number(localStorage.getItem('doncor_chat_unread') || 0));
-    };
-    window.addEventListener('doncor-chat-unread', updateUnread);
-    window.addEventListener('storage', updateUnread);
-    return () => {
-      window.removeEventListener('doncor-chat-unread', updateUnread);
-      window.removeEventListener('storage', updateUnread);
     };
   }, []);
 
@@ -223,7 +221,7 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
                 position: 'relative',
                 transition: 'all 0.2s'
               }}
-              title={notificationUnreadCount > 0 ? `${notificationUnreadCount} nova(s) movimentação(ões)` : 'Notificações de Movimentações'}
+              title={notificationUnreadCount > 0 ? `${notificationUnreadCount} nova(s) notificação(ões)` : 'Notificações'}
             >
               <Bell size={16} />
               {notificationUnreadCount > 0 && (
@@ -250,7 +248,7 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" style={{ width: '400px', maxHeight: '480px', overflowY: 'auto', padding: '12px', background: '#fff', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', border: '1px solid #d8e2ef', borderRadius: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', borderBottom: '1px solid #f0f2f5', paddingBottom: '8px' }}>
-              <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#344050' }}>Notificações de Movimentações</span>
+              <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#344050' }}>Notificações do Sistema DonCor</span>
               {notificationUnreadCount > 0 && (
                 <button 
                   onClick={(e) => { e.stopPropagation(); handleMarkAllAsRead(); }} 
@@ -261,8 +259,11 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
               )}
             </div>
 
+            <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#5E6E82', textTransform: 'uppercase', margin: '8px 0 6px' }}>
+              Movimentações ({movementUnreadCount})
+            </div>
             {notifications.length === 0 ? (
-              <div style={{ padding: '24px 8px', textAlign: 'center', color: '#8a8d93', fontSize: '0.8rem', fontStyle: 'italic' }}>
+              <div style={{ padding: '14px 8px', textAlign: 'center', color: '#8a8d93', fontSize: '0.8rem', fontStyle: 'italic' }}>
                 Nenhuma notificação de movimentação.
               </div>
             ) : (
@@ -278,9 +279,8 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
                     <span style={{ fontSize: '0.65rem', color: '#8a8d93' }}>{item.createdAt ? new Date(item.createdAt).toLocaleDateString('pt-BR') : ''}</span>
                   </div>
                   <p style={{ margin: '4px 0', fontSize: '0.78rem', color: '#344050', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.text}</p>
-                  
                   {item.attachments && item.attachments.length > 0 && (
-                    <div style={{ display: 'none', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
                       {item.attachments.map((att, idx) => (
                         <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', fontWeight: 600 }}>
                           <Paperclip size={12} color="#5e6e82" />
@@ -300,7 +300,40 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
                       ))}
                     </div>
                   )}
-                  
+                  {!item.read && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleMarkAsRead(item.id); }}
+                      style={{ position: 'absolute', right: '10px', top: '10px', background: 'none', border: 'none', color: '#8a8d93', fontSize: '0.65rem', cursor: 'pointer' }}
+                    >
+                      ✓ Lido
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+
+            <DropdownMenuSeparator style={{ margin: '10px 0' }} />
+
+            <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#5E6E82', textTransform: 'uppercase', margin: '8px 0 6px' }}>
+              Mensagens do chat ({chatUnreadCount})
+            </div>
+            {chatNotifications.length === 0 ? (
+              <div style={{ padding: '14px 8px', textAlign: 'center', color: '#8a8d93', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                Nenhuma mensagem nova do portal.
+              </div>
+            ) : (
+              chatNotifications.map((item) => (
+                <div key={item.id} style={{ padding: '10px', borderBottom: '1px solid #f8fafc', borderRadius: '6px', background: !item.read ? '#fff7ed' : 'transparent', marginBottom: '4px', position: 'relative' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '4px' }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleChatNotificationClick(item); }}
+                      style={{ background: 'none', border: 'none', color: '#C2410C', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', padding: 0, textDecoration: 'underline', textAlign: 'left' }}
+                    >
+                      Chat: {item.empresa || item.company || 'Portal do Cliente'}
+                    </button>
+                    <span style={{ fontSize: '0.65rem', color: '#8a8d93' }}>{item.createdAt ? new Date(item.createdAt).toLocaleDateString('pt-BR') : ''}</span>
+                  </div>
+                  <p style={{ margin: '4px 0', fontSize: '0.78rem', color: '#344050', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.text || item.attachmentName || 'Mensagem com anexo'}</p>
                   {!item.read && (
                     <button
                       onClick={(e) => { e.stopPropagation(); handleMarkAsRead(item.id); }}
