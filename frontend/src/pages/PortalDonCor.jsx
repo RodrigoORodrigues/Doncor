@@ -3303,15 +3303,15 @@ const PortalDonCor = () => {
             <button
               onClick={() => {
                 setActiveSection('chat');
-                const unread = messages.filter(m => !m.read && (m.protocolo || m.direction === 'incoming')).length;
+                const unread = messages.filter(m => !m.read && !m.protocolo && m.direction === 'outgoing').length;
                 if (unread > 0) markPortalDonCorChatRead({ documento: session.documento, empresa: session.empresa }).then(() => loadPortal(session));
               }}
               style={{ border:`1px solid ${theme.border}`, background:'#fff', borderRadius:12, padding:9, color:theme.muted, position: 'relative', cursor: 'pointer' }}
             >
               <Bell size={16}/>
-              {messages.filter(m => !m.read && (m.protocolo || m.direction === 'incoming')).length > 0 && (
+              {messages.filter(m => !m.read && !m.protocolo && m.direction === 'outgoing').length > 0 && (
                 <span style={{ position: 'absolute', top: -5, right: -5, background: '#e63757', color: '#fff', fontSize: '10px', fontWeight: 800, padding: '2px 5px', borderRadius: '50%' }}>
-                  {messages.filter(m => !m.read && (m.protocolo || m.direction === 'incoming')).length}
+                  {messages.filter(m => !m.read && !m.protocolo && m.direction === 'outgoing').length}
                 </span>
               )}
             </button>
