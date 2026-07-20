@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { fetchSaldoVidas, fetchPortalDonCorChat, markPortalDonCorChatRead } from '../services/api';
+import { fetchSaldoVidas, fetchPortalDonCorChat, markPortalDonCorChatRead, fetchPortalDonCorSolicitacoes } from '../services/api';
 import {
   Menu, Bell, Lightbulb, ChevronDown,
   User, Settings, LogOut, HelpCircle, Paperclip, Eye, Download
@@ -20,6 +20,7 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
 
   const [notifications, setNotifications] = useState([]);
   const [chatNotifications, setChatNotifications] = useState([]);
+  const [concludedSolicitacoes, setConcludedSolicitacoes] = useState([]);
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [previewAtt, setPreviewAtt] = useState(null);
 
@@ -41,8 +42,20 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
     try {
       const chat = await fetchPortalDonCorChat({});
       const items = chat || [];
+      // Movement notifications (have protocolo)
       setNotifications(items.filter(item => item.protocolo));
-      setChatNotifications(items.filter(item => !item.protocolo && item.direction === 'incoming'));
+
+      // Only consider messages from the system as portal-level chat notifications
+      const systemMsgs = items.filter(item => !item.protocolo && (String(item.sender || '').toLowerCase().includes('sistema') || item.senderRole === 'system' || /sistema/i.test(item.sender || '')) && item.direction === 'incoming');
+      setChatNotifications(systemMsgs);
+
+      // Fetch solicitacoes concluded and detect new ones
+      try {
+        const conclu = await fetchPortalDonCorSolicitacoes({ status: 'Concluído' });
+        setConcludedSolicitacoes(conclu || []);
+      } catch (e) {
+        console.error('Erro ao carregar solicitações concluídas:', e);
+      }
     } catch (e) {
       console.error("Erro ao carregar notificações no TopNav:", e);
     }
@@ -56,7 +69,16 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
 
   const movementUnreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
   const chatUnreadCount = useMemo(() => chatNotifications.filter(n => !n.read).length, [chatNotifications]);
-  const notificationUnreadCount = movementUnreadCount + chatUnreadCount;
+  const concludedUnreadCount = useMemo(() => {
+    try {
+      const seen = JSON.parse(localStorage.getItem('doncor_seen_concluded_solicitacoes') || '[]');
+      return (concludedSolicitacoes || []).filter(s => !seen.includes(s.id)).length;
+    } catch {
+      return (concludedSolicitacoes || []).length;
+    }
+  }, [concludedSolicitacoes]);
+
+  const notificationUnreadCount = movementUnreadCount + chatUnreadCount + concludedUnreadCount;
 
   useEffect(() => {
     localStorage.setItem('doncor_notifications_unread', String(movementUnreadCount));
@@ -86,10 +108,35 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
   };
 
   const handleProtocolClick = (item) => {
+    // If this is a solicitacao (from concluded list), mark as seen locally and navigate to solicitacoes
+    if (item && item.solicitacaoId) {
+      try {
+        const seen = JSON.parse(localStorage.getItem('doncor_seen_concluded_solicitacoes') || '[]');
+        if (!seen.includes(item.solicitacaoId)) {
+          seen.push(item.solicitacaoId);
+          localStorage.setItem('doncor_seen_concluded_solicitacoes', JSON.stringify(seen));
+        }
+      } catch (e) {}
+      // open solicitacoes page
+      onMenuClick?.({ id: 'solicitacoes', label: 'Solicitações', page: 'solicitacoes' });
+      return;
+    }
+
     setSelectedNotification(item);
     if (!item.read) {
       handleMarkAsRead(item.id);
     }
+  };
+
+  const handleConcludedClick = (s) => {
+    try {
+      const seen = JSON.parse(localStorage.getItem('doncor_seen_concluded_solicitacoes') || '[]');
+      if (!seen.includes(s.id)) {
+        seen.push(s.id);
+        localStorage.setItem('doncor_seen_concluded_solicitacoes', JSON.stringify(seen));
+      }
+    } catch (e) {}
+    onMenuClick?.({ id: 'solicitacoes', label: 'Solicitações', page: 'solicitacoes' });
   };
 
   const handleChatNotificationClick = (item) => {
@@ -313,6 +360,26 @@ const TopNav = ({ onToggleSidebar, sidebarCollapsed, onMenuClick, onLogout, sess
                 </div>
               ))
             )}
+
+            {/* Concluded solicitations shown as movement notifications */}
+            {(concludedSolicitacoes || []).map((s) => {
+              const seen = JSON.parse(localStorage.getItem('doncor_seen_concluded_solicitacoes') || '[]');
+              const isNew = !seen.includes(s.id);
+              return (
+                <div key={`sol-${s.id}`} style={{ padding: '10px', borderBottom: '1px solid #f8fafc', borderRadius: '6px', background: isNew ? '#fff7f3' : 'transparent', marginBottom: '4px', position: 'relative' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '4px' }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleConcludedClick(s); }}
+                      style={{ background: 'none', border: 'none', color: '#2C7BE5', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', padding: 0, textDecoration: 'underline', textAlign: 'left' }}
+                    >
+                      Protocolo: {s.protocolo}
+                    </button>
+                    <span style={{ fontSize: '0.65rem', color: '#8a8d93' }}>{s.updatedAt ? new Date(s.updatedAt).toLocaleDateString('pt-BR') : ''}</span>
+                  </div>
+                  <p style={{ margin: '4px 0', fontSize: '0.78rem', color: '#344050' }}>{s.empresa || s.company || '-'}</p>
+                </div>
+              );
+            })}
 
             <DropdownMenuSeparator style={{ margin: '10px 0' }} />
 
