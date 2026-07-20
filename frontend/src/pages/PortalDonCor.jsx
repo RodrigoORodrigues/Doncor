@@ -924,6 +924,41 @@ const PortalDonCor = () => {
         .some((key) => String(item[key] || '').toLowerCase().includes(term));
     });
   }, [solicitacoes, solicitacoesSearch, solicitacoesTipo, solicitacoesStatus]);
+  const beneficiariosDoPlano = useMemo(() => {
+    const selected = plain(selectedPlan);
+    if (!selected) return [];
+
+    const beneficiaries = new Map();
+
+    solicitacoes.forEach((item) => {
+      const tipo = plain(item.tipo || item.tipoLabel);
+      const status = plain(item.status);
+      const planos = Array.isArray(item.planos)
+        ? item.planos
+        : Array.isArray(item.payload?.planos)
+          ? item.payload.planos
+          : [item.plano || item.payload?.plano || ''];
+      const matchesPlan = planos.some((plano) => plain(plano) === selected);
+
+      if (!matchesPlan || !tipo.includes('inclusao') || !status.includes('concl')) return;
+
+      const beneficiaryName = item.beneficiario || item.payload?.beneficiario || '';
+      const beneficiaryCpf = item.cpf || item.payload?.cpf || '';
+      const beneficiaryKey = beneficiaryCpf || beneficiaryName;
+
+      if (!beneficiaryKey) return;
+
+      beneficiaries.set(beneficiaryKey, {
+        beneficiario: beneficiaryName || '-',
+        cpf: beneficiaryCpf || '-',
+        parentesco: item.parentesco || item.payload?.parentesco || '-',
+        dataNascimento: item.dataNascimento || item.payload?.dataNascimento || '-',
+        status: item.status || 'Concluído',
+      });
+    });
+
+    return Array.from(beneficiaries.values()).sort((a, b) => a.beneficiario.localeCompare(b.beneficiario));
+  }, [selectedPlan, solicitacoes]);
   const solicitacoesAbertas = useMemo(
     () => solicitacoes.filter((item) => !String(item.status || '').toLowerCase().includes('concl')).length,
     [solicitacoes]
@@ -3506,16 +3541,41 @@ const PortalDonCor = () => {
 
       {showBeneficiariesModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.4)', backdropFilter: 'blur(3px)', zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div style={{ background: '#fff', borderRadius: 18, padding: 28, width: '100%', maxWidth: 500, boxShadow: '0 20px 40px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ background: '#fff', borderRadius: 18, padding: 28, width: '100%', maxWidth: 760, boxShadow: '0 20px 40px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', maxHeight: '88vh' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: `1px solid ${theme.border}`, paddingBottom: 14 }}>
               <h3 style={{ margin: 0, fontSize: '1.25rem', color: theme.text, display: 'flex', alignItems: 'center', gap: 10 }}>
-                👥 Beneficiários: {selectedPlan}
+                👥 Beneficiários: {selectedPlan} ({beneficiariosDoPlano.length})
               </h3>
               <button onClick={() => setShowBeneficiariesModal(false)} style={{ background: 'transparent', border: 0, fontSize: '1.25rem', cursor: 'pointer', color: theme.muted }}>&times;</button>
             </div>
             
-            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-              <p style={{ color: theme.muted, fontSize: '0.9rem' }}>Funcionalidade em desenvolvimento. Listagem de beneficiários para este plano será exibida aqui.</p>
+            <div style={{ overflowY: 'auto', border: `1px solid ${theme.border}`, borderRadius: 12 }}>
+              {beneficiariosDoPlano.length === 0 ? (
+                <EmptyState>Nenhum beneficiário concluído encontrado para este plano.</EmptyState>
+              ) : (
+                <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', borderBottom: `1px solid ${theme.border}` }}>
+                      <th style={{ textAlign: 'left', padding: '10px 12px', color: theme.muted, fontSize: '0.72rem', textTransform: 'uppercase' }}>Beneficiário</th>
+                      <th style={{ textAlign: 'left', padding: '10px 12px', color: theme.muted, fontSize: '0.72rem', textTransform: 'uppercase' }}>CPF</th>
+                      <th style={{ textAlign: 'left', padding: '10px 12px', color: theme.muted, fontSize: '0.72rem', textTransform: 'uppercase' }}>Nascimento</th>
+                      <th style={{ textAlign: 'left', padding: '10px 12px', color: theme.muted, fontSize: '0.72rem', textTransform: 'uppercase' }}>Parentesco</th>
+                      <th style={{ textAlign: 'left', padding: '10px 12px', color: theme.muted, fontSize: '0.72rem', textTransform: 'uppercase' }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {beneficiariosDoPlano.map((beneficiary) => (
+                      <tr key={`${beneficiary.cpf}-${beneficiary.beneficiario}`} style={{ borderBottom: `1px solid ${theme.border}` }}>
+                        <td style={{ padding: '10px 12px', color: theme.text, fontWeight: 800 }}>{beneficiary.beneficiario}</td>
+                        <td style={{ padding: '10px 12px', color: theme.text, whiteSpace: 'nowrap' }}>{beneficiary.cpf}</td>
+                        <td style={{ padding: '10px 12px', color: theme.text, whiteSpace: 'nowrap' }}>{beneficiary.dataNascimento}</td>
+                        <td style={{ padding: '10px 12px', color: theme.text }}>{beneficiary.parentesco}</td>
+                        <td style={{ padding: '10px 12px' }}><StatusPill status={beneficiary.status} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
 
             <Button onClick={() => setShowBeneficiariesModal(false)} style={{ background: theme.blue, color: '#fff', width: '100%', height: 44, marginTop: 20 }}>
