@@ -977,6 +977,31 @@ const PortalDonCor = () => {
   const maxSolicitacoesStatus = useMemo(() => Math.max(...solicitacoesPorStatus.map((item) => item.value), 1), [solicitacoesPorStatus]);
   const maxSolicitacoesTipo = useMemo(() => Math.max(...solicitacoesPorTipo.map((item) => item.value), 1), [solicitacoesPorTipo]);
   const ultimasSolicitacoes = useMemo(() => solicitacoes.slice(0, 4), [solicitacoes]);
+  const formulariosPorCategoria = useMemo(() => {
+    const groupedCategories = formularioCategories.map((category) => ({
+      ...category,
+      docs: formularios.filter((item) => item.categoria === category.id),
+    }));
+
+    const customCategories = formularios
+      .filter((item) => !formularioCategories.some((category) => category.id === item.categoria))
+      .reduce((acc, item) => {
+        const categoryId = item.categoria || 'outros';
+        const currentCategory = acc.get(categoryId) || {
+          id: categoryId,
+          title: item.categoriaLabel || 'Outros documentos',
+          icon: item.categoriaIcone || '📄',
+          description: item.categoriaDescricao || 'Documentos necessários para atendimento.',
+          docs: [],
+        };
+
+        currentCategory.docs.push(item);
+        acc.set(categoryId, currentCategory);
+        return acc;
+      }, new Map());
+
+    return [...groupedCategories, ...Array.from(customCategories.values())];
+  }, [formularios]);
   const demandasPendentes = useMemo(() => solicitacoes.filter((item) => !String(item.status || '').toLowerCase().includes('concl')).slice(0, 4), [solicitacoes]);
   const demandasConcluidas = useMemo(() => solicitacoes.filter((item) => String(item.status || '').toLowerCase().includes('concl')).slice(0, 4), [solicitacoes]);
   const inclusoesConcluidas = useMemo(() => {
